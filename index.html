@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>Dynamic Map Renderer — GM</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+</head>
+<body class="gm-view">
+
+  <!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+  <aside id="sidebar">
+
+    <section class="panel" id="session-panel">
+      <h2 class="panel-title">Session</h2>
+      <div class="room-code-row">
+        <span class="label">Room Code</span>
+        <code id="room-code" class="room-code">…</code>
+      </div>
+      <div id="qr-container"><canvas></canvas></div>
+      <div class="session-actions">
+        <button id="open-player-btn" class="btn btn--primary">Open Player Window</button>
+        <button id="copy-url-btn"    class="btn btn--ghost">Copy Player URL</button>
+      </div>
+      <div class="session-meta">
+        <span>Players: <strong id="player-count">0</strong></span>
+      </div>
+    </section>
+
+    <section class="panel" id="map-panel">
+      <h2 class="panel-title">Map</h2>
+      <select id="map-select" class="select-full"></select>
+      <label class="upload-label btn btn--ghost">
+        Upload Map
+        <input type="file" id="map-upload" accept=".png,.jpg,.jpeg,.webp" hidden />
+      </label>
+    </section>
+
+    <section class="panel" id="filter-panel-section">
+      <h2 class="panel-title">Filter</h2>
+      <select id="filter-select" class="select-full"></select>
+      <div id="filter-params" class="filter-params-container"></div>
+    </section>
+
+    <section class="panel" id="view-panel">
+      <h2 class="panel-title">Player View</h2>
+      <div class="param-row">
+        <label for="view-center-x">Center X</label>
+        <input type="range" id="view-center-x" min="0" max="1" step="0.01" value="0.5" />
+        <span class="param-value">0.5</span>
+      </div>
+      <div class="param-row">
+        <label for="view-center-y">Center Y</label>
+        <input type="range" id="view-center-y" min="0" max="1" step="0.01" value="0.5" />
+        <span class="param-value">0.5</span>
+      </div>
+      <div class="param-row">
+        <label for="view-scale">Zoom</label>
+        <input type="range" id="view-scale" min="0.25" max="4" step="0.05" value="1" />
+        <span class="param-value">1</span>
+      </div>
+    </section>
+
+    <section class="panel" id="fog-panel">
+      <h2 class="panel-title">Fog of War</h2>
+      <div class="fog-toolbar">
+        <button id="fog-draw-btn"   class="btn btn--sm">Draw</button>
+        <button id="fog-select-btn" class="btn btn--sm">Select</button>
+        <button id="fog-delete-btn" class="btn btn--sm btn--danger">Delete</button>
+        <button id="fog-clear-btn"  class="btn btn--sm btn--danger">Clear All</button>
+        <input type="color" id="fog-color" value="#000000" title="Fog colour" />
+      </div>
+      <p class="fog-hint">Click canvas to place vertices. Click near first vertex to close polygon.</p>
+    </section>
+
+    <div id="status" class="status-bar" data-level="ok">Ready</div>
+
+  </aside>
+
+  <!-- ═══════════════════════════════ MAIN ══════════════════════════════════ -->
+  <main id="main-area">
+    <div id="canvas-wrapper">
+      <canvas id="renderer-canvas"></canvas>
+      <canvas id="fog-canvas"></canvas>
+    </div>
+  </main>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

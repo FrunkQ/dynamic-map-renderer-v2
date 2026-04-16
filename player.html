@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#000000" />
+  <title>Dynamic Map Renderer — Player</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body class="player-view">
+
+  <canvas id="renderer-canvas"></canvas>
+
+  <!-- Transition overlay — faded in/out for map/filter changes -->
+  <div id="transition-overlay"></div>
+
+  <!-- Status overlay — shown while connecting or on errors -->
+  <div id="status" hidden></div>
+
+  <!-- Connect panel — shown when no room code in URL -->
+  <div id="connect-panel" class="connect-panel" hidden>
+    <h1 class="connect-title">Dynamic Map Renderer</h1>
+    <p class="connect-sub">Enter the room code shown on the GM screen</p>
+    <div class="connect-row">
+      <input type="text" id="room-input" class="room-input" placeholder="e.g. abc-1234-xyz" autocomplete="off" />
+      <button id="connect-btn" class="btn btn--primary">Connect</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/player.ts"></script>
+</body>
+</html>
