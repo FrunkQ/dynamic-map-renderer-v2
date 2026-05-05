@@ -17,7 +17,7 @@ export default {
     },
   ],
 
-  async play({ overlay, snapshot, params, triggerChange }) {
+  async play({ overlay, snapshot, params }) {
     const duration = (params['duration'] as number) ?? 800;
     const ctx = overlay.getContext('2d')!;
     const { width: w, height: h } = overlay;
@@ -30,10 +30,7 @@ export default {
       ctx.fillRect(0, 0, w, h);
     }, easeIn);
 
-    // Apply the map change — new map loads in Three.js underneath
-    triggerChange();
-
-    // Phase 2: black overlay fades out, revealing new frame
+    // Phase 2: black fades out — new frame (already loaded underneath) is revealed
     await animate(duration / 2, (t) => {
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = `rgba(0,0,0,${1 - t})`;

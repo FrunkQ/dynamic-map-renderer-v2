@@ -174,7 +174,7 @@ export class Renderer {
    * state. Any in-flight texture decode from a previous loadMap call is
    * silently discarded when it eventually completes.
    */
-  loadMap(buffer: ArrayBuffer, fog?: FogState): void {
+  loadMap(buffer: ArrayBuffer, fog?: FogState): Promise<void> {
     const gen = ++this.loadGen;
 
     // Lock in the fog for this load immediately — before the async decode.
@@ -187,48 +187,56 @@ export class Renderer {
     const blob = new Blob([buffer]);
     const url  = URL.createObjectURL(blob);
 
-    const loader = new THREE.TextureLoader();
-    loader.load(url, (tex) => {
-      URL.revokeObjectURL(url);
+    return new Promise<void>((resolve) => {
+      const loader = new THREE.TextureLoader();
+      loader.load(url, (tex) => {
+        URL.revokeObjectURL(url);
 
-      // Discard callbacks from superseded loads — the latest load already won.
-      if (gen !== this.loadGen) {
-        tex.dispose();
-        return;
-      }
+        // Discard callbacks from superseded loads — the latest load already won.
+        // Still resolve so any awaiting transition animation can proceed.
+        if (gen !== this.loadGen) {
+          tex.dispose();
+          resolve();
+          return;
+        }
 
-      if (this.mapTexture) this.mapTexture.dispose();
-      tex.colorSpace = THREE.SRGBColorSpace;
-      this.mapTexture = tex;
+        if (this.mapTexture) this.mapTexture.dispose();
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.mapTexture = tex;
 
-      const img = tex.image as HTMLImageElement;
-      this.aspectRatio = img.naturalWidth / img.naturalHeight;
+        const img = tex.image as HTMLImageElement;
+        this.aspectRatio = img.naturalWidth / img.naturalHeight;
 
-      // Recreate the FogCompositor for every map load.
-      //
-      // Re-using the same CanvasTexture after the OffscreenCanvas is resized
-      // triggers "glCopySubTextureCHROMIUM: Offset overflows texture dimensions"
-      // in Chrome whenever the new map is larger than the previous one: WebGL
-      // already allocated a texture at the old size, so the larger canvas upload
-      // exceeds its bounds and the GPU texture is left with the old fog data.
-      //
-      // A fresh compositor creates a new OffscreenCanvas AND a new CanvasTexture,
-      // so Three.js allocates a correctly-sized GPU texture from scratch.
-      // rebuildLayerMeshes() always reads this.fogCompositor.texture, so it
-      // automatically picks up the new texture without extra wiring.
-      //
-      // The fog canvas is fixed at 1024×1024 regardless of map resolution.
-      // Fog vertices are stored in 0–1 normalised coords relative to the map;
-      // the plane geometry UV mapping stretches the square canvas to the map's
-      // actual aspect ratio, so polygon positions are always correct.
-      this.fogCompositor.dispose();
-      this.fogCompositor = new FogCompositor(1024, 1024);
-      this.fogCompositor.redraw(this.lastFogState);
+        // Recreate the FogCompositor for every map load.
+        //
+        // Re-using the same CanvasTexture after the OffscreenCanvas is resized
+        // triggers "glCopySubTextureCHROMIUM: Offset overflows texture dimensions"
+        // in Chrome whenever the new map is larger than the previous one: WebGL
+        // already allocated a texture at the old size, so the larger canvas upload
+        // exceeds its bounds and the GPU texture is left with the old fog data.
+        //
+        // A fresh compositor creates a new OffscreenCanvas AND a new CanvasTexture,
+        // so Three.js allocates a correctly-sized GPU texture from scratch.
+        // rebuildLayerMeshes() always reads this.fogCompositor.texture, so it
+        // automatically picks up the new texture without extra wiring.
+        //
+        // The fog canvas is fixed at 1024×1024 regardless of map resolution.
+        // Fog vertices are stored in 0–1 normalised coords relative to the map;
+        // the plane geometry UV mapping stretches the square canvas to the map's
+        // actual aspect ratio, so polygon positions are always correct.
+        this.fogCompositor.dispose();
+        this.fogCompositor = new FogCompositor(1024, 1024);
+        this.fogCompositor.redraw(this.lastFogState);
 
-      this.rebuildLayerMeshes();
-      this.refreshCamera();
-      this.needsRender = true;
-      this.onMapLoaded?.(this.aspectRatio);
+        this.rebuildLayerMeshes();
+        this.refreshCamera();
+        this.needsRender = true;
+        this.onMapLoaded?.(this.aspectRatio);
+        resolve();
+      }, undefined, (_err) => {
+        URL.revokeObjectURL(url);
+        resolve(); // failed load — don't block the transition
+      });
     });
   }
 

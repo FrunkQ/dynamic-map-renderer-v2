@@ -127,8 +127,8 @@ export class PlayerApp {
           const filter = msg.filter;
           const view   = msg.view;
           const blob   = mapBlob;
-          void this.runTransition(msg.transition, () => {
-            this.renderer.loadMap(blob, fog);
+          void this.runTransition(msg.transition, async () => {
+            await this.renderer.loadMap(blob, fog);
             if (filter) this.renderer.setFilter(filter);
             if (view)   this.renderer.setView(view);
           });
@@ -166,7 +166,7 @@ export class PlayerApp {
 
   private async runTransition(
     config: TransitionConfig | undefined,
-    applyChange: () => void,
+    applyChange: () => Promise<void>,
   ): Promise<void> {
     const id  = config?.transitionId ?? 'none';
     const def = transitionRegistry.getOrFallback(id);

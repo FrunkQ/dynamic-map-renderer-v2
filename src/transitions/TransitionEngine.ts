@@ -34,22 +34,32 @@ export class TransitionEngine {
   /**
    * Runs a transition, then clears the overlay.
    *
-   * @param def            The transition definition to run.
-   * @param params         Resolved param values for this run.
-   * @param sourceCanvas   The Three.js renderer canvas (snapshot source).
-   * @param triggerChange  Called by the transition when the new map should load.
-   *                       For most transitions this is called immediately; for
-   *                       CRT Collapse it fires at the midpoint (dot moment).
+   * Flow:
+   *   1. Capture the current frame as a static snapshot.
+   *   2. Paint the snapshot onto the overlay — canvas beneath is now covered.
+   *   3. Await applyChange() — new map, filter, and view load underneath.
+   *   4. Wait one rAF so Three.js renders the new frame to the canvas.
+   *   5. Run the animation — animates the snapshot away to reveal the new frame.
+   *
+   * Because the new content is fully rendered before any animation pixel is
+   * removed, wipe/dissolve/scanline transitions work correctly without needing
+   * a second buffer.
+   *
+   * @param def          The transition definition to run.
+   * @param params       Resolved param values for this run.
+   * @param sourceCanvas The Three.js renderer canvas (snapshot source).
+   * @param applyChange  Async function that loads the new map and applies state.
+   *                     Awaited before the animation starts.
    */
   async run(
     def: TransitionDefinition,
     params: Record<string, number | string>,
     sourceCanvas: HTMLCanvasElement,
-    triggerChange: () => void,
+    applyChange: () => Promise<void>,
   ): Promise<void> {
-    // 'none' skips the overlay entirely — no capture needed
+    // 'none' skips the overlay entirely — just apply immediately
     if (def.id === 'none') {
-      triggerChange();
+      await applyChange();
       return;
     }
 
@@ -63,21 +73,26 @@ export class TransitionEngine {
       snapshot = await createImageBitmap(sourceCanvas);
     } catch {
       // If capture fails (e.g. canvas tainted), fall through to a plain cut
-      triggerChange();
+      await applyChange();
       return;
     }
 
+    // Cover the canvas with the snapshot so texture decode is invisible
+    const ctx = this.overlay.getContext('2d')!;
+    ctx.drawImage(snapshot, 0, 0, this.overlay.width, this.overlay.height);
+
+    // Load new map, filter, and view underneath the snapshot
+    await applyChange();
+
+    // Wait for Three.js to render the new frame before the animation reveals it
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
     try {
-      await def.play({
-        overlay: this.overlay,
-        snapshot,
-        params,
-        triggerChange,
-      });
+      await def.play({ overlay: this.overlay, snapshot, params });
     } finally {
       // Always clear the overlay when done, even if the transition threw
-      const ctx = this.overlay.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, this.overlay.width, this.overlay.height);
+      const ctx2 = this.overlay.getContext('2d');
+      if (ctx2) ctx2.clearRect(0, 0, this.overlay.width, this.overlay.height);
       snapshot.close();
     }
   }

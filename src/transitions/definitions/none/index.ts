@@ -4,8 +4,7 @@ export default {
   id: 'none',
   label: 'None (instant)',
   params: [],
-  play({ triggerChange }) {
-    triggerChange();
+  play() {
     return Promise.resolve();
   },
 } satisfies TransitionDefinition;

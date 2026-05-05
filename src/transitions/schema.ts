@@ -26,21 +26,18 @@ export type TransitionParam = TransitionSliderParam | TransitionSelectParam;
 /**
  * Passed to each transition's play() function.
  *
- * overlay   — full-screen canvas sitting above the Three.js renderer.
- *             Draw on this to cover / animate the old frame.
- * snapshot  — captured frame of the old map (before the map change).
- * params    — resolved param values for this transition instance.
- * triggerChange — call this when the new map should be applied to the
- *             renderer (i.e. when the old frame has been fully hidden).
- *             For most transitions this is called immediately so the
- *             texture decode runs during the animation.  CRT collapse
- *             calls it at the midpoint (dot moment).
+ * overlay  — full-screen canvas sitting above the Three.js renderer.
+ *            Draw on this to animate the old frame away.
+ * snapshot — captured frame of the old map (before the map change).
+ *            The engine has already applied the new map to the Three.js
+ *            canvas underneath before play() is called, so animating the
+ *            snapshot away will reveal the fully-loaded new content.
+ * params   — resolved param values for this transition instance.
  */
 export interface TransitionContext {
   overlay: HTMLCanvasElement;
   snapshot: ImageBitmap;
   params: Record<string, number | string>;
-  triggerChange: () => void;
 }
 
 // ─── Transition Definition ────────────────────────────────────────────────────

@@ -52,7 +52,7 @@ export default {
     },
   ],
 
-  async play({ overlay, snapshot, params, triggerChange }) {
+  async play({ overlay, snapshot, params }) {
     const duration  = (params['duration']   as number) ?? 1200;
     const glowMix   = (params['glow_color'] as number) ?? 0;
     const ctx = overlay.getContext('2d')!;
@@ -97,10 +97,7 @@ export default {
       ctx.fillRect(w / 2 - dotR * 4, h / 2 - dotR * 4, dotR * 8, dotR * 8);
     });
 
-    // ── Apply map change at the dot moment ─────────────────────────────────
-    triggerChange();
-
-    // ── Phase 2: Expand from line to full new frame ────────────────────────
+    // ── Phase 2: Expand from dot to full new frame (already loaded underneath) ──
     await animate(duration * 0.45, (t) => {
       ctx.clearRect(0, 0, w, h);
 
