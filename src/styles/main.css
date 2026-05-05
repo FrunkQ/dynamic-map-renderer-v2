@@ -114,6 +114,12 @@ body.gm-view {
   cursor: crosshair;
 }
 
+/* Viewport editor canvas — sits above fog canvas, pointer-events managed by ViewportEditor */
+#viewport-canvas {
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* ── Player Layout ─────────────────────────────────────────────────────── */
 body.player-view {
   position: relative;
@@ -614,6 +620,28 @@ body.player-view #renderer-canvas {
   font-size: 0.7rem;
   color: var(--text-dim);
   line-height: 1.4;
+}
+
+/* ── View panel ─────────────────────────────────────────────────────────── */
+.view-hint {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin-bottom: var(--space-sm);
+}
+
+.view-hint--editing {
+  color: rgba(255, 140, 0, 0.8);
+}
+
+.viewport-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.btn--full {
+  width: 100%;
 }
 
 /* ── Status bar ─────────────────────────────────────────────────────────── */

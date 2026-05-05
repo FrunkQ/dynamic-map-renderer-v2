@@ -12,8 +12,16 @@ export interface ViewState {
   centerX: number;
   /** Normalised 0–1 vertical centre of the player's visible region */
   centerY: number;
-  /** Zoom multiplier; 1.0 = fit-to-screen */
-  scale: number;
+  /**
+   * Fraction of the map's width that is visible (1.0 = full map width).
+   * Screen-aspect-ratio-independent — the player letterboxes / pillarboxes
+   * to fit this rectangle into their own window.
+   */
+  viewNW: number;
+  /**
+   * Fraction of the map's height that is visible (1.0 = full map height).
+   */
+  viewNH: number;
   /** CSS hex colour rendered behind the map image — default #000000 */
   backgroundColor: string;
 }
@@ -112,7 +120,7 @@ export function defaultSessionState(): SessionState {
   return {
     version: STATE_VERSION,
     map: null,
-    view: { centerX: 0.5, centerY: 0.5, scale: 1.0, backgroundColor: '#000000' },
+    view: { centerX: 0.5, centerY: 0.5, viewNW: 1.0, viewNH: 1.0, backgroundColor: '#000000' },
     filter: { filterId: 'none', params: {} },
     fog: { polygons: [] },
     markers: [],

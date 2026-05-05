@@ -38,6 +38,14 @@ export class Renderer {
   private renderPass: RenderPass;
   private shaderPass: ShaderPass | null = null;
   private outputPass: OutputPass;
+  /**
+   * Clip pass — placed between the filter shader and OutputPass.
+   * Replaces pixels outside the GM-defined viewport rectangle with the
+   * background colour, so the player can never see map content the GM
+   * hasn't revealed regardless of screen aspect ratio.
+   * Defaults to full pass-through (uRect = 0,0,1,1) until setView() fires.
+   */
+  private clipPass!: ShaderPass;
   private resolution: THREE.Vector2;
   private startTime = performance.now();
 
@@ -71,6 +79,8 @@ export class Renderer {
   private lastFogState: FogState = { polygons: [] };
   /** Incremented on every loadMap call; callbacks check against this to discard stale loads */
   private loadGen = 0;
+  /** Last view state set by setView(); null means "show full map" (GM mode or no view set yet). */
+  private currentView: ViewState | null = null;
 
   /** Called once the map texture has loaded and aspectRatio is known. */
   onMapLoaded: ((aspectRatio: number) => void) | null = null;
@@ -108,6 +118,32 @@ export class Renderer {
     // setFilter() removes and re-appends this pass so it stays last whenever
     // the active filter changes.
     this.outputPass = new OutputPass();
+
+    this.clipPass = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null },
+        uRect:    { value: new THREE.Vector4(0, 0, 1, 1) }, // x1,y1,x2,y2 UV space
+        uBgColor: { value: new THREE.Vector3(0, 0, 0) },    // linear sRGB
+      },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */`
+        uniform sampler2D tDiffuse;
+        uniform vec4 uRect;
+        uniform vec3 uBgColor;
+        varying vec2 vUv;
+        void main() {
+          if (vUv.x < uRect.x || vUv.x > uRect.z ||
+              vUv.y < uRect.y || vUv.y > uRect.w)
+            gl_FragColor = vec4(uBgColor, 1.0);
+          else
+            gl_FragColor = texture2D(tDiffuse, vUv);
+        }`,
+    });
 
     this.setFilter({ filterId: 'none', params: {} });
     this.handleResize();
@@ -179,7 +215,7 @@ export class Renderer {
       this.fogCompositor.redraw(this.lastFogState);
 
       this.rebuildLayerMeshes();
-      this.updateCameraFrustum();
+      this.refreshCamera();
       this.needsRender = true;
       this.onMapLoaded?.(this.aspectRatio);
     });
@@ -217,14 +253,17 @@ export class Renderer {
       this.composer.removePass(this.shaderPass);
       this.shaderPass.dispose?.();
     }
-    // Always remove OutputPass before adding the new ShaderPass so it can be
-    // re-appended afterwards — EffectComposer executes passes in insertion order.
+    // Remove clip + output before rebuilding so insertion order is always:
+    //   RenderPass → clipPass → filter ShaderPass → OutputPass
+    // Clip runs first so the filter sees the complete frame (map + solid
+    // background bars) and applies its effect uniformly across everything.
+    this.composer.removePass(this.clipPass);
     this.composer.removePass(this.outputPass);
 
     this.shaderPass = new ShaderPass(shaderObj);
-    // renderToScreen stays false (default) — OutputPass is the final output.
-    this.composer.addPass(this.shaderPass);
-    this.composer.addPass(this.outputPass);
+    this.composer.addPass(this.clipPass);    // clip viewport → fill bars with bg
+    this.composer.addPass(this.shaderPass); // filter sees full frame incl. bars
+    this.composer.addPass(this.outputPass); // SRGB conversion last
   }
 
   updateFilterParams(filterId: string, values: FilterParamValues): void {
@@ -235,39 +274,50 @@ export class Renderer {
 
   /** Apply the background colour without touching the camera — used by the GM renderer */
   setBackgroundColour(colour: string): void {
-    (this.scene.background as THREE.Color).set(colour);
-    this.renderer.setClearColor(new THREE.Color(colour), 1);
+    const c = new THREE.Color(colour);
+    (this.scene.background as THREE.Color).copy(c);
+    this.renderer.setClearColor(c, 1);
     // Keep the GM map border colour in sync (inverted background)
     if (this.mapBorderMat) {
       this.mapBorderMat.color.set(this.invertColour(colour));
     }
+    // Keep clip-pass background colour in sync (linear Three.js values match
+    // scene rendering before OutputPass applies SRGB conversion)
+    this.clipPass.uniforms['uBgColor']!.value.set(c.r, c.g, c.b);
     this.needsRender = true;
   }
 
   setView(view: ViewState): void {
+    this.currentView = { ...view };
     this.needsRender = true;
     this.setBackgroundColour(view.backgroundColor ?? '#000000');
 
-    // Base frustum at scale=1: fit the whole map on screen — same formula as
-    // updateCameraFrustum so that broadcasting the default view does not visibly
-    // change the player camera (previously setView ignored screenAspect, causing
-    // a jarring resize whenever any view_update arrived).
-    const canvas = this.renderer.domElement;
-    const screenAspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1);
-    const mapAspect = this.aspectRatio;
-    let hwBase: number, hhBase: number;
-    if (screenAspect > mapAspect) {
-      hhBase = 0.5;
-      hwBase = hhBase * screenAspect;
+    // The map plane occupies width=mapAspect, height=1 in Three.js world units.
+    // viewNW/viewNH define the visible fraction of the map in each axis —
+    // independent of either the GM's or the player's screen shape.
+    const canvas    = this.renderer.domElement;
+    const sa        = canvas.clientWidth / Math.max(canvas.clientHeight, 1);
+    const ma        = this.aspectRatio;
+
+    // Viewport half-extents in world units
+    const hw_vp = (view.viewNW / 2) * ma;
+    const hh_vp =  view.viewNH / 2;
+
+    // Fit the viewport rectangle into the player's screen, letterboxing /
+    // pillarboxing as needed based on the player's own aspect ratio.
+    const va = hw_vp / Math.max(hh_vp, 0.0001);  // viewport aspect ratio
+    let hw: number, hh: number;
+    if (sa > va) {
+      // Player screen wider than viewport — pillarbox
+      hh = hh_vp;
+      hw = hh * sa;
     } else {
-      hwBase = mapAspect * 0.5;
-      hhBase = hwBase / screenAspect;
+      // Player screen taller than viewport — letterbox
+      hw = hw_vp;
+      hh = hw / sa;
     }
 
-    const hw = hwBase / view.scale;
-    const hh = hhBase / view.scale;
-
-    const cx = (view.centerX - 0.5) * mapAspect;
+    const cx = (view.centerX - 0.5) * ma;
     const cy = -(view.centerY - 0.5);
 
     this.camera.left   = cx - hw;
@@ -275,6 +325,20 @@ export class Renderer {
     this.camera.top    = cy + hh;
     this.camera.bottom = cy - hh;
     this.camera.updateProjectionMatrix();
+
+    // Compute where the viewport rectangle sits in UV space on the player's screen
+    // and update the clip pass so pixels outside it are filled with background.
+    // sa > va → wide screen, viewport fills full height, bars left/right
+    // sa < va → tall screen, viewport fills full width, bars top/bottom
+    let x1 = 0, y1 = 0, x2 = 1, y2 = 1;
+    if (sa > va) {
+      x1 = (1 - va / sa) / 2;
+      x2 = 1 - x1;
+    } else if (sa < va) {
+      y1 = (1 - sa / va) / 2;
+      y2 = 1 - y1;
+    }
+    this.clipPass.uniforms['uRect']!.value.set(x1, y1, x2, y2);
   }
 
   /**
@@ -341,6 +405,7 @@ export class Renderer {
     this.mapBorderLine?.geometry.dispose();
     this.mapBorderMat?.dispose();
     this.outputPass.dispose();
+    this.clipPass.dispose?.();
     this.renderer.dispose();
     window.removeEventListener('resize', () => this.handleResize());
   }
@@ -468,8 +533,21 @@ export class Renderer {
       this.shaderPass.uniforms['resolution']!.value.set(pw, ph);
     }
 
-    this.updateCameraFrustum();
+    this.refreshCamera();
     this.needsRender = true;
+  }
+
+  /**
+   * Re-applies the current ViewState if one has been set (player mode),
+   * or falls back to updateCameraFrustum() for the default full-map view (GM mode).
+   * Called after resize and after a new map texture loads.
+   */
+  private refreshCamera(): void {
+    if (this.currentView) {
+      this.setView(this.currentView);
+    } else {
+      this.updateCameraFrustum();
+    }
   }
 
   private updateCameraFrustum(): void {

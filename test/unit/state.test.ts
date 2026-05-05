@@ -7,11 +7,12 @@ describe('defaultSessionState', () => {
     expect(s.version).toBe(STATE_VERSION);
   });
 
-  it('has default view at center scale 1', () => {
+  it('has default view at center showing full map', () => {
     const s = defaultSessionState();
     expect(s.view.centerX).toBe(0.5);
     expect(s.view.centerY).toBe(0.5);
-    expect(s.view.scale).toBe(1.0);
+    expect(s.view.viewNW).toBe(1.0);
+    expect(s.view.viewNH).toBe(1.0);
   });
 
   it('starts with no map', () => {

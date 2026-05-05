@@ -1,6 +1,7 @@
 import { StateManager } from './StateManager.ts';
 import { MapManager } from './MapManager.ts';
 import { FogEditor } from './FogEditor.ts';
+import { ViewportEditor } from './ViewportEditor.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { FilterPanel } from '../filters/FilterPanel.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
@@ -51,29 +52,29 @@ export class GMApp {
   private state   = new StateManager();
   private maps    = new MapManager();
   private host:   Host;
-  private renderer!: Renderer;
-  private fogEditor!: FogEditor;
-  private filterPanel!: FilterPanel;
+  private renderer!:       Renderer;
+  private fogEditor!:      FogEditor;
+  private viewportEditor!: ViewportEditor;
+  private filterPanel!:    FilterPanel;
 
   // DOM references (assigned in init)
-  private mapSelect!:         HTMLSelectElement;
-  private filterSelect!:      HTMLSelectElement;
-  private filterParamsContainer!: HTMLElement;
-  private viewCenterX!:       HTMLInputElement;
-  private viewCenterY!:       HTMLInputElement;
-  private viewScale!:         HTMLInputElement;
-  private viewCenterXNum!:    HTMLInputElement;
-  private viewCenterYNum!:    HTMLInputElement;
-  private viewScaleNum!:      HTMLInputElement;
-  private viewBgColour!:      HTMLInputElement;
-  private roomCodeEl!:        HTMLElement;
-  private qrContainer!:       HTMLElement;
-  private playerCountEl!:     HTMLElement;
-  private statusEl!:          HTMLElement;
-  private currentMapBlob:     ArrayBuffer | null = null;
-  private fogDrawing = false;
-  private activeFilterId:     string = '';
-  private playerOrigin:       string = location.origin; // replaced with LAN IP when on localhost
+  private mapSelect!:              HTMLSelectElement;
+  private filterSelect!:           HTMLSelectElement;
+  private filterParamsContainer!:  HTMLElement;
+  private viewBgColour!:           HTMLInputElement;
+  private viewDefaultActions!:     HTMLElement;
+  private editViewportBtn!:        HTMLButtonElement;
+  private editViewportActions!:    HTMLElement;
+  private fogDrawBtn!:             HTMLButtonElement;
+  private fogDeleteBtn!:           HTMLButtonElement;
+  private roomCodeEl!:             HTMLElement;
+  private qrContainer!:            HTMLElement;
+  private playerCountEl!:          HTMLElement;
+  private statusEl!:               HTMLElement;
+  private currentMapBlob:          ArrayBuffer | null = null;
+  private fogDrawing     = false;
+  private activeFilterId = '';
+  private playerOrigin   = location.origin; // replaced with LAN IP when on localhost
 
   constructor() {
     this.host = new Host({
@@ -88,6 +89,7 @@ export class GMApp {
     this.bindDOMRefs();
     this.bindRenderer();
     this.bindFogEditor();
+    this.bindViewportEditor();
     this.bindFilterPanel();
     this.bindUIControls();
 
@@ -250,15 +252,16 @@ export class GMApp {
     }
 
     this.fogEditor.loadState(this.state.getState().fog);
-    this.syncViewSliders(this.state.getState());
+    this.syncView(this.state.getState());
     this.filterSelect.value = this.state.getState().filter.filterId;
 
     // Capture fog state after loadForMap so the correct state is used everywhere
     const fog = this.state.getState().fog;
 
-    // Update fog aspect ratio once the texture dimensions are known
+    // Update fog + viewport aspect ratios once the texture dimensions are known
     this.renderer.onMapLoaded = (aspect) => {
       this.fogEditor.setMapAspect(aspect);
+      this.viewportEditor.setMapAspect(aspect);
     };
 
     // Pass fog explicitly so the texture-load callback always redraws the right
@@ -283,20 +286,19 @@ export class GMApp {
     const q = <T extends HTMLElement>(sel: string): T =>
       document.querySelector<T>(sel)!;
 
-    this.mapSelect              = q<HTMLSelectElement>('#map-select');
-    this.filterSelect           = q<HTMLSelectElement>('#filter-select');
-    this.filterParamsContainer  = q('#filter-params');
-    this.viewCenterX            = q<HTMLInputElement>('#view-center-x');
-    this.viewCenterY            = q<HTMLInputElement>('#view-center-y');
-    this.viewScale              = q<HTMLInputElement>('#view-scale');
-    this.viewCenterXNum         = q<HTMLInputElement>('#view-center-x-num');
-    this.viewCenterYNum         = q<HTMLInputElement>('#view-center-y-num');
-    this.viewScaleNum           = q<HTMLInputElement>('#view-scale-num');
-    this.viewBgColour           = q<HTMLInputElement>('#view-bg-colour');
-    this.roomCodeEl             = q('#room-code');
-    this.qrContainer            = q('#qr-container');
-    this.playerCountEl          = q('#player-count');
-    this.statusEl               = q('#status');
+    this.mapSelect             = q<HTMLSelectElement>('#map-select');
+    this.filterSelect          = q<HTMLSelectElement>('#filter-select');
+    this.filterParamsContainer = q('#filter-params');
+    this.viewBgColour          = q<HTMLInputElement>('#view-bg-colour');
+    this.viewDefaultActions    = q('#view-default-actions');
+    this.editViewportBtn       = q<HTMLButtonElement>('#edit-viewport-btn');
+    this.editViewportActions   = q('#edit-viewport-actions');
+    this.fogDrawBtn            = q<HTMLButtonElement>('#fog-draw-btn');
+    this.fogDeleteBtn          = q<HTMLButtonElement>('#fog-delete-btn');
+    this.roomCodeEl            = q('#room-code');
+    this.qrContainer           = q('#qr-container');
+    this.playerCountEl         = q('#player-count');
+    this.statusEl              = q('#status');
   }
 
   private bindRenderer(): void {
@@ -305,6 +307,53 @@ export class GMApp {
     this.renderer.setFilterEnabled(false); // GM sees raw unfiltered scene
     this.renderer.enableGMOverlay();
     this.renderer.setFogOpacity(0.35);     // GM sees through fog; players get full opacity
+  }
+
+  private bindViewportEditor(): void {
+    const canvas = document.querySelector<HTMLCanvasElement>('#viewport-canvas')!;
+    this.viewportEditor = new ViewportEditor(canvas);
+
+    // Live drag → push view to state (and on to players via P2P)
+    this.viewportEditor.onChange((view) => {
+      this.state.setView(view);
+    });
+
+    // Toggle edit-mode UI
+    this.viewportEditor.onEditMode((editing) => {
+      this.viewDefaultActions.hidden  =  editing;
+      this.editViewportActions.hidden = !editing;
+      // Disable fog tools while editing viewport so they don't conflict
+      this.fogDrawBtn.disabled   = editing;
+      this.fogDeleteBtn.disabled = editing;
+      if (editing && this.fogDrawing) {
+        this.fogDrawing = false;
+        this.fogEditor.disable();
+        this.fogDrawBtn.classList.remove('active');
+      }
+    });
+
+    this.editViewportBtn.addEventListener('click', () => {
+      this.viewportEditor.startEdit();
+      // Expand the panel if it's collapsed
+      const panel = document.querySelector('#view-panel .panel-body') as HTMLElement | null;
+      const title = document.querySelector('#view-panel .panel-title') as HTMLElement | null;
+      if (panel?.hidden) {
+        panel.hidden = false;
+        title?.setAttribute('aria-expanded', 'true');
+      }
+    });
+
+    document.querySelector('#viewport-ok-btn')?.addEventListener('click', () => {
+      this.viewportEditor.commitEdit();
+    });
+
+    document.querySelector('#viewport-cancel-btn')?.addEventListener('click', () => {
+      this.viewportEditor.cancelEdit();
+    });
+
+    document.querySelector('#reset-viewport-btn')?.addEventListener('click', () => {
+      this.viewportEditor.resetToFullMap();
+    });
   }
 
   private bindFogEditor(): void {
@@ -445,44 +494,11 @@ export class GMApp {
       }
     });
 
-    // View controls — range and number inputs kept in sync
-    const makeSliderPair = (
-      range: HTMLInputElement,
-      num: HTMLInputElement,
-      onChange: (v: number) => void
-    ): void => {
-      range.addEventListener('input', () => {
-        const v = parseFloat(range.value);
-        num.value = String(v);
-        onChange(v);
-      });
-      num.addEventListener('input', () => {
-        const min = parseFloat(range.min);
-        const max = parseFloat(range.max);
-        const v = Math.max(min, Math.min(max, parseFloat(num.value) || 0));
-        range.value = String(v);
-        onChange(v);
-      });
-      num.addEventListener('blur', () => {
-        // Re-clamp and reformat on blur
-        const v = parseFloat(range.value);
-        num.value = String(v);
-      });
-    };
-
-    const applyView = () => {
-      this.state.setView({
-        centerX:         parseFloat(this.viewCenterX.value),
-        centerY:         parseFloat(this.viewCenterY.value),
-        scale:           parseFloat(this.viewScale.value),
-        backgroundColor: this.viewBgColour.value,
-      });
-    };
-
-    makeSliderPair(this.viewCenterX, this.viewCenterXNum, () => applyView());
-    makeSliderPair(this.viewCenterY, this.viewCenterYNum, () => applyView());
-    makeSliderPair(this.viewScale,   this.viewScaleNum,   () => applyView());
-    this.viewBgColour.addEventListener('input', () => applyView());
+    // Background colour (still a direct colour picker — not part of viewport editor)
+    this.viewBgColour.addEventListener('input', () => {
+      const v = this.state.getState().view;
+      this.state.setView({ ...v, backgroundColor: this.viewBgColour.value });
+    });
 
     // Open local player window as a real popup
     document.querySelector('#open-player-btn')?.addEventListener('click', () => {
@@ -528,14 +544,9 @@ export class GMApp {
     return '#' + [d[0]!, d[1]!, d[2]!].map((v) => v.toString(16).padStart(2, '0')).join('');
   }
 
-  private syncViewSliders(state: SessionState): void {
-    this.viewCenterX.value    = String(state.view.centerX);
-    this.viewCenterY.value    = String(state.view.centerY);
-    this.viewScale.value      = String(state.view.scale);
-    this.viewCenterXNum.value = String(state.view.centerX);
-    this.viewCenterYNum.value = String(state.view.centerY);
-    this.viewScaleNum.value   = String(state.view.scale);
-    this.viewBgColour.value   = state.view.backgroundColor;
+  private syncView(state: SessionState): void {
+    this.viewportEditor.setView(state.view);
+    this.viewBgColour.value = state.view.backgroundColor;
   }
 
   private setStatus(msg: string, level: 'ok' | 'warn' | 'error'): void {

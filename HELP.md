@@ -77,11 +77,20 @@ Below the selector, each filter exposes parameter groups (e.g. Display, Colour, 
 
 ## Player View
 
-Controls the pan and zoom of the player camera. The GM's own view is unaffected — this only changes what players see.
+Controls exactly which portion of the map players can see. The GM's own view is always unaffected.
 
-**Center X / Center Y** — Pan the player view horizontally and vertically. Both are normalised 0–1 values where 0.5 / 0.5 is the centre of the map. Adjust with the slider or type a value directly.
+An **orange marching-ants rectangle** is permanently visible on the GM's map showing the current player viewport. It updates in real time as you adjust it.
 
-**Zoom** — Zoom level multiplier. 1.0 fits the whole map to the player's screen. Values above 1.0 zoom in; values below zoom out.
+**Edit Player View** — Activates the viewport editor. The rectangle brightens and gains corner handles.
+
+- **Move** — Click and drag inside the rectangle to reposition it anywhere on the map.
+- **Resize** — Drag any corner handle to freely resize the rectangle. Width and height are fully independent — there is no forced aspect ratio.
+- **OK** — Commits the new position and size and pushes it to all connected players immediately.
+- **Cancel** — Reverts the rectangle to where it was when you clicked Edit.
+
+**Reset to Full Map** — Snaps the player view back to showing the entire map, centred. Takes effect immediately for all connected players.
+
+The player's window is **strictly clipped** to the rectangle you define — no map content outside it is ever visible, regardless of the player's screen size or aspect ratio. If the player's screen shape differs from the rectangle, the background colour (set in the Background Colour panel) fills the bars.
 
 ---
 

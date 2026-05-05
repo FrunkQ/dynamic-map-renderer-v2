@@ -12,6 +12,12 @@ Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GM
 
 ![Dynamic Map Renderer v2 — GM interface showing filter panel](./screenshot.png)
 
+## What's New in v1.1
+
+- **Interactive viewport editor** — the pan/zoom sliders are replaced by a direct on-map editor. A faint orange marching-ants rectangle is permanently overlaid on the GM's map showing exactly what players currently see. Click **Edit Player View** to activate drag handles: move the rectangle by dragging inside it, or resize it freely by dragging any corner. Hit **OK** to commit or **Cancel** to revert.
+- **Reset to Full Map** — one-click button to snap the player view back to showing the complete map.
+- **Strict viewport clipping** — the player's screen is hard-clipped to the GM's rectangle. No map content outside that rectangle is ever visible regardless of the player's screen size or aspect ratio. Background colour fills any letterbox or pillarbox bars.
+
 ## What's New in v2
 
 - **No server required** — peer-to-peer via WebRTC (PeerJS). Deploy to any static host.
@@ -40,7 +46,7 @@ Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GM
   | Retro Sci-Fi Green | Classic green-phosphor CRT terminal |
   | Watercolour | Soft watercolour wash |
 
-- **Player view control** — pan (Centre X/Y) and zoom independently of the GM's own view.
+- **Player view control** — interactive on-map viewport editor: an orange rectangle on the GM's canvas always shows what players see. Click Edit to drag-move or freely corner-resize it. One-click Reset to Full Map. The player's screen is strictly clipped to the rectangle; background colour fills any bars caused by aspect-ratio differences.
 - **Background colour** — set the letterbox colour; auto-sampled from the map on first load.
 - **Real-time sync** — all GM changes (map, fog, filter, view) push to connected players instantly.
 - **Room code** — three-word memorable code persists across reloads so players can reconnect.
