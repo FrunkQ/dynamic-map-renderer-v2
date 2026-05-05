@@ -1,7 +1,19 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { networkInterfaces } from 'os';
 
-export default defineConfig({
+/** Returns the first non-loopback IPv4 address on this machine, or null. */
+function getLanIp(): string | null {
+  for (const ifaces of Object.values(networkInterfaces())) {
+    if (!ifaces) continue;
+    for (const iface of ifaces) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+    }
+  }
+  return null;
+}
+
+export default defineConfig(({ command }) => ({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -32,6 +44,14 @@ export default defineConfig({
     }),
   ],
 
+  // Inject the host machine's LAN IP during dev so the QR code / player URL
+  // uses a reachable address instead of localhost.  In production builds this
+  // is null, and the code path that reads it only runs when hostname is
+  // localhost anyway, so it is safe to include in all builds.
+  define: {
+    __DEV_LAN_IP__: JSON.stringify(command === 'serve' ? getLanIp() : null),
+  },
+
   server: {
     host: true,   // bind to 0.0.0.0 so LAN devices can reach the dev server
     port: 5173,
@@ -55,4 +75,4 @@ export default defineConfig({
       reporter: ['text', 'html'],
     },
   },
-});
+}));

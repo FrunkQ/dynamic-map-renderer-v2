@@ -89,14 +89,11 @@ export interface AudioState {
 
 // ─── Transitions ─────────────────────────────────────────────────────────────
 
-export type TransitionType = 'fade' | 'static' | 'scan' | 'none';
-
 export interface TransitionConfig {
-  type: TransitionType;
-  /** Duration in milliseconds */
-  duration: number;
-  /** Fade-to colour (used by 'fade' type) */
-  color?: string;
+  /** ID of the active transition definition (e.g. 'none', 'fade', 'wipe') */
+  transitionId: string;
+  /** Flat param values for the selected transition */
+  params: Record<string, number | string>;
 }
 
 // ─── Full Session State ───────────────────────────────────────────────────────
@@ -170,6 +167,13 @@ export interface MsgMapChange {
   payload: MapState;
   /** Fog state for the incoming map — applied atomically when texture finishes loading */
   fog?: FogState;
+  /**
+   * Filter and view for the incoming map — carried here so the player can apply
+   * them at the transition midpoint rather than via separate filter_update /
+   * view_update messages that would corrupt the transition snapshot.
+   */
+  filter?: FilterState;
+  view?: ViewState;
   mapBlob: ArrayBuffer;
   transition?: TransitionConfig;
 }

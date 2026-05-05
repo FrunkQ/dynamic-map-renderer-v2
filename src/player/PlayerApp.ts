@@ -1,6 +1,8 @@
 import { Guest } from '../p2p/Guest.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
+import { TransitionEngine } from '../transitions/TransitionEngine.ts';
+import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import type { GMMessage, TransitionConfig } from '../types.ts';
 
 /**
@@ -13,6 +15,7 @@ import type { GMMessage, TransitionConfig } from '../types.ts';
  */
 export class PlayerApp {
   private renderer!: Renderer;
+  private transitionEngine!: TransitionEngine;
   private guest!: Guest;
   private statusEl!: HTMLElement;
   private connectPanel!: HTMLElement;
@@ -33,7 +36,11 @@ export class PlayerApp {
 
   async init(): Promise<void> {
     this.renderer = new Renderer(
-      document.querySelector<HTMLCanvasElement>('#renderer-canvas')!
+      document.querySelector<HTMLCanvasElement>('#renderer-canvas')!,
+      { preserveDrawingBuffer: true },
+    );
+    this.transitionEngine = new TransitionEngine(
+      document.querySelector<HTMLCanvasElement>('#transition-canvas')!,
     );
     this.renderer.start();
 
@@ -113,19 +120,24 @@ export class PlayerApp {
         // the texture finishes loading is evaluated against the new map.
         this.currentMapId = msg.payload.id;
         if (mapBlob) {
-          // fog travels atomically inside map_change — no separate fog_update needed.
-          const fog = msg.fog ?? { polygons: [] };
-          this.applyTransition(msg.transition, () => {
-            this.renderer.loadMap(mapBlob, fog);
+          // fog, filter, and view all travel atomically inside map_change.
+          // They are applied inside triggerChange() so the transition snapshot
+          // captures the OLD state and only the new state appears at the reveal.
+          const fog    = msg.fog    ?? { polygons: [] };
+          const filter = msg.filter;
+          const view   = msg.view;
+          const blob   = mapBlob;
+          void this.runTransition(msg.transition, () => {
+            this.renderer.loadMap(blob, fog);
+            if (filter) this.renderer.setFilter(filter);
+            if (view)   this.renderer.setView(view);
           });
         }
         break;
       }
 
       case 'filter_update': {
-        this.applyTransition(msg.transition, () => {
-          this.renderer.setFilter(msg.payload);
-        });
+        this.renderer.setFilter(msg.payload);
         break;
       }
 
@@ -152,28 +164,15 @@ export class PlayerApp {
 
   // ─── Transitions ──────────────────────────────────────────────────────────
 
-  private applyTransition(
-    transition: TransitionConfig | undefined,
-    applyChange: () => void
-  ): void {
-    if (!transition || transition.type === 'none' || transition.duration === 0) {
-      applyChange();
-      return;
-    }
-
+  private async runTransition(
+    config: TransitionConfig | undefined,
+    applyChange: () => void,
+  ): Promise<void> {
+    const id  = config?.transitionId ?? 'none';
+    const def = transitionRegistry.getOrFallback(id);
+    const params = config?.params ?? transitionRegistry.defaultParams(id);
     const canvas = document.querySelector<HTMLCanvasElement>('#renderer-canvas')!;
-    const overlay = document.querySelector<HTMLElement>('#transition-overlay')!;
-
-    overlay.style.transition = `opacity ${transition.duration / 2}ms ease-in`;
-    overlay.style.opacity = '1';
-
-    setTimeout(() => {
-      applyChange();
-      overlay.style.transition = `opacity ${transition.duration / 2}ms ease-out`;
-      overlay.style.opacity = '0';
-    }, transition.duration / 2);
-
-    void canvas; // suppress unused warning
+    await this.transitionEngine.run(def, params, canvas, applyChange);
   }
 
   // ─── UI ───────────────────────────────────────────────────────────────────

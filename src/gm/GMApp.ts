@@ -5,43 +5,16 @@ import { ViewportEditor } from './ViewportEditor.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { FilterPanel } from '../filters/FilterPanel.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
+import { TransitionPanel } from '../transitions/TransitionPanel.ts';
+import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, deleteMap } from '../storage/db.ts';
 import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { exportBundle, importBundle } from '../storage/bundleIO.ts';
-import type { SessionState, StoredMap } from '../types.ts';
+import type { SessionState, StoredMap, TransitionConfig } from '../types.ts';
 import QRCode from 'qrcode';
 
-/**
- * Discover the machine's LAN IP via WebRTC ICE candidate inspection.
- * Falls back to null if detection fails or times out (e.g. in a deployed env
- * where location.hostname is already a real address).
- */
-async function detectLanIp(): Promise<string | null> {
-  try {
-    const pc = new RTCPeerConnection({ iceServers: [] });
-    pc.createDataChannel('');
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    return new Promise((resolve) => {
-      const done = (ip: string | null) => { pc.close(); resolve(ip); };
-      const timer = setTimeout(() => done(null), 2000);
-
-      pc.onicecandidate = ({ candidate }) => {
-        if (!candidate) return;
-        const m = candidate.candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
-        if (m && !m[1].startsWith('127.') && !m[1].startsWith('169.254.')) {
-          clearTimeout(timer);
-          done(m[1]);
-        }
-      };
-    });
-  } catch {
-    return null;
-  }
-}
 
 /**
  * GMApp — top-level orchestrator for the GM interface.
@@ -55,12 +28,15 @@ export class GMApp {
   private renderer!:       Renderer;
   private fogEditor!:      FogEditor;
   private viewportEditor!: ViewportEditor;
-  private filterPanel!:    FilterPanel;
+  private filterPanel!:     FilterPanel;
+  private transitionPanel!: TransitionPanel;
 
   // DOM references (assigned in init)
-  private mapSelect!:              HTMLSelectElement;
-  private filterSelect!:           HTMLSelectElement;
-  private filterParamsContainer!:  HTMLElement;
+  private mapSelect!:               HTMLSelectElement;
+  private transitionSelect!:        HTMLSelectElement;
+  private transitionParamsContainer!: HTMLElement;
+  private filterSelect!:            HTMLSelectElement;
+  private filterParamsContainer!:   HTMLElement;
   private viewBgColour!:           HTMLInputElement;
   private viewDefaultActions!:     HTMLElement;
   private editViewportBtn!:        HTMLButtonElement;
@@ -72,8 +48,11 @@ export class GMApp {
   private playerCountEl!:          HTMLElement;
   private statusEl!:               HTMLElement;
   private currentMapBlob:          ArrayBuffer | null = null;
-  private fogDrawing     = false;
-  private activeFilterId = '';
+  private fogDrawing            = false;
+  private activeFilterId        = '';
+  private activeTransitionId    = 'none';
+  /** Per-transition saved params — persisted in-memory for the session */
+  private allTransitionParams: Record<string, Record<string, number | string>> = {};
   private playerOrigin   = location.origin; // replaced with LAN IP when on localhost
 
   constructor() {
@@ -91,6 +70,7 @@ export class GMApp {
     this.bindFogEditor();
     this.bindViewportEditor();
     this.bindFilterPanel();
+    this.bindTransitionPanel();
     this.bindUIControls();
 
     // Register the state listener BEFORE loading maps so that the initial
@@ -122,12 +102,11 @@ export class GMApp {
   private async onHostReady(roomCode: string): Promise<void> {
     this.roomCodeEl.textContent = roomCode;
 
-    // On localhost, replace with the real LAN IP so QR/URL works for other devices
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      const lanIp = await detectLanIp();
-      if (lanIp) {
-        this.playerOrigin = `${location.protocol}//${lanIp}:${location.port}`;
-      }
+    // On localhost, replace with the real LAN IP so QR/URL works for other devices.
+    // __DEV_LAN_IP__ is injected at build time by vite.config.ts (null in prod).
+    if ((location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+        && __DEV_LAN_IP__) {
+      this.playerOrigin = `${location.protocol}//${__DEV_LAN_IP__}:${location.port}`;
     }
 
     const playerUrl = `${this.playerOrigin}/player#${roomCode}`;
@@ -188,12 +167,21 @@ export class GMApp {
         // Same filter, params changed — update values in-place (no DOM rebuild)
         this.filterPanel.setValues(state.filter.params[filterId] ?? {});
       }
-      this.host.broadcast({ type: 'filter_update', payload: state.filter });
+      // During a map switch, filter travels atomically inside map_change (below)
+      // so a separate filter_update would arrive before the transition starts and
+      // corrupt the snapshot.  Only broadcast standalone filter changes.
+      if (!changed.includes('map')) {
+        this.host.broadcast({ type: 'filter_update', payload: state.filter });
+      }
     }
 
     if (changed.includes('view')) {
       this.renderer.setBackgroundColour(state.view.backgroundColor);
-      this.host.broadcast({ type: 'view_update', payload: state.view });
+      // During a map switch, view travels inside map_change — same reasoning as
+      // filter above.  Live viewport-editor drags only have 'view' in changed.
+      if (!changed.includes('map')) {
+        this.host.broadcast({ type: 'view_update', payload: state.view });
+      }
     }
 
     this.host.updateState(state, this.currentMapBlob ?? undefined);
@@ -270,13 +258,19 @@ export class GMApp {
 
     this.setStatus(map.name, 'ok');
 
-    // Broadcast new map to all connected players, fog carried atomically so the
-    // player doesn't need to rely on a separately-timed fog_update message.
+    // Broadcast new map to all connected players.
+    // fog, filter, and view all travel atomically inside map_change so the
+    // player can apply them together at the transition midpoint — preventing
+    // the new filter/view from appearing on the old map before the transition runs.
+    // Transition config tells the player which animation to play.
     this.host.broadcast({
       type: 'map_change',
-      payload: { id: map.id, name: map.name },
+      payload:    { id: map.id, name: map.name },
       fog,
-      mapBlob: blob,
+      filter:     this.state.getState().filter,
+      view:       this.state.getState().view,
+      mapBlob:    blob,
+      transition: this.buildTransitionConfig(),
     });
   }
 
@@ -286,8 +280,10 @@ export class GMApp {
     const q = <T extends HTMLElement>(sel: string): T =>
       document.querySelector<T>(sel)!;
 
-    this.mapSelect             = q<HTMLSelectElement>('#map-select');
-    this.filterSelect          = q<HTMLSelectElement>('#filter-select');
+    this.mapSelect                  = q<HTMLSelectElement>('#map-select');
+    this.transitionSelect           = q<HTMLSelectElement>('#transition-select');
+    this.transitionParamsContainer  = q('#transition-params');
+    this.filterSelect               = q<HTMLSelectElement>('#filter-select');
     this.filterParamsContainer = q('#filter-params');
     this.viewBgColour          = q<HTMLInputElement>('#view-bg-colour');
     this.viewDefaultActions    = q('#view-default-actions');
@@ -414,6 +410,50 @@ export class GMApp {
     });
   }
 
+  private bindTransitionPanel(): void {
+    this.transitionPanel = new TransitionPanel(
+      this.transitionParamsContainer,
+      (params) => {
+        this.allTransitionParams[this.activeTransitionId] = params;
+      },
+    );
+
+    // Seed default params for all transitions
+    for (const def of transitionRegistry.getAll()) {
+      this.allTransitionParams[def.id] = transitionRegistry.defaultParams(def.id);
+    }
+
+    // Populate transition dropdown
+    this.transitionSelect.innerHTML = '';
+    for (const def of transitionRegistry.getAll()) {
+      const opt = document.createElement('option');
+      opt.value = def.id;
+      opt.textContent = def.label;
+      this.transitionSelect.appendChild(opt);
+    }
+
+    this.transitionSelect.addEventListener('change', () => {
+      this.activeTransitionId = this.transitionSelect.value;
+      const def    = transitionRegistry.getOrFallback(this.activeTransitionId);
+      const saved  = this.allTransitionParams[this.activeTransitionId] ?? transitionRegistry.defaultParams(this.activeTransitionId);
+      this.transitionPanel.render(def, saved);
+    });
+
+    // Render initial panel (none — no params)
+    this.transitionPanel.render(
+      transitionRegistry.getOrFallback('none'),
+      this.allTransitionParams['none'] ?? {},
+    );
+  }
+
+  /** Returns the current transition config to include in a map_change broadcast. */
+  private buildTransitionConfig(): TransitionConfig {
+    return {
+      transitionId: this.activeTransitionId,
+      params: this.allTransitionParams[this.activeTransitionId] ?? transitionRegistry.defaultParams(this.activeTransitionId),
+    };
+  }
+
   private bindUIControls(): void {
     // Map selection
     this.mapSelect.addEventListener('change', async () => {
@@ -508,7 +548,7 @@ export class GMApp {
       const l = Math.round((screen.width  - w) / 2);
       const t = Math.round((screen.height - h) / 2);
       window.open(
-        `/player#${code}`,
+        `${this.playerOrigin}/player#${code}`,
         'dmr-player',
         `noopener,width=${w},height=${h},left=${l},top=${t}`
       );

@@ -85,8 +85,14 @@ export class Renderer {
   /** Called once the map texture has loaded and aspectRatio is known. */
   onMapLoaded: ((aspectRatio: number) => void) | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+  constructor(canvas: HTMLCanvasElement, options?: { preserveDrawingBuffer?: boolean }) {
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: false,
+      // Player renderer needs preserveDrawingBuffer: true so createImageBitmap()
+      // can snapshot the canvas for transition animations outside the rAF loop.
+      preserveDrawingBuffer: options?.preserveDrawingBuffer ?? false,
+    });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.autoClear = false;
     this.renderer.setClearColor(0x000000, 1);
@@ -146,8 +152,13 @@ export class Renderer {
     });
 
     this.setFilter({ filterId: 'none', params: {} });
-    this.handleResize();
-    window.addEventListener('resize', () => this.handleResize());
+
+    // ResizeObserver fires whenever the canvas element changes size — including
+    // the first time it gets non-zero dimensions after the initial layout.  This
+    // is more reliable than window.resize on mobile (Android Chrome, iOS Safari)
+    // where window.resize only fires on orientation changes, not on initial layout.
+    // On desktop it behaves identically to the old window.resize listener.
+    new ResizeObserver(() => this.handleResize()).observe(canvas);
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
@@ -296,7 +307,15 @@ export class Renderer {
     // viewNW/viewNH define the visible fraction of the map in each axis —
     // independent of either the GM's or the player's screen shape.
     const canvas    = this.renderer.domElement;
-    const sa        = canvas.clientWidth / Math.max(canvas.clientHeight, 1);
+    const cw        = canvas.clientWidth;
+    const ch        = canvas.clientHeight;
+
+    // Canvas not yet laid out (mobile initial paint) — store currentView so
+    // refreshCamera() can re-apply it once the ResizeObserver fires with real
+    // dimensions.  Do not attempt camera/clip math with zero dimensions.
+    if (cw === 0 || ch === 0) return;
+
+    const sa        = cw / ch;
     const ma        = this.aspectRatio;
 
     // Viewport half-extents in world units
@@ -517,6 +536,11 @@ export class Renderer {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
 
+    // Skip if the canvas has no layout dimensions yet (happens on mobile when
+    // the initial ResizeObserver fires before the first layout pass, or when
+    // the canvas is detached).  We'll be called again once it gets real size.
+    if (w === 0 || h === 0) return;
+
     // setSize honours the pixelRatio set in the constructor, so the actual
     // framebuffer becomes w*dpr × h*dpr.  Always call it so canvas.width/height
     // are authoritative physical-pixel values we can rely on below.
@@ -552,7 +576,10 @@ export class Renderer {
 
   private updateCameraFrustum(): void {
     const canvas = this.renderer.domElement;
-    const screenAspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1);
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    if (cw === 0 || ch === 0) return;
+    const screenAspect = cw / ch;
 
     // Default view: fit the map plane in screen (letterbox / pillarbox as needed)
     const mapAspect = this.aspectRatio;
