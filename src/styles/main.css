@@ -105,19 +105,20 @@ body.gm-view {
   pointer-events: none;
 }
 
-/* Enabled when in draw or select mode */
+/* Enabled when in draw or select mode — raised above markers canvas so it receives events */
 #fog-canvas.fog-active {
   pointer-events: auto;
+  z-index: 2;
 }
 
 #fog-canvas.fog-draw {
   cursor: crosshair;
 }
 
-/* Viewport editor canvas — sits above fog canvas, pointer-events managed by ViewportEditor */
+/* Viewport editor canvas — above fog (3) so it wins when the editor is active */
 #viewport-canvas {
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 
 /* ── Player Layout ─────────────────────────────────────────────────────── */
@@ -681,7 +682,8 @@ body.player-view #renderer-canvas {
 
 /* ── Markers canvas (GM) ────────────────────────────────────────────────── */
 #gm-markers-canvas {
-  pointer-events: auto; /* interactive by default; disabled via JS when fog/viewport active */
+  pointer-events: auto; /* interactive by default; disabled via JS when viewport active */
+  z-index: 1;           /* below fog-canvas.fog-active (z-index:2) so fog events win */
 }
 
 /* ── Marker HUD (floating above selected marker on GM canvas) ───────────── */
