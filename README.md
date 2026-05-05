@@ -8,7 +8,7 @@ No account needed. No server. Everything stays on your device — maps you uploa
 
 ## Description
 
-Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GMs. It lets you display map images to players in real time, with full control over fog of war, visual filters, pan, and zoom — all from a separate GM interface. Players connect via a peer-to-peer link; no server infrastructure is required beyond static file hosting.
+Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GMs. It lets you display map images to players in real time, with full control over fog of war, visual filters, pan, and zoom — all from a separate GM interface. Players connect via a peer-to-peer link; no server infrastructure is required beyond static file hosting. It is effectively a very light form-over-function VTT tool you can use locally or online for free.
 
 ![Dynamic Map Renderer v2 — GM interface showing filter panel](./screenshot.png)
 
