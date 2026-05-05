@@ -31,10 +31,23 @@ export class Guest {
     this.events = events;
     this.local = new LocalChannel();
 
-    // Always listen on the local channel — fires immediately if GM opened this window
+    // Listen for state updates pushed by the GM (fog/filter/view changes)
     this.local.onMessage((msg) => {
-      this.events.onMessage(msg);
+      // BroadcastChannel uses structured cloning — mapBlob arrives inside the msg object.
+      // Extract it so PlayerApp receives it via the standard (msg, mapBlob) signature.
+      if (msg.type === 'full_state' || msg.type === 'map_change') {
+        const blob = (msg as { mapBlob?: ArrayBuffer }).mapBlob;
+        const { mapBlob: _stripped, ...cleanMsg } = msg as typeof msg & { mapBlob?: ArrayBuffer };
+        void _stripped;
+        this.events.onMessage(cleanMsg as GMMessage, blob);
+      } else {
+        this.events.onMessage(msg);
+      }
     });
+
+    // Request the current full state immediately — the GM responds via LocalChannel.
+    // This is instant for local windows (no PeerJS broker needed).
+    this.local.requestState();
   }
 
   /** Connect to a GM via their room code (PeerJS peer ID) */
@@ -49,6 +62,9 @@ export class Guest {
     });
 
     peer.on('error', (err) => {
+      // Ignore background peer-level errors (broker reconnects, ICE noise, etc.)
+      // if a DataConnection is already open and working — the data link is fine.
+      if (this.conn?.open) return;
       this.events.onError(err as Error);
     });
   }

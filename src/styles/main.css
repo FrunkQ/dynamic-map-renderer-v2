@@ -51,6 +51,7 @@
 
 /* ── Reset ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 
 html, body { height: 100%; overflow: hidden; }
 
@@ -99,13 +100,17 @@ body.gm-view {
   height: 100%;
 }
 
-/* Fog drawing canvas sits on top, pointer-events only when drawing */
+/* Fog drawing canvas — pointer-events off by default (pass-through to Three.js canvas) */
 #fog-canvas {
   pointer-events: none;
 }
 
-#fog-canvas.drawing-active {
+/* Enabled when in draw or select mode */
+#fog-canvas.fog-active {
   pointer-events: auto;
+}
+
+#fog-canvas.fog-draw {
   cursor: crosshair;
 }
 
@@ -198,21 +203,49 @@ body.player-view #renderer-canvas {
 
 /* ── Panels ─────────────────────────────────────────────────────────────── */
 .panel {
-  padding: var(--space-md);
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
 }
 
+/* Panel title doubles as the collapse toggle button */
 .panel-title {
   font-size: var(--font-size-title);
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-dim);
-  padding-bottom: var(--space-xs);
+  /* button reset */
+  background: none;
+  border: none;
   border-bottom: 1px solid var(--border);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.panel-title:hover { color: var(--text-secondary); }
+
+.panel-title::after {
+  content: '▸';
+  font-size: 0.65rem;
+  transition: transform 0.18s;
+  flex-shrink: 0;
+}
+
+.panel-title[aria-expanded="true"]::after {
+  transform: rotate(90deg);
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md) var(--space-md);
 }
 
 /* ── Session panel ─────────────────────────────────────────────────────── */
@@ -311,7 +344,25 @@ body.player-view #renderer-canvas {
   font-size: 0.7rem;
 }
 
+/* Active / pressed state — used by the Draw toggle */
+.btn--active {
+  background: var(--accent-dim) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-hover) !important;
+}
+
 .upload-label {
+  text-align: center;
+  cursor: pointer;
+}
+
+.btn-row {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.btn-row .btn {
+  flex: 1;
   text-align: center;
   cursor: pointer;
 }
@@ -383,7 +434,7 @@ body.player-view #renderer-canvas {
   padding: var(--space-xs) 0;
 }
 
-/* Param row */
+/* Param row — base (used by toggle, colour, select) */
 .param-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -402,6 +453,39 @@ body.player-view #renderer-canvas {
   white-space: nowrap;
 }
 
+/* Stacked variant — label above, slider + number below (used by filter sliders) */
+.param-row--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;  /* override .param-row's align-items:center which shrinks flex children */
+  gap: 3px;
+  padding: var(--space-xs) 0;
+  min-height: unset;
+}
+
+.param-row--stacked label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.param-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.param-controls input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Original inline range — kept for Player View sliders in the sidebar */
 .param-row input[type="range"] {
   grid-column: 2;
   width: 90px;
@@ -416,6 +500,24 @@ body.player-view #renderer-canvas {
   min-width: 36px;
   text-align: right;
 }
+
+/* Numeric text entry paired with a range slider */
+.param-number {
+  width: 54px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  padding: 1px var(--space-xs);
+  text-align: right;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.param-number:focus { border-color: var(--border-focus); }
+.param-number::-webkit-inner-spin-button,
+.param-number::-webkit-outer-spin-button { opacity: 0.6; }
 
 .param-row input[type="color"] {
   width: 32px;
@@ -483,6 +585,21 @@ body.player-view #renderer-canvas {
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(16px);
   background: var(--accent);
+}
+
+/* ── Map panel sub-sections ─────────────────────────────────────────────── */
+.map-section-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border);
+}
+
+.map-section-label--gap {
+  margin-top: var(--space-xs);
 }
 
 /* ── Fog toolbar ────────────────────────────────────────────────────────── */

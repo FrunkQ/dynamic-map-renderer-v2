@@ -29,7 +29,11 @@ export function buildShaderObject(
   for (const param of filter.params) {
     const uniformName = paramToUniform(param.id);
     const value = paramValues[param.id] ?? param.default;
-    uniforms[uniformName] = { value: boolToFloat(param, value) };
+    if (param.type === 'color') {
+      uniforms[uniformName] = { value: new THREE.Color(value as string) };
+    } else {
+      uniforms[uniformName] = { value: boolToFloat(param, value) };
+    }
   }
 
   // Resolved texture uniforms from filter declaration
@@ -57,7 +61,10 @@ export function updateUniforms(
   for (const param of filter.params) {
     const uniformName = paramToUniform(param.id);
     const value = paramValues[param.id] ?? param.default;
-    if (uniforms[uniformName]) {
+    if (!uniforms[uniformName]) continue;
+    if (param.type === 'color') {
+      (uniforms[uniformName]!.value as THREE.Color).set(value as string);
+    } else {
       uniforms[uniformName]!.value = boolToFloat(param, value);
     }
   }

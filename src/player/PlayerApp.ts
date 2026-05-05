@@ -17,6 +17,19 @@ export class PlayerApp {
   private statusEl!: HTMLElement;
   private connectPanel!: HTMLElement;
   private roomInput!: HTMLInputElement;
+  /** Tracks which map ID the player is currently showing (or loading). */
+  private currentMapId: string | null = null;
+  /**
+   * Sequence numbers of messages already processed.
+   * Local player windows receive every broadcast TWICE — once via BroadcastChannel
+   * (fast, sub-ms) and once via PeerJS (slower, ~50-200ms).  Without dedup, the
+   * second delivery re-runs loadMap with a new loadGen, which then discards the
+   * first (BC) texture decode and waits for a second, slower decode.  More
+   * critically, re-processing map_change resets currentMapId mid-flight, which
+   * can make valid fog_update messages appear to belong to a different map and
+   * get discarded.  Tracking seqs lets us drop the PeerJS duplicate entirely.
+   */
+  private seenSeqs = new Set<number>();
 
   async init(): Promise<void> {
     this.renderer = new Renderer(
@@ -63,20 +76,47 @@ export class PlayerApp {
   // ─── Message handling ─────────────────────────────────────────────────────
 
   private handleMessage(msg: GMMessage, mapBlob?: ArrayBuffer): void {
+    // ── Sequence-number deduplication ────────────────────────────────────────
+    // Local player windows receive every broadcast twice: once via the fast
+    // BroadcastChannel (sub-ms) and once via PeerJS (~50-200ms later).
+    // The first delivery (BC) is canonical.  When the PeerJS copy arrives we
+    // recognise the seq and drop it before any state is touched.
+    const seq = (msg as unknown as Record<string, unknown>)['_seq'];
+    if (typeof seq === 'number') {
+      if (this.seenSeqs.has(seq)) return; // duplicate — already handled via BC
+      this.seenSeqs.add(seq);
+      // Trim the set so it doesn't grow without bound over a long session.
+      if (this.seenSeqs.size > 200) {
+        const sorted = [...this.seenSeqs].sort((a, b) => a - b);
+        this.seenSeqs = new Set(sorted.slice(-100));
+      }
+    }
+
     switch (msg.type) {
       case 'full_state': {
-        if (mapBlob) this.renderer.loadMap(mapBlob);
+        this.currentMapId = msg.payload.map?.id ?? null;
+        if (mapBlob) {
+          // loadMap stores fog and redraws after texture decode — no separate updateFog needed.
+          this.renderer.loadMap(mapBlob, msg.payload.fog);
+        } else {
+          // No map blob (e.g. fresh session with no maps loaded yet) — still sync fog state.
+          this.renderer.updateFog(msg.payload.fog);
+        }
         this.renderer.setFilter(msg.payload.filter);
-        this.renderer.updateFog(msg.payload.fog);
         this.renderer.setView(msg.payload.view);
         this.setStatus('');
         break;
       }
 
       case 'map_change': {
+        // Update currentMapId immediately so any fog_update arriving before
+        // the texture finishes loading is evaluated against the new map.
+        this.currentMapId = msg.payload.id;
         if (mapBlob) {
+          // fog travels atomically inside map_change — no separate fog_update needed.
+          const fog = msg.fog ?? { polygons: [] };
           this.applyTransition(msg.transition, () => {
-            this.renderer.loadMap(mapBlob);
+            this.renderer.loadMap(mapBlob, fog);
           });
         }
         break;
@@ -90,6 +130,10 @@ export class PlayerApp {
       }
 
       case 'fog_update': {
+        // Safety net: discard fog updates for a different map.
+        // With seq deduplication the BC+PeerJS race is already prevented, but
+        // this guard catches any edge case where mapId doesn't match.
+        if (msg.mapId && msg.mapId !== this.currentMapId) break;
         this.renderer.updateFog(msg.payload);
         break;
       }

@@ -6,11 +6,12 @@ const definition: FilterDefinition = {
   id: 'retro_sci_fi_green',
   name: 'Retro Sci-Fi Green',
   description: 'Classic green-phosphor CRT terminal. Ideal for Mothership, Traveller, Aliens RPG.',
+  animated: true,   // scanlines, flicker, noise bars all use time
   vertexShader,
   fragmentShader,
   groups: [
     { id: 'display',   label: 'Display' },
-    { id: 'color',     label: 'Color' },
+    { id: 'color',     label: 'Colour' },
     { id: 'crt',       label: 'CRT Effects' },
     { id: 'distort',   label: 'Distortion',       collapsed: true },
     { id: 'signal',    label: 'Signal Artifacts', collapsed: true },

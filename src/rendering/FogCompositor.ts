@@ -22,14 +22,13 @@ export class FogCompositor {
     if (!ctx) throw new Error('FogCompositor: OffscreenCanvas 2D context unavailable');
     this.ctx = ctx;
     this.texture = new THREE.CanvasTexture(this.canvas as unknown as HTMLCanvasElement);
+    // Canvas 2D always draws in sRGB.  Marking the texture SRGBColorSpace tells
+    // Three.js to decode it to linear before rendering, so OutputPass can
+    // re-encode to sRGB on the way out — preserving the exact picked colour.
+    // Without this, the raw sRGB value is treated as linear and OutputPass
+    // over-brightens it (e.g. #CBCBCB → #E6E6E6).
+    this.texture.colorSpace = THREE.SRGBColorSpace;
     this.texture.needsUpdate = true;
-  }
-
-  /** Resize canvas when a new map is loaded (preserves texture object) */
-  resize(width: number, height: number): void {
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.redraw({ polygons: [] });
   }
 
   /** Re-composite the fog layer from the current state */
@@ -52,6 +51,10 @@ export class FogCompositor {
       this.ctx.closePath();
       this.ctx.fillStyle = poly.color;
       this.ctx.fill();
+      // Stroke with same colour to eliminate the sub-pixel antialiased fringe
+      this.ctx.strokeStyle = poly.color;
+      this.ctx.lineWidth = 1;
+      this.ctx.stroke();
     }
 
     // Signal Three.js to re-upload the canvas to GPU on next render

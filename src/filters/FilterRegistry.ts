@@ -29,7 +29,11 @@ class FilterRegistry {
   }
 
   getAll(): FilterDefinition[] {
-    return [...this.filters.values()];
+    return [...this.filters.values()].sort((a, b) => {
+      if (a.id === 'none') return -1;
+      if (b.id === 'none') return  1;
+      return a.name.localeCompare(b.name);
+    });
   }
 
   get(id: string): FilterDefinition | undefined {

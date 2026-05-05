@@ -33,6 +33,9 @@ export class StateManager {
       this.state = {
         ...saved,
         map,
+        // Merge view so new fields (e.g. backgroundColor) fall back to defaults
+        // when loading a save written before those fields existed.
+        view:    { ...base.view,    ...saved.view },
         // Ensure any new default fields added in later versions are present
         markers: saved.markers ?? base.markers,
         audio:   saved.audio   ?? base.audio,
@@ -94,6 +97,17 @@ export class StateManager {
     for (const fn of this.listeners) fn(this.state, changed);
     this.scheduleAutosave();
     void mapBlob; // mapBlob is passed through to P2P layer via the listener; not saved here
+  }
+
+  /** Flush any pending debounced save immediately. Call before switching maps. */
+  async flushSave(): Promise<void> {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    if (this.state.map) {
+      await saveConfig(this.state.map.id, this.state);
+    }
   }
 
   private scheduleAutosave(): void {

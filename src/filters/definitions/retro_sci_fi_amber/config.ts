@@ -6,11 +6,12 @@ const definition: FilterDefinition = {
   id: 'retro_sci_fi_amber',
   name: 'Retro Sci-Fi Amber',
   description: 'Warm amber-phosphor CRT display. Great for vintage sci-fi and space opera settings.',
+  animated: true,   // scanlines, flicker, noise bars all use time
   vertexShader,
   fragmentShader,
   groups: [
     { id: 'display',   label: 'Display' },
-    { id: 'color',     label: 'Color' },
+    { id: 'color',     label: 'Colour' },
     { id: 'crt',       label: 'CRT Effects' },
     { id: 'distort',   label: 'Distortion',       collapsed: true },
     { id: 'signal',    label: 'Signal Artifacts', collapsed: true },

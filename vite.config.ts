@@ -32,6 +32,11 @@ export default defineConfig({
     }),
   ],
 
+  server: {
+    host: true,   // bind to 0.0.0.0 so LAN devices can reach the dev server
+    port: 5173,
+  },
+
   build: {
     rollupOptions: {
       input: {

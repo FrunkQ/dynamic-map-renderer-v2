@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local shader development scratch folder
+_shadertoy_dump
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

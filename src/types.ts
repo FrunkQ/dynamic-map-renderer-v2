@@ -14,6 +14,8 @@ export interface ViewState {
   centerY: number;
   /** Zoom multiplier; 1.0 = fit-to-screen */
   scale: number;
+  /** CSS hex colour rendered behind the map image — default #000000 */
+  backgroundColor: string;
 }
 
 // ─── Fog of War ──────────────────────────────────────────────────────────────
@@ -110,7 +112,7 @@ export function defaultSessionState(): SessionState {
   return {
     version: STATE_VERSION,
     map: null,
-    view: { centerX: 0.5, centerY: 0.5, scale: 1.0 },
+    view: { centerX: 0.5, centerY: 0.5, scale: 1.0, backgroundColor: '#000000' },
     filter: { filterId: 'none', params: {} },
     fog: { polygons: [] },
     markers: [],
@@ -140,6 +142,13 @@ export interface MsgViewUpdate {
 export interface MsgFogUpdate {
   type: 'fog_update';
   payload: FogState;
+  /**
+   * ID of the map this fog state belongs to.
+   * Players use this to discard stale fog_update messages that arrive out of
+   * order when BC and PeerJS deliver duplicates with different latencies.
+   * Absent on very old messages — treated as always-applicable.
+   */
+  mapId?: string;
 }
 
 export interface MsgFilterUpdate {
@@ -151,6 +160,8 @@ export interface MsgFilterUpdate {
 export interface MsgMapChange {
   type: 'map_change';
   payload: MapState;
+  /** Fog state for the incoming map — applied atomically when texture finishes loading */
+  fog?: FogState;
   mapBlob: ArrayBuffer;
   transition?: TransitionConfig;
 }

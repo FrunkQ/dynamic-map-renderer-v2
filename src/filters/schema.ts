@@ -92,6 +92,13 @@ export interface FilterDefinition {
   additionalPasses?: AdditionalPass[];
   /** Collapsible groups for params. Ungrouped params appear at the top. */
   groups?: ParamGroup[];
+  /**
+   * Set true for filters that use the `time` uniform for visible animation
+   * (scanlines, flicker, CRT effects, etc.).  The renderer runs at full 60 fps
+   * for animated filters and renders once-per-change for static filters.
+   * Defaults to false (static) when absent.
+   */
+  animated?: boolean;
 }
 
 // ─── Resolved uniform value types used at runtime ────────────────────────────

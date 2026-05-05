@@ -35,7 +35,7 @@ export class FilterPanel {
 
     for (const [groupId, params] of groups) {
       const groupDef = filter.groups?.find((g) => g.id === groupId);
-      const wrapper = this.buildGroupWrapper(groupId, groupDef?.label ?? groupId, groupDef?.collapsed ?? false);
+      const wrapper = this.buildGroupWrapper(groupId, groupDef?.label ?? groupId, groupDef?.collapsed ?? true);
       const body = wrapper.querySelector('.filter-group-body') as HTMLElement;
 
       for (const param of params) {
@@ -128,12 +128,8 @@ export class FilterPanel {
   }
 
   private buildSlider(param: Extract<FilterParam, { type: 'slider' }>): HTMLElement {
-    const row = this.createRow(param.id, param.label);
+    const row = this.createRow(param.id, param.label, 'param-row--stacked');
     const value = (this.currentValues[param.id] as number) ?? param.default;
-
-    const display = document.createElement('span');
-    display.className = 'param-value';
-    display.textContent = String(value);
 
     const input = document.createElement('input');
     input.type = 'range';
@@ -143,15 +139,39 @@ export class FilterPanel {
     input.value = String(value);
     input.dataset['paramId'] = param.id;
 
+    const numInput = document.createElement('input');
+    numInput.type = 'number';
+    numInput.className = 'param-number';
+    numInput.min = String(param.min);
+    numInput.max = String(param.max);
+    numInput.step = String(param.step);
+    numInput.value = String(value);
+
     input.addEventListener('input', () => {
       const v = parseFloat(input.value);
-      display.textContent = String(v);
+      numInput.value = String(v);
       this.currentValues[param.id] = v;
       this.onChangeCallback({ ...this.currentValues });
     });
 
-    row.appendChild(input);
-    row.appendChild(display);
+    numInput.addEventListener('input', () => {
+      const min = parseFloat(input.min);
+      const max = parseFloat(input.max);
+      const v = Math.max(min, Math.min(max, parseFloat(numInput.value) || 0));
+      input.value = String(v);
+      this.currentValues[param.id] = v;
+      this.onChangeCallback({ ...this.currentValues });
+    });
+
+    numInput.addEventListener('blur', () => {
+      numInput.value = input.value;
+    });
+
+    const controls = document.createElement('div');
+    controls.className = 'param-controls';
+    controls.appendChild(input);
+    controls.appendChild(numInput);
+    row.appendChild(controls);
     return row;
   }
 
@@ -231,16 +251,16 @@ export class FilterPanel {
 
     const lbl = document.createElement('label');
     lbl.htmlFor = `param-${id}`;
-    lbl.textContent = label;
+    lbl.textContent = label + ':';
 
     row.appendChild(lbl);
     return row;
   }
 
   private syncValueDisplay(input: HTMLInputElement): void {
-    const display = input.nextElementSibling;
-    if (display?.classList.contains('param-value')) {
-      display.textContent = input.value;
+    const sibling = input.nextElementSibling;
+    if (sibling instanceof HTMLInputElement && sibling.classList.contains('param-number')) {
+      sibling.value = input.value;
     }
   }
 }

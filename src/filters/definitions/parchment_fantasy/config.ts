@@ -14,6 +14,7 @@ const definition: FilterDefinition = {
    * If the file is absent, FilterRegistry provides a procedural fallback.
    * Replace paper_grain.webp with a photographed paper scan for higher fidelity.
    */
+  animated: true,   // candlelight flicker uses time
   textures: [
     {
       uniformName: 'uPaperTexture',
@@ -23,7 +24,7 @@ const definition: FilterDefinition = {
     },
   ],
   groups: [
-    { id: 'color',    label: 'Color & Age' },
+    { id: 'color',    label: 'Colour & Age' },
     { id: 'texture',  label: 'Paper Texture' },
     { id: 'effects',  label: 'Effects' },
   ],

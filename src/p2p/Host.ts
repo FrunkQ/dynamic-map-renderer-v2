@@ -1,6 +1,7 @@
 import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage, SessionState } from '../types.ts';
 import { LocalChannel } from './LocalChannel.ts';
+import { generateRoomCode } from './roomCode.ts';
 
 const CHUNK_SIZE = 16 * 1024; // 16 KB — safe DataChannel message size
 
@@ -26,6 +27,10 @@ export class Host {
   private events: HostEvents;
   private lastState: SessionState | null = null;
   private lastMapBlob: ArrayBuffer | null = null;
+  /** Monotonically-increasing sequence number stamped on every broadcast.
+   *  Players use this to deduplicate the same message arriving via both
+   *  BroadcastChannel and PeerJS (local windows receive both). */
+  private broadcastSeq = 0;
 
   constructor(events: HostEvents) {
     this.events = events;
@@ -46,7 +51,25 @@ export class Host {
     });
 
     peer.on('error', (err) => {
+      // If the requested ID is already taken on the PeerJS server, silently
+      // regenerate a new word code and retry — collisions are rare but possible.
+      if ((err as unknown as { type?: string }).type === 'unavailable-id') {
+        peer.destroy();
+        this.start(generateRoomCode());
+        return;
+      }
       this.events.onError(err as Error);
+    });
+
+    // When a local player window opens it immediately requests state via
+    // BroadcastChannel. Respond with full_state so it doesn't wait for PeerJS.
+    this.local.onRequest(() => {
+      if (this.lastState) {
+        const msg: GMMessage = this.lastMapBlob
+          ? { type: 'full_state', payload: this.lastState, mapBlob: this.lastMapBlob }
+          : { type: 'full_state', payload: this.lastState };
+        this.local.send(msg);
+      }
     });
   }
 
@@ -58,9 +81,16 @@ export class Host {
     return this.connections.size;
   }
 
-  /** Broadcast a message to all network peers AND the local window channel */
+  /** Broadcast a message to all network peers AND the local window channel.
+   *  Every broadcast is stamped with a monotonically-increasing _seq so that
+   *  players receiving the same message via BOTH BroadcastChannel and PeerJS
+   *  can detect and drop the duplicate. */
   broadcast(msg: GMMessage): void {
-    this.local.send(msg);
+    // Stamp with seq before sending so both channels carry the same number.
+    const seq = ++this.broadcastSeq;
+    const tagged = { ...msg, _seq: seq } as unknown as GMMessage;
+
+    this.local.send(tagged);
 
     // Cache latest state + blob for new joiners
     if (msg.type === 'full_state') {
@@ -72,7 +102,7 @@ export class Host {
     }
 
     for (const conn of this.connections.values()) {
-      this.sendTo(conn, msg);
+      this.sendTo(conn, tagged);
     }
   }
 
@@ -117,24 +147,23 @@ export class Host {
   }
 
   private sendTo(conn: DataConnection, msg: GMMessage): void {
-    // PeerJS handles chunking internally for binary data, but we still
-    // serialise as JSON + separate binary to keep the protocol clean.
     const { mapBlob, ...rest } = msg as { mapBlob?: ArrayBuffer } & GMMessage;
+
+    // IMPORTANT: send __blob_start__ FIRST so the player sets blobTotal
+    // BEFORE receiving the JSON message that triggers waiting for the blob.
+    if (mapBlob && mapBlob.byteLength > 0) {
+      const total = Math.ceil(mapBlob.byteLength / CHUNK_SIZE);
+      conn.send(JSON.stringify({ type: '__blob_start__', total }));
+    }
 
     conn.send(JSON.stringify(rest));
 
     if (mapBlob && mapBlob.byteLength > 0) {
-      this.sendBlob(conn, mapBlob);
-    }
-  }
-
-  private sendBlob(conn: DataConnection, blob: ArrayBuffer): void {
-    const total = Math.ceil(blob.byteLength / CHUNK_SIZE);
-    conn.send(JSON.stringify({ type: '__blob_start__', total }));
-
-    for (let i = 0; i < total; i++) {
-      const chunk = blob.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-      conn.send(chunk);
+      const total = Math.ceil(mapBlob.byteLength / CHUNK_SIZE);
+      for (let i = 0; i < total; i++) {
+        const chunk = mapBlob.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        conn.send(chunk);
+      }
     }
   }
 }
