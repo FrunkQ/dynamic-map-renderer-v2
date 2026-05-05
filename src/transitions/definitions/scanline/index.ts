@@ -3,63 +3,108 @@ import { animate, linear } from '../../easing.ts';
 
 export default {
   id: 'scanline',
-  label: 'Scanline (Teleprompter)',
+  label: 'Terminal Clear',
   params: [
     {
       type: 'slider',
       id: 'duration',
       label: 'Duration',
-      min: 300,
-      max: 3000,
+      min: 500,
+      max: 6000,
       step: 100,
-      default: 900,
+      default: 2000,
       unit: 'ms',
     },
     {
       type: 'slider',
-      id: 'direction',
-      label: 'Direction (0=top 1=bottom)',
-      min: 0,
-      max: 1,
-      step: 1,
-      default: 0,
+      id: 'cols',
+      label: 'Columns',
+      min: 40,
+      max: 160,
+      step: 10,
+      default: 80,
+    },
+    {
+      type: 'slider',
+      id: 'rows',
+      label: 'Rows',
+      min: 10,
+      max: 50,
+      step: 5,
+      default: 25,
     },
   ],
 
   async play({ overlay, snapshot, params }) {
-    const duration  = (params['duration']  as number) ?? 900;
-    const fromTop   = ((params['direction'] as number) ?? 0) === 0;
-    const ctx = overlay.getContext('2d')!;
+    const duration = (params['duration'] as number) ?? 2000;
+    const cols     = Math.max(1, Math.round((params['cols'] as number) ?? 80));
+    const rows     = Math.max(1, Math.round((params['rows'] as number) ?? 25));
+    const ctx      = overlay.getContext('2d')!;
     const { width: w, height: h } = overlay;
 
+    const cellW = w / cols;
+    const cellH = h / rows;
+    const total = cols * rows;
+
+    // Width of the green flash band (cells ahead of the clear front)
+    const flashBand = Math.max(2, Math.ceil(cols * 0.12));
+
+    // Helper: pixel rect for cell (col, row) — rounded to avoid sub-pixel gaps
+    const cellRect = (col: number, row: number) => ({
+      x:  Math.round(col * cellW),
+      y:  Math.round(row * cellH),
+      cw: Math.round((col + 1) * cellW) - Math.round(col * cellW),
+      ch: Math.round((row + 1) * cellH) - Math.round(row * cellH),
+    });
+
     await animate(duration, (t) => {
+      const clearCount = Math.floor(t * total);
+      const flashFront = Math.min(total, clearCount + flashBand);
+
       ctx.clearRect(0, 0, w, h);
       ctx.drawImage(snapshot, 0, 0, w, h);
 
-      // Punch hole — reveals new Three.js frame (already loaded) underneath.
-      // fillStyle must be opaque — glow gradient from the previous frame leaks
-      // into save() state and would make destination-out near-transparent.
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = '#000';
-      if (fromTop) {
-        ctx.fillRect(0, 0, w, t * h);
-      } else {
-        ctx.fillRect(0, (1 - t) * h, w, t * h + 1);
-      }
-      ctx.restore();
+      // ── Flash zone ─────────────────────────────────────────────────────────
+      // Cells [clearCount, flashFront) glow phosphor green ahead of the clear.
+      // Intensity falls off toward the front; leading cell is near-white.
+      for (let i = clearCount; i < flashFront; i++) {
+        const { x, y, cw, ch } = cellRect(i % cols, Math.floor(i / cols));
+        const fade = 1 - (i - clearCount) / flashBand;
 
-      // Bright horizontal scan line at the boundary
-      const lineY = fromTop ? t * h : (1 - t) * h;
-      if (lineY > 0 && lineY < h) {
-        const glow = ctx.createLinearGradient(0, lineY - 6, 0, lineY + 8);
-        glow.addColorStop(0,   'transparent');
-        glow.addColorStop(0.35, 'rgba(80,220,80,0.5)');
-        glow.addColorStop(0.55, 'rgba(200,255,200,0.95)');
-        glow.addColorStop(0.75, 'rgba(80,220,80,0.4)');
-        glow.addColorStop(1,   'transparent');
-        ctx.fillStyle = glow;
-        ctx.fillRect(0, lineY - 6, w, 14);
+        if (i === clearCount) {
+          // Leading cell: bright white-green flash (the "cursor")
+          ctx.fillStyle = 'rgba(220,255,220,0.95)';
+        } else {
+          ctx.fillStyle = `rgba(60,255,100,${(fade * 0.8).toFixed(2)})`;
+        }
+        ctx.fillRect(x, y, cw, ch);
+      }
+
+      // ── Clear zone ─────────────────────────────────────────────────────────
+      // Use two rectangles (O(1)) rather than per-cell fills (O(n)).
+      if (clearCount > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = '#000';
+
+        const fullRows    = Math.floor(clearCount / cols);
+        const partialCols = clearCount % cols;
+
+        // All complete rows above the current one
+        if (fullRows > 0) {
+          ctx.fillRect(0, 0, w, Math.round(fullRows * cellH));
+        }
+        // Current partial row up to the clear front
+        if (partialCols > 0) {
+          ctx.fillRect(
+            0,
+            Math.round(fullRows * cellH),
+            Math.round(partialCols * cellW),
+            Math.round((fullRows + 1) * cellH) - Math.round(fullRows * cellH),
+          );
+        }
+
+        ctx.restore();
       }
     }, linear);
   },
