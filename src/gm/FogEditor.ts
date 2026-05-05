@@ -94,6 +94,14 @@ export class FogEditor {
     this.emitMode();
   }
 
+  /**
+   * Public entry point for fog polygon selection — called by MarkerEditor when a
+   * click misses all markers, so both layers share the same pointer stream.
+   */
+  trySelectAt(pos: { x: number; y: number }): void {
+    if (!this.enabled) this.trySelect(pos);
+  }
+
   deleteSelected(): void {
     if (!this.selectedId) return;
     this.polygons = this.polygons.filter((p) => p.id !== this.selectedId);

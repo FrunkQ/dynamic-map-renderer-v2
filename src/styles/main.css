@@ -105,13 +105,15 @@ body.gm-view {
   pointer-events: none;
 }
 
-/* Enabled when in draw or select mode — raised above markers canvas so it receives events */
+/* Select mode — click routing handled by markers canvas (see MarkerEditor fog callback) */
 #fog-canvas.fog-active {
-  pointer-events: auto;
-  z-index: 2;
+  /* pointer-events intentionally NOT set here; fog-draw overrides below */
 }
 
+/* Draw mode: fog canvas rises above markers canvas and intercepts all pointer events */
 #fog-canvas.fog-draw {
+  pointer-events: auto;
+  z-index: 2;
   cursor: crosshair;
 }
 

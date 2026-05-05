@@ -29,6 +29,7 @@ export class MarkerEditor {
   private readonly _onChange:     (markers: Marker[]) => void;
   private readonly _onSelect:     (marker: Marker | null) => void;
   private readonly _getIconCache: () => Map<string, ImageBitmap>;
+  private _fogSelectCb: ((pos: { x: number; y: number }) => void) | null = null;
 
   constructor(
     canvas:       HTMLCanvasElement,
@@ -63,6 +64,11 @@ export class MarkerEditor {
     this.selectedId = id;
     this._positionHUD();
     this._redraw();
+  }
+
+  /** Called when a click misses all markers — routes to fog polygon selection. */
+  setFogSelectCallback(fn: (pos: { x: number; y: number }) => void): void {
+    this._fogSelectCb = fn;
   }
 
   /** Disable / re-enable pointer capture — called when fog or viewport editors activate. */
@@ -137,6 +143,8 @@ export class MarkerEditor {
     } else {
       this.selectedId = null;
       this._onSelect(null);
+      // Missed all markers — let fog editor try to select a polygon at this position
+      this._fogSelectCb?.(this.layer.unproject(x, y, null));
     }
 
     this._positionHUD();

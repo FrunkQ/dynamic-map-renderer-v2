@@ -676,6 +676,8 @@ export class GMApp {
       () => this.iconPicker.iconCache,
     );
 
+    this.markerEditor.setFogSelectCallback((pos) => this.fogEditor.trySelectAt(pos));
+
     document.querySelector('#add-marker-btn')?.addEventListener('click', () => {
       this.markerEditor.addMarker(0.5, 0.5);
     });
@@ -759,7 +761,7 @@ export class GMApp {
     const sel     = markers.find((m) => m.id === this.selectedMarkerId) ?? null;
 
     // Rebuild dropdown
-    this.markerSelect.innerHTML = '<option value="">— No markers —</option>';
+    this.markerSelect.innerHTML = '<option value="">— No marker selected —</option>';
     for (const m of markers) {
       const opt = document.createElement('option');
       opt.value       = m.id;
