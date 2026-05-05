@@ -59,12 +59,12 @@ export default {
       id: 'direction',
       label: 'Direction',
       options: [
-        { value: 'left',     label: '← Enter from left'   },
-        { value: 'right',    label: '→ Enter from right'  },
-        { value: 'up',       label: '↑ Enter from top'    },
-        { value: 'down',     label: '↓ Enter from bottom' },
-        { value: 'diag_tl',  label: '↘ Diagonal TL → BR'  },
-        { value: 'diag_tr',  label: '↙ Diagonal TR → BL'  },
+        { value: 'left',    label: '→ Left to right'      },
+        { value: 'right',   label: '← Right to left'      },
+        { value: 'up',      label: '↓ Top to bottom'      },
+        { value: 'down',    label: '↑ Bottom to top'      },
+        { value: 'diag_tl', label: '↘ Diagonal TL → BR'   },
+        { value: 'diag_tr', label: '↙ Diagonal TR → BL'   },
       ],
       default: 'left',
     },
@@ -96,6 +96,7 @@ export default {
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = '#000';
+
       switch (direction) {
         case 'left':
           ctx.fillRect(0, 0, t * w, h);
@@ -109,31 +110,62 @@ export default {
         case 'down':
           ctx.fillRect(0, (1 - t) * h, w, t * h + 1);
           break;
+
+        // Diagonal TL→BR: reveal region is x + y <= reach (clipped to canvas).
+        // Build the correct polygon for each phase as reach sweeps 0 → w+h.
         case 'diag_tl': {
           const reach = t * (w + h);
           ctx.beginPath();
           ctx.moveTo(0, 0);
-          ctx.lineTo(Math.min(reach, w), 0);
-          ctx.lineTo(0, Math.min(reach, h));
-          if (reach > w) ctx.lineTo(0, reach - w);
-          if (reach > h) ctx.lineTo(reach - h, 0);
+          if (reach >= w + h) {
+            ctx.lineTo(w, 0); ctx.lineTo(w, h); ctx.lineTo(0, h);
+          } else if (reach >= Math.max(w, h)) {
+            // Both TR (w,0) and BL (0,h) inside — pentagon
+            ctx.lineTo(w, 0); ctx.lineTo(w, reach - w);
+            ctx.lineTo(reach - h, h); ctx.lineTo(0, h);
+          } else if (reach >= w) {
+            // Portrait only: TR inside, BL not yet
+            ctx.lineTo(w, 0); ctx.lineTo(w, reach - w); ctx.lineTo(0, reach);
+          } else if (reach >= h) {
+            // Landscape only: BL inside, TR not yet
+            ctx.lineTo(reach, 0); ctx.lineTo(reach - h, h); ctx.lineTo(0, h);
+          } else {
+            // Simple triangle
+            ctx.lineTo(reach, 0); ctx.lineTo(0, reach);
+          }
           ctx.closePath();
           ctx.fill();
           break;
         }
+
+        // Diagonal TR→BL: reveal region is (w-x) + y <= reach (clipped to canvas).
+        // Boundary line: at y=0, x = w-reach; at y=h, x = w-reach+h.
         case 'diag_tr': {
           const reach = t * (w + h);
           ctx.beginPath();
           ctx.moveTo(w, 0);
-          ctx.lineTo(Math.max(w - reach, 0), 0);
-          ctx.lineTo(w, Math.min(reach, h));
-          if (reach > w) ctx.lineTo(w, reach - w);
-          if (reach > h) ctx.lineTo(w - (reach - h), 0);
+          if (reach >= w + h) {
+            ctx.lineTo(0, 0); ctx.lineTo(0, h); ctx.lineTo(w, h);
+          } else if (reach >= Math.max(w, h)) {
+            // Both TL (0,0) and BR (w,h) inside — pentagon
+            ctx.lineTo(0, 0); ctx.lineTo(0, reach - w);
+            ctx.lineTo(w - reach + h, h); ctx.lineTo(w, h);
+          } else if (reach >= w) {
+            // Portrait only: TL inside, BR not yet
+            ctx.lineTo(0, 0); ctx.lineTo(0, reach - w); ctx.lineTo(w, reach);
+          } else if (reach >= h) {
+            // Landscape only: BR inside, TL not yet
+            ctx.lineTo(w - reach, 0); ctx.lineTo(w - reach + h, h); ctx.lineTo(w, h);
+          } else {
+            // Simple triangle
+            ctx.lineTo(w - reach, 0); ctx.lineTo(w, reach);
+          }
           ctx.closePath();
           ctx.fill();
           break;
         }
       }
+
       ctx.restore();
 
       // Bright edge line — only for cardinal directions
