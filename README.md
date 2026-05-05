@@ -6,6 +6,8 @@ Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GM
 
 This version is a complete rewrite of the original Python/Flask application. It is a pure browser app built with TypeScript, Three.js, and Vite, and is deployable to any static host (Vercel, Netlify, GitHub Pages, etc.).
 
+![Dynamic Map Renderer v2 — GM interface showing filter panel](./screenshot.png)
+
 ## What's New in v2
 
 - **No server required** — peer-to-peer via WebRTC (PeerJS). Deploy to any static host.
