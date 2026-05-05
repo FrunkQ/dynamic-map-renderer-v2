@@ -426,6 +426,9 @@ export class GMApp {
       }
       const deleteBtn = document.querySelector<HTMLButtonElement>('#fog-delete-btn');
       if (deleteBtn) deleteBtn.hidden = !hasSelection;
+      // Restore marker interaction whenever draw mode ends (covers both the Draw
+      // button and auto-exit after polygon completion via closePolygon).
+      this.markerEditor?.setPointerCapture(!drawing);
     });
 
     // Draw button toggles draw / select mode
