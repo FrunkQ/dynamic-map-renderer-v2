@@ -1,10 +1,14 @@
 # Dynamic Map Renderer v2
 
+## Try It Now
+
+**[https://dynamic-map-renderer-v2.vercel.app/](https://dynamic-map-renderer-v2.vercel.app/)**
+
+No account needed. No server. Everything stays on your device — maps you upload are stored in your browser's local storage and never sent anywhere. Just open the link and go.
+
 ## Description
 
 Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GMs. It lets you display map images to players in real time, with full control over fog of war, visual filters, pan, and zoom — all from a separate GM interface. Players connect via a peer-to-peer link; no server infrastructure is required beyond static file hosting.
-
-This version is a complete rewrite of the original Python/Flask application. It is a pure browser app built with TypeScript, Three.js, and Vite, and is deployable to any static host (Vercel, Netlify, GitHub Pages, etc.).
 
 ![Dynamic Map Renderer v2 — GM interface showing filter panel](./screenshot.png)
 
