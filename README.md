@@ -8,26 +8,9 @@ No account needed. No server. Everything stays on your device — maps you uploa
 
 ## Description
 
-Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GMs. It lets you display map images to players in real time, with full control over fog of war, visual filters, pan, and zoom — all from a separate GM interface. Players connect via a peer-to-peer link; no server infrastructure is required beyond static file hosting. It is effectively a very light form-over-function VTT tool you can use locally or online for free.
+Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GMs. It lets you display map images to players in real time, with full control over fog of war, visual filters, view pan and zoom, and animated map transitions — all from a separate GM interface. Players connect via a peer-to-peer link; no server infrastructure is required beyond static file hosting. It is effectively a very light form-over-function VTT tool you can use locally or online for free.
 
 ![Dynamic Map Renderer v2 — GM interface showing filter panel](./screenshot.png)
-
-## What's New in v1.1
-
-- **Interactive viewport editor** — the pan/zoom sliders are replaced by a direct on-map editor. A faint orange marching-ants rectangle is permanently overlaid on the GM's map showing exactly what players currently see. Click **Edit Player View** to activate drag handles: move the rectangle by dragging inside it, or resize it freely by dragging any corner. Hit **OK** to commit or **Cancel** to revert.
-- **Reset to Full Map** — one-click button to snap the player view back to showing the complete map.
-- **Strict viewport clipping** — the player's screen is hard-clipped to the GM's rectangle. No map content outside that rectangle is ever visible regardless of the player's screen size or aspect ratio. Background colour fills any letterbox or pillarbox bars.
-
-## What's New in v2
-
-- **No server required** — peer-to-peer via WebRTC (PeerJS). Deploy to any static host.
-- **Eight visual filters** — including four new artistically-styled effects (Ballpoint Pen, Hand Drawing, Watercolour, Oil Painting) alongside the updated CRT filters.
-- **Bundle import/export** — save and restore your entire map library (images + fog + filter settings) as a single `.json` file.
-- **Default map bundle** — place a `public/default-bundle.json` file to pre-load maps for first-time users.
-- **QR code** — scan to open the player view on a phone or tablet instantly.
-- **Auto-save** — all per-map settings (fog polygons, filter, view position, background colour) save automatically to browser IndexedDB.
-- **PWA support** — installable as an app on desktop and mobile.
-- **GPU-efficient rendering** — static filters render only on change; animated filters run at full frame rate only when needed.
 
 ## Features
 
@@ -46,10 +29,16 @@ Dynamic Map Renderer v2 is a browser-based tool for tabletop roleplaying game GM
   | Retro Sci-Fi Green | Classic green-phosphor CRT terminal |
   | Watercolour | Soft watercolour wash |
 
-- **Player view control** — interactive on-map viewport editor: an orange rectangle on the GM's canvas always shows what players see. Click Edit to drag-move or freely corner-resize it. One-click Reset to Full Map. The player's screen is strictly clipped to the rectangle; background colour fills any bars caused by aspect-ratio differences.
+- **Map transitions** — animated transitions when switching maps on the player view. Select per-map from the GM's Current Map panel. Available transitions: None (instant cut), Fade to black, CRT Collapse (old-TV phosphor dot effect). Transitions are extensible — each lives in its own folder under `src/transitions/definitions/` with its own configurable parameters.
+- **Player view control** — interactive on-map viewport editor: an orange rectangle on the GM's canvas always shows what players see. Click **Edit Player View** to drag-move or freely corner-resize it. One-click **Reset to Full Map**. The player's screen is strictly clipped to the rectangle; background colour fills any bars caused by aspect-ratio differences.
 - **Background colour** — set the letterbox colour; auto-sampled from the map on first load.
-- **Real-time sync** — all GM changes (map, fog, filter, view) push to connected players instantly.
+- **Real-time sync** — all GM changes (map, fog, filter, view, transition) push to connected players instantly.
 - **Room code** — three-word memorable code persists across reloads so players can reconnect.
+- **QR code** — scan to open the player view on a phone or tablet instantly. When running locally, uses your LAN IP so other devices on the same network can connect.
+- **Bundle import/export** — save and restore your entire map library (images + fog + filter settings) as a single `.json` file.
+- **Auto-save** — all per-map settings (fog polygons, filter, view position, background colour) save automatically to browser IndexedDB.
+- **PWA support** — installable as an app on desktop and mobile.
+- **GPU-efficient rendering** — static filters render only on change; animated filters run at full frame rate only when needed.
 
 ## Setup & Development
 
@@ -93,11 +82,11 @@ For other hosts, ensure those two COOP/COEP headers are set on all responses, an
 1. **GM view** — open the root URL (e.g. `https://your-deployment.vercel.app/`).
    - Upload maps with **Upload New Map**.
    - Share the room code or QR code with players, or click **Open Player Window** for a local second screen.
-   - Draw fog polygons, choose a filter, adjust the player view.
+   - Draw fog polygons, choose a filter, set a transition, and adjust the player view.
    - Use **Save to File** to back up your map library; **Load Maps File** to restore it.
 
 2. **Player view** — open `<your URL>/player`, enter the room code, and connect.
-   - The player sees whatever the GM is showing, filtered and cropped as the GM sets it.
+   - The player sees whatever the GM is showing, filtered, cropped, and transitioned as the GM sets it.
 
 ## Default Maps
 
@@ -126,6 +115,11 @@ src/
       retro_sci_fi_amber/
       retro_sci_fi_green/
       watercolor/
+  transitions/  Transition registry, engine, panel UI, and per-transition definitions
+    definitions/
+      none/
+      fade/
+      crt_collapse/
   p2p/          PeerJS host/guest session management + local BroadcastChannel fallback
   storage/      IndexedDB wrapper, map manager, bundle import/export
   styles/       CSS
@@ -143,10 +137,11 @@ player.html     Player entry point
 
 ## Future Plans
 
-1. **Map transitions** — fade and wipe animations when switching maps on the player view.
-2. **Markers / tokens** — place and manage visual tokens on the map.
-3. **Audio** — ambient sound tied to maps or locations (e.g. Aliens-style motion tracker).
-4. **Lighting** — dynamic light radius effects around tokens.
+1. **Markers / tokens** — place and manage visual tokens on the map.
+2. **Audio** — ambient sound tied to maps or locations (e.g. Aliens-style motion tracker).
+3. **Lighting** — dynamic light radius effects around tokens.
+
+See [CHANGELOG.md](./CHANGELOG.md) for release history.
 
 ---
 

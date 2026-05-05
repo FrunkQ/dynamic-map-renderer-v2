@@ -669,6 +669,16 @@ body.player-view #renderer-canvas {
 .status-bar[data-level="warn"]  { color: var(--warn); }
 .status-bar[data-level="ok"]    { color: var(--ok); }
 
+.app-version {
+  padding: 4px var(--space-md) 6px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-align: right;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+}
+
 /* ── Scrollbars ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

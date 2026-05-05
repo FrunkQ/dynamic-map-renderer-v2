@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { networkInterfaces } from 'os';
+import { readFileSync } from 'fs';
+
+const { version } = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: string };
 
 /** Returns the first non-loopback IPv4 address on this machine, or null. */
 function getLanIp(): string | null {
@@ -49,7 +52,8 @@ export default defineConfig(({ command }) => ({
   // is null, and the code path that reads it only runs when hostname is
   // localhost anyway, so it is safe to include in all builds.
   define: {
-    __DEV_LAN_IP__: JSON.stringify(command === 'serve' ? getLanIp() : null),
+    __DEV_LAN_IP__:   JSON.stringify(command === 'serve' ? getLanIp() : null),
+    __APP_VERSION__:  JSON.stringify(version),
   },
 
   server: {
