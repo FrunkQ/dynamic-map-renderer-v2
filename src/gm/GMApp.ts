@@ -819,6 +819,8 @@ export class GMApp {
           });
         } else if (msg.type === 'stop') {
           this.host.broadcast({ type: 'soundboard_stop', slotId: msg.slotId });
+        } else if (msg.type === 'volume') {
+          this.host.broadcast({ type: 'soundboard_volume', slotId: msg.slotId, volume: msg.volume });
         } else {
           this.host.broadcast({ type: 'soundboard_mute_all', muted: msg.muted });
         }

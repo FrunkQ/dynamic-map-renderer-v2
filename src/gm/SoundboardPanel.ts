@@ -9,7 +9,8 @@ type SlotsChangedCb = (slots: SoundboardSlot[]) => void;
 export type SoundboardBroadcast =
   | { type: 'play';     data: SoundboardAudioData }
   | { type: 'stop';     slotId: string }
-  | { type: 'mute_all'; muted: boolean };
+  | { type: 'mute_all'; muted: boolean }
+  | { type: 'volume';   slotId: string; volume: number };
 
 export class SoundboardPanel {
   private slotsEl!:      HTMLElement;
@@ -261,6 +262,9 @@ export class SoundboardPanel {
       const volume = parseFloat((e.target as HTMLInputElement).value);
       this.engine.setVolume(slot.id, volume);
       this._updateSlot(slot.id, { volume });
+      if (this.engine.isPlaying(slot.id) || this.randomTimers.has(slot.id)) {
+        this.onBroadcast({ type: 'volume', slotId: slot.id, volume });
+      }
     });
 
     row.querySelector('.sb-remove-btn')?.addEventListener('click', () => this._removeSlot(slot.id));

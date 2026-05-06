@@ -305,6 +305,13 @@ export interface MsgSoundboardMuteAll {
   muted: boolean;
 }
 
+/** GM changed volume on a playing slot — update without interrupting playback */
+export interface MsgSoundboardVolume {
+  type: 'soundboard_volume';
+  slotId: string;
+  volume: number;
+}
+
 /** Preloads an audio asset on the player without starting playback */
 export interface MsgSoundboardAsset {
   type: 'soundboard_asset';
@@ -324,6 +331,7 @@ export type GMMessage =
   | MsgSoundboardPlay
   | MsgSoundboardStop
   | MsgSoundboardMuteAll
+  | MsgSoundboardVolume
   | MsgSoundboardAsset;
 
 // ─── Storage types ───────────────────────────────────────────────────────────

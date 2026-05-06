@@ -303,6 +303,12 @@ export class PlayerApp {
         break;
       }
 
+      case 'soundboard_volume': {
+        const el = this.sbAudioEls.get(msg.slotId);
+        if (el) el.volume = Math.max(0, Math.min(1, msg.volume));
+        break;
+      }
+
       case 'soundboard_mute_all': {
         this.sbMuted = msg.muted;
         for (const el of this.sbAudioEls.values()) el.muted = msg.muted;
