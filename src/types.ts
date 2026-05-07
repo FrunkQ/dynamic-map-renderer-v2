@@ -80,6 +80,9 @@ export interface Marker {
   audioLoop:        boolean;
   audioMuted:       boolean;
   audioMaxDistance: number;   // normalised map units
+  audioVolume:      number;   // 0–1 base volume (multiplied by positional attenuation)
+  audioRandom:      boolean;  // random play mode — fires one-shots at randomised intervals
+  audioRandomFreq:  number;   // target plays per 10 minutes (1–100) when audioRandom is true
 
   // Listener fields (Phase 3+)
   trackerEnabled: boolean;
@@ -99,9 +102,12 @@ export function defaultMarker(id: string, x = 0.5, y = 0.5): Marker {
     hiddenFromTracker: false,
     showLabel:         false,
     audioTrackId:      null,
-    audioLoop:         true,
+    audioLoop:         false,
     audioMuted:        false,
     audioMaxDistance:  0.3,
+    audioVolume:       1.0,
+    audioRandom:       false,
+    audioRandomFreq:   10,
     trackerEnabled:    false,
     trackerScale:      1.0,
   };

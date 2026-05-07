@@ -832,11 +832,36 @@ body.player-view #renderer-canvas {
   color: var(--accent);
   background: var(--accent-dim);
 }
+.marker-role-btn--listener {
+  border-color: rgba(72, 209, 204, 0.3);
+  color: rgba(72, 209, 204, 0.7);
+}
+.marker-role-btn--listener:hover {
+  border-color: #48d1cc;
+  color: #48d1cc;
+}
+.marker-role-btn--listener.marker-role-btn--active {
+  border-color: #48d1cc;
+  color: #48d1cc;
+  background: rgba(72, 209, 204, 0.1);
+}
 .marker-sound-row {
   align-items: center;
 }
 .marker-sound-row .btn {
   margin-left: auto;
+}
+.marker-playback-row {
+  align-items: center;
+}
+.marker-mode-btns {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.marker-mode-btns .btn {
+  font-size: 11px;
+  padding: 3px 7px;
 }
 
 /* ── Icon picker popover ────────────────────────────────────────────────── */

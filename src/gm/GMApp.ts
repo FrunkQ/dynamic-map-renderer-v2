@@ -813,6 +813,39 @@ export class GMApp {
       });
     });
 
+    // Volume slider
+    const audioVolInput = document.querySelector<HTMLInputElement>('#marker-audio-volume');
+    const audioVolVal   = document.querySelector<HTMLElement>('#marker-audio-volume-val');
+    audioVolInput?.addEventListener('input', () => {
+      const val = parseFloat(audioVolInput!.value);
+      if (audioVolVal) audioVolVal.textContent = `${Math.round(val * 100)}%`;
+      this.updateSelectedMarker({ audioVolume: val });
+    });
+
+    // Loop / random mode buttons
+    document.querySelector('#marker-loop-btn')?.addEventListener('click', () => {
+      const m = this.state.getState().markers.find((mk) => mk.id === this.selectedMarkerId);
+      if (!m) return;
+      const newLoop = !m.audioLoop;
+      this.updateSelectedMarker({ audioLoop: newLoop, ...(newLoop ? { audioRandom: false } : {}) });
+    });
+
+    document.querySelector('#marker-random-btn')?.addEventListener('click', () => {
+      const m = this.state.getState().markers.find((mk) => mk.id === this.selectedMarkerId);
+      if (!m) return;
+      const newRandom = !(m.audioRandom ?? false);
+      this.updateSelectedMarker({ audioRandom: newRandom, ...(newRandom ? { audioLoop: false } : {}) });
+    });
+
+    // Random frequency slider
+    const randomFreqInput = document.querySelector<HTMLInputElement>('#marker-random-freq');
+    const randomFreqVal   = document.querySelector<HTMLElement>('#marker-random-freq-val');
+    randomFreqInput?.addEventListener('input', () => {
+      const val = parseInt(randomFreqInput!.value);
+      if (randomFreqVal) randomFreqVal.textContent = `${val}/10m`;
+      this.updateSelectedMarker({ audioRandomFreq: val });
+    });
+
     // Audio muted toggle
     document.querySelector<HTMLInputElement>('#marker-audio-muted')?.addEventListener('change', (e) => {
       this.updateSelectedMarker({ audioMuted: (e.target as HTMLInputElement).checked });
@@ -983,14 +1016,29 @@ export class GMApp {
       if (audioControlsEl) audioControlsEl.hidden = sel.role !== 'audio_source';
 
       if (sel.role === 'audio_source') {
-        const mutedToggle  = document.querySelector<HTMLInputElement>('#marker-audio-muted');
-        const maxDistInput = document.querySelector<HTMLInputElement>('#marker-max-dist');
-        const maxDistVal   = document.querySelector<HTMLElement>('#marker-max-dist-val');
-        const soundBtn     = document.querySelector<HTMLButtonElement>('#marker-sound-btn');
-        if (mutedToggle)  mutedToggle.checked     = sel.audioMuted;
-        if (maxDistInput) maxDistInput.value       = String(sel.audioMaxDistance);
-        if (maxDistVal)   maxDistVal.textContent   = sel.audioMaxDistance.toFixed(2);
-        if (soundBtn)     soundBtn.textContent     = sel.audioTrackId ? 'Change Sound' : 'Assign Sound';
+        const soundBtn      = document.querySelector<HTMLButtonElement>('#marker-sound-btn');
+        const audioVolInput = document.querySelector<HTMLInputElement>('#marker-audio-volume');
+        const audioVolVal   = document.querySelector<HTMLElement>('#marker-audio-volume-val');
+        const loopBtn       = document.querySelector<HTMLButtonElement>('#marker-loop-btn');
+        const randomBtn     = document.querySelector<HTMLButtonElement>('#marker-random-btn');
+        const randomRow     = document.querySelector<HTMLElement>('#marker-random-row');
+        const randomFreqInput = document.querySelector<HTMLInputElement>('#marker-random-freq');
+        const randomFreqVal   = document.querySelector<HTMLElement>('#marker-random-freq-val');
+        const mutedToggle   = document.querySelector<HTMLInputElement>('#marker-audio-muted');
+        const maxDistInput  = document.querySelector<HTMLInputElement>('#marker-max-dist');
+        const maxDistVal    = document.querySelector<HTMLElement>('#marker-max-dist-val');
+
+        if (soundBtn)       soundBtn.textContent        = sel.audioTrackId ? 'Change Sound' : 'Assign Sound';
+        if (audioVolInput)  audioVolInput.value         = String(sel.audioVolume ?? 1);
+        if (audioVolVal)    audioVolVal.textContent      = `${Math.round((sel.audioVolume ?? 1) * 100)}%`;
+        if (loopBtn)        loopBtn.classList.toggle('btn--active', sel.audioLoop);
+        if (randomBtn)      randomBtn.classList.toggle('btn--active', !!(sel.audioRandom));
+        if (randomRow)      randomRow.hidden             = !(sel.audioRandom);
+        if (randomFreqInput) randomFreqInput.value       = String(sel.audioRandomFreq ?? 10);
+        if (randomFreqVal)  randomFreqVal.textContent    = `${sel.audioRandomFreq ?? 10}/10m`;
+        if (mutedToggle)    mutedToggle.checked          = sel.audioMuted;
+        if (maxDistInput)   maxDistInput.value           = String(sel.audioMaxDistance);
+        if (maxDistVal)     maxDistVal.textContent       = sel.audioMaxDistance.toFixed(2);
       }
     }
   }

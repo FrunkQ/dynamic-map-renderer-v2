@@ -134,17 +134,34 @@
             </label>
           </div>
 
-          <p class="map-section-label map-section-label--gap">Role</p>
+          <p class="map-section-label map-section-label--gap">Marker Sounds</p>
           <div class="marker-role-btns">
-            <button class="marker-role-btn" data-role="default">Default</button>
-            <button class="marker-role-btn" data-role="listener">Listener</button>
-            <button class="marker-role-btn" data-role="audio_source">Audio Source</button>
+            <button class="marker-role-btn" data-role="default">None</button>
+            <button class="marker-role-btn" data-role="audio_source">Sound Source</button>
+            <button class="marker-role-btn marker-role-btn--listener" data-role="listener">Listener</button>
           </div>
 
           <div id="marker-audio-controls" hidden>
             <div class="param-row marker-sound-row">
               <label>Sound</label>
               <button id="marker-sound-btn" class="btn btn--ghost btn--sm">Assign Sound</button>
+            </div>
+            <div class="param-row">
+              <label for="marker-audio-volume">Volume</label>
+              <input type="range" id="marker-audio-volume" min="0" max="1" step="0.01" value="1" />
+              <span id="marker-audio-volume-val" class="param-value">100%</span>
+            </div>
+            <div class="param-row marker-playback-row">
+              <label>Playback</label>
+              <div class="marker-mode-btns">
+                <button id="marker-loop-btn" class="btn btn--ghost btn--sm" title="Loop">🔄 Loop</button>
+                <button id="marker-random-btn" class="btn btn--ghost btn--sm" title="Random">🎲 Random</button>
+              </div>
+            </div>
+            <div id="marker-random-row" class="param-row" hidden>
+              <label for="marker-random-freq">Frequency</label>
+              <input type="range" id="marker-random-freq" min="1" max="100" step="1" value="10" />
+              <span id="marker-random-freq-val" class="param-value">10/10m</span>
             </div>
             <div class="param-row param-row--toggle">
               <label for="marker-audio-muted">Muted</label>
