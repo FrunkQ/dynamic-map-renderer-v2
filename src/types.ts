@@ -305,12 +305,27 @@ export interface MsgSoundboardStop {
   slotId: string;
 }
 
-/** GM assigned audio to a marker — deliver the blob to players for preloading */
-export interface MsgMarkerAudioAsset {
-  type:     'marker_audio_asset';
+/** GM started a positional audio source; player plays it at the given volume */
+export interface MsgPositionalPlay {
+  type:     'positional_play';
   markerId: string;
   assetId:  string;
+  loop:     boolean;
+  volume:   number;
   dataUrl?: string; // stripped for PeerJS binary delivery; inline for BroadcastChannel
+}
+
+/** Update volume for an active positional source (listener moved) */
+export interface MsgPositionalVolume {
+  type:     'positional_volume';
+  markerId: string;
+  volume:   number;
+}
+
+/** Stop a positional audio source on the player */
+export interface MsgPositionalStop {
+  type:     'positional_stop';
+  markerId: string;
 }
 
 /** GM toggled master mute — all player audio should pause/resume accordingly */
@@ -347,7 +362,9 @@ export type GMMessage =
   | MsgSoundboardMuteAll
   | MsgSoundboardVolume
   | MsgSoundboardAsset
-  | MsgMarkerAudioAsset;
+  | MsgPositionalPlay
+  | MsgPositionalVolume
+  | MsgPositionalStop;
 
 // ─── Storage types ───────────────────────────────────────────────────────────
 

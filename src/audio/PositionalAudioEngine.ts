@@ -34,6 +34,13 @@ export class PositionalAudioEngine {
   private listenerY   = 0.5;
   private hasListener = false;
 
+  /** Fired when a source starts playing (or a random one-shot fires).
+   *  GMApp uses this to broadcast positional_play to players. */
+  onSourceStart?: (markerId: string, assetId: string, loop: boolean, gain: number) => void;
+  /** Fired when a source is explicitly removed.
+   *  GMApp uses this to broadcast positional_stop to players. */
+  onSourceStop?: (markerId: string) => void;
+
   // ── Buffer management ────────────────────────────────────────────────────
 
   async storeBuffer(assetId: string, raw: ArrayBuffer): Promise<void> {
@@ -52,9 +59,18 @@ export class PositionalAudioEngine {
   // ── State updates (called on every marker_update) ────────────────────────
 
   setListenerPosition(x: number, y: number): void {
+    const wasListener = this.hasListener;
     this.listenerX   = x;
     this.listenerY   = y;
     this.hasListener = true;
+    // Listener just appeared — notify GMApp about sources that are already running
+    if (!wasListener && this.onSourceStart) {
+      for (const [id, src] of this.sources.entries()) {
+        if (src.node !== null) {
+          this.onSourceStart(id, src.assetId, src.loop, this._calcGain(src.x, src.y, src.maxDist, src.volume));
+        }
+      }
+    }
     this._refreshGains();
   }
 
@@ -85,6 +101,7 @@ export class PositionalAudioEngine {
     // Stop and remove sources that are no longer wanted
     for (const [id, src] of this.sources.entries()) {
       if (!wanted.has(id)) {
+        this.onSourceStop?.(id);
         this._stopSource(src);
         this.sources.delete(id);
       }
@@ -139,6 +156,12 @@ export class PositionalAudioEngine {
       }
     }
     this._refreshGains();
+  }
+
+  /** Compute the current positional gain for a marker (used by GMApp for volume broadcasts). */
+  calcGainForMarker(m: Marker): number {
+    if (!this.hasListener) return 0;
+    return this._calcGain(m.position.x, m.position.y, m.audioMaxDistance, m.audioVolume ?? 1);
   }
 
   /** Call on any user gesture to unblock the browser's autoplay policy. */
@@ -201,6 +224,11 @@ export class PositionalAudioEngine {
       node.connect(gain);
       node.start();
       src.node = node;
+      // Notify GMApp so it can broadcast positional_play to players
+      if (this.hasListener) {
+        this.onSourceStart?.(markerId, src.assetId, src.loop,
+          this._calcGain(src.x, src.y, src.maxDist, src.volume));
+      }
       // For non-looping one-shots: clean up when done
       if (!marker.audioLoop) {
         node.onended = () => { src.node = null; };
@@ -236,9 +264,12 @@ export class PositionalAudioEngine {
     node.buffer = buf;
     node.loop   = false;
     node.connect(src.gain);
-    src.gain.gain.value = this._calcGain(src.x, src.y, src.maxDist, src.volume);
+    const gain2 = this._calcGain(src.x, src.y, src.maxDist, src.volume);
+    src.gain.gain.value = gain2;
     node.start();
     src.node = node;
+    // Notify GMApp so it can broadcast each random fire to players
+    this.onSourceStart?.(markerId, src.assetId, false, gain2);
     node.onended = () => {
       src.node = null;
       this._scheduleRandom(markerId);

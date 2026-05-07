@@ -44,7 +44,11 @@ export class GMApp {
   private soundboardEngine!: SoundboardEngine;
   private soundboardPanel!:  SoundboardPanel;
 
-  private positionalAudio = new PositionalAudioEngine();
+  private positionalAudio  = new PositionalAudioEngine();
+  /** assetId → dataUrl — cached for inclusion in positional_play broadcasts */
+  private _assetDataUrls   = new Map<string, string>();
+  /** markerId → last-broadcast state for active positional sources */
+  private _activePositional = new Map<string, { loop: boolean; lastVolume: number }>();
   private selectedMarkerId: string | null = null;
   private mapAspectRatio = 1;
   private remoteAudioEnabled = localStorage.getItem(REMOTE_AUDIO_KEY) !== 'false';
@@ -120,6 +124,20 @@ export class GMApp {
     document.addEventListener('click',      resumePA);
     document.addEventListener('keydown',    resumePA);
     document.addEventListener('touchstart', resumePA, { passive: true });
+
+    // Mirror positional audio events to connected players
+    this.positionalAudio.onSourceStart = (markerId, assetId, loop, gain) => {
+      const dataUrl = this._assetDataUrls.get(assetId);
+      if (!dataUrl) return;
+      this._activePositional.set(markerId, { loop, lastVolume: gain });
+      this.host.broadcast({ type: 'positional_play', markerId, assetId, loop, volume: gain, dataUrl });
+    };
+    this.positionalAudio.onSourceStop = (markerId) => {
+      if (this._activePositional.has(markerId)) {
+        this._activePositional.delete(markerId);
+        this.host.broadcast({ type: 'positional_stop', markerId });
+      }
+    };
 
     this.setStatus('Ready', 'ok');
   }
@@ -334,6 +352,8 @@ export class GMApp {
 
     // Stop positional and soundboard audio from the previous map
     this.positionalAudio.setSources([]);
+    this._activePositional.clear();
+    this._assetDataUrls.clear();
     this.soundboardPanel.stopAll();
     this.soundboardPanel.update(this.state.getState().audio.slots);
 
@@ -888,14 +908,9 @@ export class GMApp {
       blob.arrayBuffer(),
       this._blobToDataUrl(blob),
     ]);
+    this._assetDataUrls.set(asset.id, dataUrl);
     await this.positionalAudio.storeBuffer(asset.id, arrayBuf);
     this._syncPositionalAudio();
-    this.host.broadcast({
-      type:     'marker_audio_asset',
-      markerId: this.selectedMarkerId,
-      assetId:  asset.id,
-      dataUrl,
-    });
   }
 
   private _blobToDataUrl(blob: Blob): Promise<string> {
@@ -914,20 +929,14 @@ export class GMApp {
       if (!asset) continue;
       const blob = await AudioAssetStore.getBlob(asset);
       if (!blob) continue;
-      // Store in GM engine and broadcast to players in parallel
       const [arrayBuf, dataUrl] = await Promise.all([
         blob.arrayBuffer(),
         this._blobToDataUrl(blob),
       ]);
+      this._assetDataUrls.set(m.audioTrackId, dataUrl);
       await this.positionalAudio.storeBuffer(m.audioTrackId, arrayBuf);
-      this.host.broadcast({
-        type:     'marker_audio_asset',
-        markerId: m.id,
-        assetId:  m.audioTrackId,
-        dataUrl,
-      });
     }
-    // All buffers now loaded — start playing any sources that have a listener
+    // All buffers loaded — engine starts sources; onSourceStart fires positional_play
     this._syncPositionalAudio();
   }
 
@@ -990,12 +999,33 @@ export class GMApp {
   private _syncPositionalAudio(): void {
     const markers = this.state.getState().markers;
     const listener = markers.find((m) => m.role === 'listener');
-    if (listener) {
-      this.positionalAudio.setListenerPosition(listener.position.x, listener.position.y);
-    } else {
+
+    if (!listener) {
+      // Stop all active positional sources on players
+      for (const markerId of this._activePositional.keys()) {
+        this.host.broadcast({ type: 'positional_stop', markerId });
+      }
+      this._activePositional.clear();
       this.positionalAudio.clearListener();
+    } else {
+      this.positionalAudio.setListenerPosition(listener.position.x, listener.position.y);
     }
+
     this.positionalAudio.setSources(markers);
+
+    // Send volume updates for active loop sources as listener moves
+    if (listener) {
+      for (const [markerId, state] of this._activePositional.entries()) {
+        if (!state.loop) continue;
+        const marker = markers.find((m) => m.id === markerId);
+        if (!marker) continue;
+        const gain = this.positionalAudio.calcGainForMarker(marker);
+        if (Math.abs(gain - state.lastVolume) > 0.01) {
+          state.lastVolume = gain;
+          this.host.broadcast({ type: 'positional_volume', markerId, volume: gain });
+        }
+      }
+    }
   }
 
   private updateMarkerPanel(): void {

@@ -30,8 +30,8 @@ export class Host {
   private lastIconData:         MarkerIconData[] = [];
   private lastSoundboardActive: SoundboardAudioData[] = [];
   private lastSoundboardAssets: { assetId: string; dataUrl: string }[] = [];
-  /** markerId → audio asset — delivered to new joiners after full_state */
-  private lastMarkerAudioAssets = new Map<string, { markerId: string; assetId: string; dataUrl: string }>();
+  /** markerId → active positional play — delivered to new joiners (mirrors lastSoundboardActive) */
+  private lastPositionalActive = new Map<string, { markerId: string; assetId: string; loop: boolean; volume: number; dataUrl: string }>();
   /** Monotonically-increasing sequence number stamped on every broadcast.
    *  Players use this to deduplicate the same message arriving via both
    *  BroadcastChannel and PeerJS (local windows receive both). */
@@ -79,14 +79,9 @@ export class Host {
           ...(this.lastSoundboardAssets.length > 0     ? { soundboardAssets: this.lastSoundboardAssets } : {}),
         };
         this.local.send(msg);
-        // Deliver cached marker audio assets inline (BroadcastChannel supports large payloads)
-        for (const asset of this.lastMarkerAudioAssets.values()) {
-          this.local.send({
-            type: 'marker_audio_asset',
-            markerId: asset.markerId,
-            assetId: asset.assetId,
-            dataUrl: asset.dataUrl,
-          });
+        // Deliver active positional plays inline (BroadcastChannel supports large payloads)
+        for (const p of this.lastPositionalActive.values()) {
+          this.local.send({ type: 'positional_play', markerId: p.markerId, assetId: p.assetId, loop: p.loop, volume: p.volume, dataUrl: p.dataUrl });
         }
       }
     });
@@ -118,15 +113,20 @@ export class Host {
     }
     if (msg.type === 'map_change') {
       this.lastMapBlob = msg.mapBlob;
-      // Map change stops all previous sounds; new map's sounds arrive via soundboard_play below.
       this.lastSoundboardActive = [];
-      // Clear marker audio cache — new map may have different audio_source markers.
-      this.lastMarkerAudioAssets.clear();
+      this.lastPositionalActive.clear();
     }
-    if (msg.type === 'marker_audio_asset' && msg.dataUrl) {
-      this.lastMarkerAudioAssets.set(msg.markerId, {
-        markerId: msg.markerId, assetId: msg.assetId, dataUrl: msg.dataUrl,
+    if (msg.type === 'positional_play' && msg.dataUrl) {
+      this.lastPositionalActive.set(msg.markerId, {
+        markerId: msg.markerId, assetId: msg.assetId, loop: msg.loop, volume: msg.volume, dataUrl: msg.dataUrl,
       });
+    }
+    if (msg.type === 'positional_volume') {
+      const p = this.lastPositionalActive.get(msg.markerId);
+      if (p) p.volume = msg.volume;
+    }
+    if (msg.type === 'positional_stop') {
+      this.lastPositionalActive.delete(msg.markerId);
     }
     // Track individual play/stop so late-joining players hear active sounds.
     if (msg.type === 'soundboard_play' && msg.dataUrl) {
@@ -187,14 +187,9 @@ export class Host {
           ...(this.lastSoundboardAssets.length > 0     ? { soundboardAssets: this.lastSoundboardAssets } : {}),
         };
         this.sendTo(conn, msg);
-        // Deliver cached marker audio assets as chunked binary messages
-        for (const asset of this.lastMarkerAudioAssets.values()) {
-          this.sendTo(conn, {
-            type: 'marker_audio_asset',
-            markerId: asset.markerId,
-            assetId: asset.assetId,
-            dataUrl: asset.dataUrl,
-          });
+        // Deliver active positional plays as chunked binary messages
+        for (const p of this.lastPositionalActive.values()) {
+          this.sendTo(conn, { type: 'positional_play', markerId: p.markerId, assetId: p.assetId, loop: p.loop, volume: p.volume, dataUrl: p.dataUrl });
         }
       }
     });
@@ -219,12 +214,10 @@ export class Host {
     // For soundboard_play / marker_audio_asset: strip dataUrl, send binary after the JSON.
     let audioBuffer: ArrayBuffer | undefined;
     let jsonMsg: Record<string, unknown> = rest as Record<string, unknown>;
-    if (rest.type === 'soundboard_play' && rest.dataUrl) {
-      audioBuffer = this._dataUrlToBuffer(rest.dataUrl);
-      const { dataUrl: _d, ...noUrl } = rest;
-      void _d;
-      jsonMsg = noUrl as Record<string, unknown>;
-    } else if (rest.type === 'marker_audio_asset' && rest.dataUrl) {
+    if (
+      (rest.type === 'soundboard_play' || rest.type === 'positional_play') &&
+      rest.dataUrl
+    ) {
       audioBuffer = this._dataUrlToBuffer(rest.dataUrl);
       const { dataUrl: _d, ...noUrl } = rest;
       void _d;

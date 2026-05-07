@@ -1,7 +1,6 @@
 import { Guest } from '../p2p/Guest.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { MarkerTexture } from '../rendering/MarkerTexture.ts';
-import { PositionalAudioEngine } from '../audio/PositionalAudioEngine.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
 import { TransitionEngine } from '../transitions/TransitionEngine.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
@@ -39,7 +38,10 @@ export class PlayerApp {
   /** Master mute flag */
   private sbMuted = false;
   private _audioResumeScheduled = false;
-  private positionalAudio = new PositionalAudioEngine();
+  /** markerId → <audio> element for active positional sources */
+  private _posAudioEls  = new Map<string, HTMLAudioElement>();
+  /** assetId → URL so re-plays (late join / random fires) don't need the data resent */
+  private _posAssetUrls = new Map<string, string>();
   private _muteIndicatorEl: HTMLElement | null = null;
   // ── WebGL context-loss recovery ──────────────────────────────────────────
   /** Room code retained so we can reconnect if cached state is unavailable. */
@@ -118,12 +120,6 @@ export class PlayerApp {
       }
     });
 
-    // Resume positional AudioContext on any user gesture (browser autoplay policy)
-    const resumePositional = () => this.positionalAudio.tryResume();
-    document.addEventListener('click',      resumePositional);
-    document.addEventListener('keydown',    resumePositional);
-    document.addEventListener('touchstart', resumePositional, { passive: true });
-
     document.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       this._toggleMute();
@@ -198,7 +194,6 @@ export class PlayerApp {
         if (msg.payload.view)   this.lastView   = msg.payload.view;
         this.renderer.setFilter(msg.payload.filter);
         this.renderer.setView(msg.payload.view);
-        this._syncPositionalAudio(this.currentMarkers);
         void (async () => {
           if (msg.iconData?.length)         await this._decodeIconData(msg.iconData);
           if (msg.soundboardAssets?.length) this._cacheSoundboardAssets(msg.soundboardAssets);
@@ -216,7 +211,7 @@ export class PlayerApp {
         if (msg.audio?.slots)          this.sbSlots = msg.audio.slots;
         // Stop any playing audio from the previous map
         this._stopAllSoundboard();
-        this.positionalAudio.setSources([]); // stop all positional audio immediately
+        this._stopAllPositional();
         if (mapBlob) {
           const fog    = msg.fog    ?? { polygons: [] };
           const filter = msg.filter;
@@ -234,7 +229,6 @@ export class PlayerApp {
               if (filter) this.renderer.setFilter(filter);
               if (view)   this.renderer.setView(view);
             });
-            this._syncPositionalAudio(this.currentMarkers);
           })();
         }
         break;
@@ -264,7 +258,6 @@ export class PlayerApp {
 
       case 'marker_update': {
         this.currentMarkers = msg.payload;
-        this._syncPositionalAudio(this.currentMarkers);
         void (async () => {
           if (msg.iconData?.length) await this._decodeIconData(msg.iconData);
           this.markerTexture.render(this.currentMarkers, this.playerIconCache);
@@ -273,23 +266,30 @@ export class PlayerApp {
         break;
       }
 
-      case 'marker_audio_asset': {
-        console.log(`[Player] marker_audio_asset: markerId=${msg.markerId} assetId=${msg.assetId} binary=${!!mapBlob} dataUrl=${!!msg.dataUrl}`);
-        void (async () => {
-          let buf: ArrayBuffer | undefined;
-          if (mapBlob) {
-            buf = mapBlob;
-          } else if (msg.dataUrl) {
-            const res = await fetch(msg.dataUrl);
-            buf = await res.arrayBuffer();
-          }
-          if (buf) {
-            await this.positionalAudio.storeBuffer(msg.assetId, buf);
-            this.positionalAudio.onBufferReady(msg.assetId, this.currentMarkers);
-          } else {
-            console.warn(`[Player] marker_audio_asset: no buffer available for assetId=${msg.assetId}`);
-          }
-        })();
+      case 'positional_play': {
+        // Reuse the same binary-or-dataUrl pattern as soundboard_play
+        if (mapBlob) {
+          const url = URL.createObjectURL(new Blob([mapBlob], { type: 'audio/mpeg' }));
+          this._posAssetUrls.set(msg.assetId, url);
+          this._posPlay(msg.markerId, url, msg.loop, msg.volume);
+        } else {
+          if (msg.dataUrl) this._posAssetUrls.set(msg.assetId, msg.dataUrl);
+          const url = this._posAssetUrls.get(msg.assetId);
+          if (url) this._posPlay(msg.markerId, url, msg.loop, msg.volume);
+        }
+        break;
+      }
+
+      case 'positional_volume': {
+        const el = this._posAudioEls.get(msg.markerId);
+        if (el) el.volume = Math.max(0, Math.min(1, msg.volume));
+        break;
+      }
+
+      case 'positional_stop': {
+        const el = this._posAudioEls.get(msg.markerId);
+        if (el) { el.pause(); el.currentTime = 0; }
+        this._posAudioEls.delete(msg.markerId);
         break;
       }
 
@@ -401,6 +401,9 @@ export class PlayerApp {
       for (const el of this.sbAudioEls.values()) {
         if (el.paused && el.src) void el.play().catch(() => {});
       }
+      for (const el of this._posAudioEls.values()) {
+        if (el.paused && el.src) void el.play().catch(() => {});
+      }
     };
     document.addEventListener('click',       resume, { once: true });
     document.addEventListener('keydown',     resume, { once: true });
@@ -430,19 +433,23 @@ export class PlayerApp {
 
   // ─── Positional audio ─────────────────────────────────────────────────────
 
-  private _syncPositionalAudio(markers: Marker[]): void {
-    const listener = markers.find((m) => m.role === 'listener');
-    const sources  = markers.filter((m) => m.role === 'audio_source');
-    console.log(
-      `[Player] _syncPositionalAudio: markers=${markers.length} sources=${sources.length} listener=${listener ? `(${listener.position.x.toFixed(3)},${listener.position.y.toFixed(3)})` : 'NONE'}` +
-      (sources.length ? ` sourceIds=[${sources.map((m) => `${m.id.slice(0,6)}:${m.audioTrackId ?? 'no-track'}`).join(', ')}]` : '')
-    );
-    if (listener) {
-      this.positionalAudio.setListenerPosition(listener.position.x, listener.position.y);
-    } else {
-      this.positionalAudio.clearListener();
+  private _posPlay(markerId: string, url: string, loop: boolean, volume: number): void {
+    let el = this._posAudioEls.get(markerId);
+    if (!el) {
+      el = new Audio();
+      this._posAudioEls.set(markerId, el);
     }
-    this.positionalAudio.setSources(markers);
+    if (el.src !== url) { el.pause(); el.src = url; }
+    el.currentTime = 0;
+    el.loop   = loop;
+    el.volume = Math.max(0, Math.min(1, volume));
+    void el.play().catch(() => this._scheduleAudioResume());
+  }
+
+  private _stopAllPositional(): void {
+    for (const el of this._posAudioEls.values()) { el.pause(); el.currentTime = 0; }
+    this._posAudioEls.clear();
+    this._posAssetUrls.clear();
   }
 
   // ─── Icon cache ───────────────────────────────────────────────────────────
