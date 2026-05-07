@@ -1,107 +1,131 @@
 # Dynamic Map Renderer — GM Help
 
-This is the GM control panel. The sidebar on the left controls everything the players see on their screen. Panels can be collapsed or expanded by clicking their title bar.
+The sidebar controls everything players see. Click any panel title to expand or collapse it.
 
 ---
 
 ## Session
 
-Manages the live connection between you (the GM) and your players.
+**Room Code** — The three-word code your players use to connect (e.g. `silent-raven-forge`). It stays the same across page reloads. If a player's connection drops, their window will automatically try to reconnect.
 
-**Room Code** — The unique three-word code for this session (e.g. `silent-raven-forge`). Players enter this code on the player page to connect. The code is remembered across page reloads so your players can reconnect to the same room.
+**QR Code** — Scan to open the player view on a phone or tablet at the table.
 
-**QR Code** — Scan with a phone or tablet to open the player view directly. Useful for getting players connected quickly at the table.
+**Open Player Window** — Opens a local player window on this machine — handy for a second screen or projector.
 
-**Open Player Window** — Opens the player view in a new browser window on this machine. Handy for testing or for running the player display on the same PC connected to a projector.
+**Copy Player URL** — Copies the full link (with the room code) to share with remote players.
 
-**Copy Player URL** — Copies the full player URL (including the room code) to your clipboard. Share this link with remote players.
-
-**Players** — Shows how many player windows are currently connected.
+**Players** — Shows how many player windows are connected right now.
 
 ---
 
 ## Map
 
-### Current Map
+**Map selector** — Switch between your uploaded maps. Switching instantly updates all connected players.
 
-**Map selector** — Dropdown list of all uploaded maps. Select a map here to load it onto the GM preview and push it to all connected players immediately.
+**Upload New Map** — Add a `.png`, `.jpg`, or `.webp` image. It's stored in your browser and loaded immediately.
 
-**Upload New Map** — Upload a map image file (`.png`, `.jpg`, `.jpeg`, `.webp`). The map is stored locally in your browser and added to the selector. The map is immediately loaded and pushed to players.
+**Delete Current Map** — Permanently removes the selected map and all its settings. Cannot be undone.
 
-**Delete Current Map** — Permanently deletes the currently selected map and all its saved settings (fog polygons, filter, view position). This cannot be undone.
+**Transition** — Choose an animated effect to play on the player screen when you switch maps (Fade, CRT Collapse, Wipe, etc.). Parameters for the selected transition appear below the dropdown.
 
-### All Map Data
+**Save to File** — Exports all maps, fog, markers, audio, and settings as a single `.json` backup file.
 
-**Save to File** — Exports all your maps and their saved configurations (fog, filters, view) as a single `.json` bundle file. Use this to back up your maps or transfer them to another machine.
-
-**Load Maps File** — Replaces all current maps with the contents of a previously saved bundle file. A confirmation prompt will appear first as this operation is destructive and cannot be undone. Make sure you have saved a backup first.
+**Load Maps File** — Replaces everything with a previously saved bundle. You'll be asked to confirm first — back up first.
 
 ---
 
 ## Fog of War
 
-Used to hide parts of the map from players — for permanent GM-only notes, unexplored areas, or classic fog of war.
+Hides parts of the map from players.
 
-**Draw** — Toggle draw mode on and off. While active the cursor changes to a crosshair. Click on the map to place vertices one at a time. Click near the first vertex (within the snap radius) to close and commit the polygon. Press **Esc** or right-click to cancel a polygon in progress.
+**Draw** — Click to place polygon vertices on the map. Click the first vertex again (or near it) to close and commit the shape. Press **Esc** or right-click to cancel.
 
-**Delete** — Appears only when a completed polygon is selected. Deletes the selected polygon, revealing that area on the player map. You can also press the **Del** or **Backspace** key.
+**Delete** — Appears when a polygon is selected. Removes it to reveal that area. **Del** / **Backspace** also work.
 
-**Fog Colour** — The fill colour for new fog polygons. Click the swatch to open the colour picker. Changes apply to new polygons; existing polygons keep their original colour. Matching this colour to the border or background of your map image creates a seamless masked look.
+**Select** — Click any existing fog polygon (with Draw off) to select it; click empty space to deselect.
 
-> **Workflow tip:** Click on an existing fog polygon (when Draw is off) to select it — the marching-ant outline brightens and the Delete button appears. Clicking empty space deselects.
+**Fog Colour** — Sets the colour of new polygons. Matching it to your map's border or background makes the fog blend in seamlessly.
 
 ---
 
 ## Filter
 
-Applies a full-screen visual effect to the **player** view only. The GM always sees the unfiltered map.
+Applies a visual effect to the **player screen only** — the GM always sees the normal map.
 
-**Filter selector** — Choose from available effects:
-
-| Filter | Best for |
-|--------|----------|
-| None | Unfiltered map |
-| Parchment Fantasy | Fantasy, historical, gothic |
-| Retro Sci-Fi Green | Mothership, Traveller, Alien RPG |
-| Retro Sci-Fi Amber | Amber-phosphor terminal variant |
-| Ballpoint Pen | Hand-sketched dungeon maps |
-| Hand Drawing | Hatched ink sketch with colour |
-| Watercolour | Hand-painted fantasy / nautical |
-| Oil Painting | Painterly impasto style |
-
-Selecting *None* removes all effects.
-
-Below the selector, each filter exposes parameter groups (e.g. Display, Colour, CRT Effects). Click a group header to expand it and adjust its sliders. Groups are collapsed by default. Settings are saved per map so each map can have its own filter configuration.
+Choose from None, Parchment Fantasy, Retro Sci-Fi Green/Amber, Ballpoint Pen, Hand Drawing, Watercolour, or Oil Painting. Each filter has adjustable sliders that appear below the selector. Settings are saved per map.
 
 ---
 
 ## Player View
 
-Controls exactly which portion of the map players can see. The GM's own view is always unaffected.
+**Orange rectangle** — Always visible on the GM's map; shows exactly what players can see right now.
 
-An **orange marching-ants rectangle** is permanently visible on the GM's map showing the current player viewport. It updates in real time as you adjust it.
+**Edit Player View** — Drag inside the rectangle to move it; drag any corner to resize it freely. Click **OK** to confirm or **Cancel** to revert.
 
-**Edit Player View** — Activates the viewport editor. The rectangle brightens and gains corner handles.
+**Reset to Full Map** — Snaps the view back to the full map instantly.
 
-- **Move** — Click and drag inside the rectangle to reposition it anywhere on the map.
-- **Resize** — Drag any corner handle to freely resize the rectangle. Width and height are fully independent — there is no forced aspect ratio.
-- **OK** — Commits the new position and size and pushes it to all connected players immediately.
-- **Cancel** — Reverts the rectangle to where it was when you clicked Edit.
-
-**Reset to Full Map** — Snaps the player view back to showing the entire map, centred. Takes effect immediately for all connected players.
-
-The player's window is **strictly clipped** to the rectangle you define — no map content outside it is ever visible, regardless of the player's screen size or aspect ratio. If the player's screen shape differs from the rectangle, the background colour (set in the Background Colour panel) fills the bars.
+**Background Colour** — The fill colour shown around the map if the player's screen has a different shape. Auto-sampled from the map's top-left corner on first load.
 
 ---
 
-## Background Colour
+## Markers / Tokens
 
-Sets the colour displayed **behind** the map image on both the GM and player screens — visible in letterboxed or pillarboxed areas when the map does not fill the full display.
+Place icons on the map to represent characters, objects, or points of interest.
 
-**Colour** — Click the swatch to pick a colour. When a new map is loaded for the first time the colour is automatically sampled from the top-left pixel of the map image as a sensible starting point. You can override it at any time; your choice is saved with the map.
+**Add Marker** — Click **+ Add Marker** in the sidebar or right-click the map to place one at that position.
+
+**Drag** — Click and drag any marker to reposition it. Moves are broadcast to players immediately on release.
+
+**Select** — Click a marker on the map or choose it from the dropdown. Its properties appear in the panel.
+
+**Properties** — Edit the label, icon, colour, and size. Toggle **Hide from players** to make a marker invisible to players while it remains visible (ghosted) to you.
+
+**Show Name** — When on, the marker's label is visible on the player screen. Off by default.
+
+**Clone Marker** — Creates an exact copy of the selected marker, offset slightly and labelled " - copy".
+
+**Delete Marker** — Removes the selected marker.
+
+**Icon picker** — Click the icon button to choose from preset symbols or upload your own image. To remove a custom uploaded icon, click **✕ Delete custom icon** inside the picker, then click the icon you want to remove.
+
+---
+
+## Marker Roles & Positional Audio
+
+Each marker can be given a **role** using the role buttons in its properties panel.
+
+**Audio Source** — This marker plays a sound. Assign a sound from your library, set volume, playback mode (Once / Loop / Random), and the maximum distance at which it can be heard.
+
+**Listener** — Represents where the players are standing. Audio Sources get louder or quieter as the Listener marker moves closer or further away. Only one Listener is active at a time.
+
+Moving either marker updates player audio in real time. Audio Sources can be hidden from players — they'll still hear the sound without seeing the marker.
+
+---
+
+## Soundboard
+
+Play ambient music and sound effects to your players.
+
+**Slots** — Each slot holds one sound. Click **+ Assign Sound** to open the sound picker:
+- **My Library** — your previously saved sounds, searchable by name.
+- **Freesound Search** — search [freesound.org](https://freesound.org) by keyword. Requires a free API key (paste it in the Search tab — saved to your browser). Use the duration filter to narrow results. If there are more results, a **More results…** button loads the next batch.
+- **Upload** — drag and drop a local audio file, or click to browse.
+
+**Playback modes** — Each slot has three modes (click the icons):
+- ** Once** — plays once and stops.
+- ** Loop** — plays continuously; auto-resumes when you return to this map.
+- ** Random** — fires one-shots at randomised intervals. Use the frequency slider to set roughly how often.
+
+**Volume** — Slider per slot.
+
+**Mute All** — Silences all audio instantly on your side without stopping playback state.
+
+**Broadcast to players** — Toggle whether players hear the soundboard (on by default). Turning it off lets you preview sounds privately.
+
+**ℹ Attributions** — Lists all CC-licensed sounds in use. Keep this handy for crediting Freesound authors.
 
 ---
 
 ## Status Bar
 
-The strip at the very bottom of the sidebar shows the current status message — map loading progress, errors, export confirmations, and similar feedback.
+The strip at the bottom of the sidebar shows loading progress, errors, and confirmations.
