@@ -105,27 +105,15 @@ export class GMApp {
     this.bindMarkerEditor();
     this.bindSoundboardPanel();
 
-    // Register the state listener BEFORE loading maps so that the initial
-    // populateMapList() → loadMap() → state.loadForMap() → _notify() chain
-    // correctly populates host.lastState.  Without this, any player that
-    // connects before the first user interaction would get no full_state
-    // and therefore no map texture or fog mesh — making live fog_update
-    // messages invisible (they update lastFogState but nothing renders).
-    this.state.onChange((s, changed) => this.onStateChange(s, changed));
-
-    await seedDefaultMaps();
-    await this.populateMapList();
-    await this.startHost();
-
-    this.renderer.start();
-
-    // Unblock Web Audio autoplay policy on any GM interaction
+    // Wire positional audio callbacks BEFORE loading maps — onSourceStart fires
+    // during _preloadMarkerAudio which is called inside populateMapList/loadMap.
+    // If the callbacks were set after that, the initial positional_play broadcasts
+    // would never happen and lastPositionalActive would stay empty forever.
     const resumePA = () => this.positionalAudio.tryResume();
     document.addEventListener('click',      resumePA);
     document.addEventListener('keydown',    resumePA);
     document.addEventListener('touchstart', resumePA, { passive: true });
 
-    // Mirror positional audio events to connected players
     this.positionalAudio.onSourceStart = (markerId, assetId, loop, gain) => {
       const dataUrl = this._assetDataUrls.get(assetId);
       if (!dataUrl) return;
@@ -139,6 +127,16 @@ export class GMApp {
       }
     };
 
+    // Register the state listener BEFORE loading maps so that the initial
+    // populateMapList() → loadMap() → state.loadForMap() → _notify() chain
+    // correctly populates host.lastState.
+    this.state.onChange((s, changed) => this.onStateChange(s, changed));
+
+    await seedDefaultMaps();
+    await this.populateMapList();
+    await this.startHost();
+
+    this.renderer.start();
     this.setStatus('Ready', 'ok');
   }
 
