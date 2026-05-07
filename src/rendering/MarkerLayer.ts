@@ -1,15 +1,16 @@
 import type { Marker, ViewState } from '../types.ts';
 
-const BADGE_R   = 8;   // badge circle radius in canvas px
-const BADGE_HIT = 14;  // hit-test radius for badge clicks
+const BADGE_R   = 9;   // badge circle radius in canvas px
+const BADGE_HIT = 15;  // hit-test radius for badge clicks
 
 interface Frustum { left: number; right: number; top: number; bottom: number; }
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
-// ── Module-level badge helpers (shared by drawMarkerShape and class) ──────────
+// ── Badge background circle ───────────────────────────────────────────────────
 
-function _badge(ctx: Ctx2D, bx: number, by: number, bg: string, txt: string): void {
+function _badge(ctx: Ctx2D, bx: number, by: number, bg: string, drawIcon: (ctx: Ctx2D, cx: number, cy: number, r: number) => void): void {
+  ctx.save();
   ctx.beginPath();
   ctx.arc(bx, by, BADGE_R, 0, Math.PI * 2);
   ctx.fillStyle = bg;
@@ -17,27 +18,157 @@ function _badge(ctx: Ctx2D, bx: number, by: number, bg: string, txt: string): vo
   ctx.strokeStyle = 'rgba(0,0,0,0.45)';
   ctx.lineWidth   = 1;
   ctx.stroke();
-  ctx.font         = `bold ${BADGE_R * 1.1}px system-ui,sans-serif`;
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle    = 'white';
-  ctx.fillText(txt, bx, by + 0.5);
+  drawIcon(ctx, bx, by, BADGE_R);
+  ctx.restore();
 }
+
+// ── Icon drawing functions (white paths on coloured badge circle) ─────────────
+
+function _iconEye(ctx: Ctx2D, cx: number, cy: number, r: number): void {
+  ctx.strokeStyle = 'white';
+  ctx.fillStyle   = 'white';
+  ctx.lineWidth   = r * 0.19;
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.7, cy);
+  ctx.quadraticCurveTo(cx, cy - r * 0.55, cx + r * 0.7, cy);
+  ctx.quadraticCurveTo(cx, cy + r * 0.55, cx - r * 0.7, cy);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.25, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function _iconEyeCrossed(ctx: Ctx2D, cx: number, cy: number, r: number): void {
+  ctx.save();
+  ctx.globalAlpha *= 0.5;
+  _iconEye(ctx, cx, cy, r);
+  ctx.restore();
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth   = r * 0.26;
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.62, cy - r * 0.62);
+  ctx.lineTo(cx + r * 0.62, cy + r * 0.62);
+  ctx.stroke();
+}
+
+function _iconSpeaker(ctx: Ctx2D, cx: number, cy: number, r: number): void {
+  ctx.fillStyle   = 'white';
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth   = r * 0.18;
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.58, cy - r * 0.3);
+  ctx.lineTo(cx - r * 0.18, cy - r * 0.3);
+  ctx.lineTo(cx + r * 0.42, cy - r * 0.62);
+  ctx.lineTo(cx + r * 0.42, cy + r * 0.62);
+  ctx.lineTo(cx - r * 0.18, cy + r * 0.3);
+  ctx.lineTo(cx - r * 0.58, cy + r * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + r * 0.25, cy, r * 0.42, -Math.PI * 0.42, Math.PI * 0.42);
+  ctx.stroke();
+}
+
+function _iconSpeakerMuted(ctx: Ctx2D, cx: number, cy: number, r: number): void {
+  ctx.save();
+  ctx.globalAlpha *= 0.5;
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.58, cy - r * 0.3);
+  ctx.lineTo(cx - r * 0.18, cy - r * 0.3);
+  ctx.lineTo(cx + r * 0.42, cy - r * 0.62);
+  ctx.lineTo(cx + r * 0.42, cy + r * 0.62);
+  ctx.lineTo(cx - r * 0.18, cy + r * 0.3);
+  ctx.lineTo(cx - r * 0.58, cy + r * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth   = r * 0.24;
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx + r * 0.1,  cy - r * 0.5);
+  ctx.lineTo(cx + r * 0.65, cy + r * 0.5);
+  ctx.moveTo(cx + r * 0.65, cy - r * 0.5);
+  ctx.lineTo(cx + r * 0.1,  cy + r * 0.5);
+  ctx.stroke();
+}
+
+function _iconEar(ctx: Ctx2D, cx: number, cy: number, r: number): void {
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth   = r * 0.22;
+  ctx.lineCap     = 'round';
+  // Outer C arc — draws the left half of a circle (bottom → left → top), opening right
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.68, Math.PI * 0.55, Math.PI * 1.45);
+  ctx.stroke();
+  // Inner canal
+  ctx.beginPath();
+  ctx.arc(cx + r * 0.05, cy + r * 0.1, r * 0.3, Math.PI * 0.4, Math.PI * 1.3);
+  ctx.stroke();
+}
+
+function _iconEarMuted(ctx: Ctx2D, cx: number, cy: number, r: number): void {
+  ctx.save();
+  ctx.globalAlpha *= 0.5;
+  _iconEar(ctx, cx, cy, r);
+  ctx.restore();
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth   = r * 0.26;
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.62, cy - r * 0.62);
+  ctx.lineTo(cx + r * 0.62, cy + r * 0.62);
+  ctx.stroke();
+}
+
+function _iconMotion(ctx: Ctx2D, cx: number, cy: number, r: number): void {
+  ctx.fillStyle   = 'white';
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth   = r * 0.2;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  // Shaft
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.6, cy);
+  ctx.lineTo(cx + r * 0.1, cy);
+  ctx.stroke();
+  // Arrowhead
+  ctx.beginPath();
+  ctx.moveTo(cx + r * 0.62, cy);
+  ctx.lineTo(cx + r * 0.08, cy - r * 0.44);
+  ctx.lineTo(cx + r * 0.08, cy + r * 0.44);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ── Composite badge renderers ─────────────────────────────────────────────────
 
 function _visibilityBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
-  _badge(ctx, bx, by, m.hidden ? '#c0392b' : '#22c55e', m.hidden ? '✕' : '✓');
+  if (m.hidden) {
+    _badge(ctx, bx, by, '#dc2626', _iconEyeCrossed);
+  } else {
+    _badge(ctx, bx, by, '#22c55e', _iconEye);
+  }
 }
 
-function _roleBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
+function _audioBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
   if (m.role === 'audio_source') {
-    const bg  = m.audioMuted ? '#d09020' : '#0d9adb';
-    const txt = m.audioMuted ? '✕' : '♪';
-    _badge(ctx, bx, by, bg, txt);
+    _badge(ctx, bx, by, m.audioMuted ? '#dc2626' : '#22c55e',
+      m.audioMuted ? _iconSpeakerMuted : _iconSpeaker);
   } else if (m.role === 'listener') {
-    const bg  = m.trackerEnabled ? '#48d1cc' : '#7a9bb5';
-    const txt = m.trackerEnabled ? '◉' : '○';
-    _badge(ctx, bx, by, bg, txt);
+    _badge(ctx, bx, by, m.audioMuted ? '#dc2626' : '#22c55e',
+      m.audioMuted ? _iconEarMuted : _iconEar);
   }
+  // default role: no audio badge
+}
+
+function _motionBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
+  _badge(ctx, bx, by, m.motionSource ? '#22c55e' : '#44475a', _iconMotion);
 }
 
 /**
@@ -56,8 +187,8 @@ export function drawMarkerShape(
   isGM: boolean,
   iconCache?: Map<string, ImageBitmap>,
 ): void {
-  // 1. Ghost out hidden markers for GM
-  if (isGM && m.hidden) ctx.globalAlpha = 0.4;
+  // 1. Dim locked markers for GM (locked = non-interactive; hidden is now badge-only)
+  if (isGM && m.locked) ctx.globalAlpha = 0.4;
 
   // 2. Dashed selection ring
   if (selected) {
@@ -77,23 +208,19 @@ export function drawMarkerShape(
     if (bmp) {
       ctx.drawImage(bmp, cx - r, cy - r, r * 2, r * 2);
     } else {
-      // Placeholder: small filled circle in marker color
       ctx.beginPath();
       ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = m.color;
       ctx.fill();
     }
   } else {
-    // Text / emoji rendering
     const iconPx = Math.max(12, r * 1.6);
     ctx.font         = `${iconPx}px system-ui,sans-serif`;
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
-    // Stroke for readability
     ctx.strokeStyle  = 'rgba(0,0,0,0.75)';
     ctx.lineWidth    = Math.max(2, iconPx * 0.15);
     ctx.strokeText(m.icon || '?', cx, cy);
-    // Fill in marker color
     ctx.fillStyle = m.color;
     ctx.fillText(m.icon || '?', cx, cy);
   }
@@ -112,10 +239,14 @@ export function drawMarkerShape(
   }
 
   // 5. Status badges — GM only
+  //    top-left:    visibility (eye)
+  //    top-right:   audio (speaker / ear) — only for audio_source or listener
+  //    bottom-right: motion source (arrow) — always shown
   if (isGM) {
     const bOff = Math.max(BADGE_R + 2, r * 0.78);
     _visibilityBadge(ctx, m, cx - bOff, cy - bOff);
-    _roleBadge(ctx, m, cx + bOff, cy - bOff);
+    _audioBadge(ctx, m, cx + bOff, cy - bOff);
+    _motionBadge(ctx, m, cx + bOff, cy + bOff);
   }
 
   // 6. Reset alpha
@@ -126,7 +257,7 @@ export function drawMarkerShape(
  * MarkerLayer — 2D canvas renderer for map markers.
  *
  * Used by both the GM (isGM=true, shows status badges + ghost opacity for
- * hidden markers) and the player (isGM=false, skips hidden markers entirely).
+ * locked markers) and the player (isGM=false, skips hidden markers entirely).
  *
  * The canvas buffer is kept in sync with the element's CSS display size via
  * ResizeObserver; the last render params are re-applied automatically on resize.
@@ -138,7 +269,6 @@ export class MarkerLayer {
   readonly canvas: HTMLCanvasElement;
   private ar = 1; // map aspect ratio
 
-  // Stored so resize can re-render without the caller needing to re-call render()
   private _markers:    Marker[]        = [];
   private _view:       ViewState | null = null;
   private _selectedId: string | null   = null;
@@ -172,7 +302,6 @@ export class MarkerLayer {
     isGM        = false,
     iconCache?: Map<string, ImageBitmap>,
   ): void {
-    // Sync buffer to CSS size before drawing
     const w = this.canvas.clientWidth  || 1;
     const h = this.canvas.clientHeight || 1;
     if (this.canvas.width !== w || this.canvas.height !== h) {
@@ -276,19 +405,23 @@ export class MarkerLayer {
     px: number, py: number,
     marker: Marker,
     view: ViewState | null,
-  ): 'hidden' | 'audio' | 'tracker' | null {
+  ): 'hidden' | 'audio' | 'motion' | null {
     const pos = this.project(marker.position.x, marker.position.y, view);
     if (!pos) return null;
     const r    = Math.min(this.canvas.width, this.canvas.height) * 0.025 * marker.size;
     const bOff = Math.max(BADGE_R + 2, r * 0.78);
 
+    // Top-left: visibility
     if (Math.hypot(px - (pos.x - bOff), py - (pos.y - bOff)) <= BADGE_HIT) return 'hidden';
 
-    if (marker.role === 'audio_source') {
+    // Top-right: audio (source or listener only)
+    if (marker.role === 'audio_source' || marker.role === 'listener') {
       if (Math.hypot(px - (pos.x + bOff), py - (pos.y - bOff)) <= BADGE_HIT) return 'audio';
-    } else if (marker.role === 'listener') {
-      if (Math.hypot(px - (pos.x + bOff), py - (pos.y - bOff)) <= BADGE_HIT) return 'tracker';
     }
+
+    // Bottom-right: motion source (all markers)
+    if (Math.hypot(px - (pos.x + bOff), py - (pos.y + bOff)) <= BADGE_HIT) return 'motion';
+
     return null;
   }
 
@@ -310,7 +443,6 @@ export class MarkerLayer {
       return { left: cx - hw, right: cx + hw, top: cy + hh, bottom: cy - hh };
     }
 
-    // GM full-map view (mirrors Renderer.updateCameraFrustum)
     let hw: number, hh: number;
     if (sa > ma) { hh = 0.5; hw = hh * sa; }
     else         { hw = ma * 0.5; hh = hw / sa; }

@@ -121,7 +121,7 @@ export class MarkerEditor {
     // Badge-click on the currently selected marker takes priority
     if (this.selectedId) {
       const sel = this.markers.find((m) => m.id === this.selectedId);
-      if (sel) {
+      if (sel && !sel.locked) {
         const badge = this.layer.hitTestBadge(x, y, sel, null);
         if (badge) { this._handleBadge(sel, badge); return; }
       }
@@ -130,10 +130,16 @@ export class MarkerEditor {
     const hit = this.layer.hitTestMarker(x, y, this.markers, null);
 
     if (hit) {
-      this.selectedId = hit.id;
-      this._onSelect(hit);
-      this.dragging   = true;
-      (e.target as Element).setPointerCapture(e.pointerId);
+      if (hit.locked) {
+        // Locked markers ignore canvas clicks entirely
+        this.selectedId = null;
+        this._onSelect(null);
+      } else {
+        this.selectedId = hit.id;
+        this._onSelect(hit);
+        this.dragging   = true;
+        (e.target as Element).setPointerCapture(e.pointerId);
+      }
     } else {
       this.selectedId = null;
       this._onSelect(null);
@@ -181,11 +187,13 @@ export class MarkerEditor {
     this.ctxMenuEl.hidden     = false;
   }
 
-  private _handleBadge(marker: Marker, badge: 'hidden' | 'audio' | 'tracker'): void {
+  private _handleBadge(marker: Marker, badge: 'hidden' | 'audio' | 'motion'): void {
+    if (marker.locked) return; // locked markers: badges are display-only
+
     let updated: Marker;
-    if      (badge === 'hidden')  updated = { ...marker, hidden:         !marker.hidden         };
-    else if (badge === 'audio')   updated = { ...marker, audioMuted:     !marker.audioMuted     };
-    else                          updated = { ...marker, trackerEnabled: !marker.trackerEnabled };
+    if      (badge === 'hidden') updated = { ...marker, hidden:       !marker.hidden       };
+    else if (badge === 'audio')  updated = { ...marker, audioMuted:   !marker.audioMuted   };
+    else                         updated = { ...marker, motionSource: !marker.motionSource };
 
     this.markers = this.markers.map((m) => m.id === marker.id ? updated : m);
     this._onChange([...this.markers]);

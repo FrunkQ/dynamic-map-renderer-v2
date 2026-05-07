@@ -77,6 +77,7 @@ export class GMApp {
   private markerSizeVal!:          HTMLElement;
   private markerHiddenToggle!:     HTMLInputElement;
   private markerShowLabelToggle!:  HTMLInputElement;
+  private markerLockedToggle!:     HTMLInputElement;
   private currentMapBlob:          ArrayBuffer | null = null;
   private fogDrawing            = false;
   private activeFilterId        = '';
@@ -411,6 +412,7 @@ export class GMApp {
     this.markerSizeVal         = q('#marker-size-val');
     this.markerHiddenToggle    = q<HTMLInputElement>('#marker-hidden');
     this.markerShowLabelToggle = q<HTMLInputElement>('#marker-show-label');
+    this.markerLockedToggle    = q<HTMLInputElement>('#marker-locked');
   }
 
   private bindRenderer(): void {
@@ -812,6 +814,10 @@ export class GMApp {
       this.updateSelectedMarker({ showLabel: this.markerShowLabelToggle.checked });
     });
 
+    this.markerLockedToggle.addEventListener('change', () => {
+      this.updateSelectedMarker({ locked: this.markerLockedToggle.checked });
+    });
+
     // Role selector
     document.querySelectorAll<HTMLElement>('.marker-role-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -985,7 +991,7 @@ export class GMApp {
     const markers = this.state.getState().markers;
     const listener = markers.find((m) => m.role === 'listener');
 
-    if (!listener) {
+    if (!listener || listener.audioMuted) {
       // Stop all active positional sources on players
       for (const markerId of this._activePositional.keys()) {
         this.host.broadcast({ type: 'positional_stop', markerId });
@@ -1037,6 +1043,7 @@ export class GMApp {
       this.markerSizeVal.textContent  = `${sel.size.toFixed(1)}×`;
       this.markerHiddenToggle.checked    = sel.hidden;
       this.markerShowLabelToggle.checked = sel.showLabel ?? false;
+      this.markerLockedToggle.checked    = sel.locked ?? false;
 
       // Update icon button display
       this.markerIconBtn.innerHTML = '';
@@ -1059,27 +1066,29 @@ export class GMApp {
         btn.classList.toggle('marker-role-btn--active', btn.dataset['role'] === sel.role);
       });
 
-      // Audio controls — only visible for audio_source role
-      const audioControlsEl = document.querySelector<HTMLElement>('#marker-audio-controls');
-      if (audioControlsEl) audioControlsEl.hidden = sel.role !== 'audio_source';
+      // Audio controls — visible for audio_source and listener
+      const audioControlsEl  = document.querySelector<HTMLElement>('#marker-audio-controls');
+      const sourceControlsEl = document.querySelector<HTMLElement>('#marker-source-controls');
+      const mutedToggle       = document.querySelector<HTMLInputElement>('#marker-audio-muted');
+      if (audioControlsEl)  audioControlsEl.hidden  = sel.role === 'default';
+      if (sourceControlsEl) sourceControlsEl.hidden = sel.role !== 'audio_source';
+      if (mutedToggle)      mutedToggle.checked      = sel.audioMuted;
 
       if (sel.role === 'audio_source') {
-        const soundRow      = document.querySelector<HTMLElement>('#marker-sound-row');
-        const soundBtn      = document.querySelector<HTMLButtonElement>('#marker-sound-btn');
-        const soundControls = document.querySelector<HTMLElement>('#marker-sound-controls');
-        const onceBtn       = document.querySelector<HTMLButtonElement>('#marker-once-btn');
-        const loopBtn       = document.querySelector<HTMLButtonElement>('#marker-loop-btn');
-        const randomBtn     = document.querySelector<HTMLButtonElement>('#marker-random-btn');
-        const audioVolInput = document.querySelector<HTMLInputElement>('#marker-audio-volume');
-        const randomRow     = document.querySelector<HTMLElement>('#marker-random-row');
+        const soundRow        = document.querySelector<HTMLElement>('#marker-sound-row');
+        const soundBtn        = document.querySelector<HTMLButtonElement>('#marker-sound-btn');
+        const soundControls   = document.querySelector<HTMLElement>('#marker-sound-controls');
+        const onceBtn         = document.querySelector<HTMLButtonElement>('#marker-once-btn');
+        const loopBtn         = document.querySelector<HTMLButtonElement>('#marker-loop-btn');
+        const randomBtn       = document.querySelector<HTMLButtonElement>('#marker-random-btn');
+        const audioVolInput   = document.querySelector<HTMLInputElement>('#marker-audio-volume');
+        const randomRow       = document.querySelector<HTMLElement>('#marker-random-row');
         const randomFreqInput = document.querySelector<HTMLInputElement>('#marker-random-freq');
         const randomFreqVal   = document.querySelector<HTMLElement>('#marker-random-freq-val');
-        const mutedToggle   = document.querySelector<HTMLInputElement>('#marker-audio-muted');
-        const maxDistInput  = document.querySelector<HTMLInputElement>('#marker-max-dist');
-        const maxDistVal    = document.querySelector<HTMLElement>('#marker-max-dist-val');
+        const maxDistInput    = document.querySelector<HTMLInputElement>('#marker-max-dist');
+        const maxDistVal      = document.querySelector<HTMLElement>('#marker-max-dist-val');
 
         if (sel.audioTrackId) {
-          // Show name-button style (same as a filled soundboard slot)
           if (soundRow)      soundRow.className = 'sb-slot-name-row';
           if (soundBtn) {
             soundBtn.className   = 'sb-name-btn';
@@ -1091,7 +1100,6 @@ export class GMApp {
           }
           if (soundControls) soundControls.hidden = false;
         } else {
-          // Show assign-button style (same as an empty soundboard slot)
           if (soundRow)      soundRow.className = 'sb-slot-empty';
           if (soundBtn) {
             soundBtn.className   = 'sb-assign-btn btn btn--ghost btn--sm btn--full';
@@ -1100,16 +1108,15 @@ export class GMApp {
           if (soundControls) soundControls.hidden = true;
         }
 
-        if (audioVolInput)    audioVolInput.value         = String(sel.audioVolume ?? 1);
+        if (audioVolInput)    audioVolInput.value      = String(sel.audioVolume ?? 1);
         if (onceBtn)          onceBtn.classList.toggle('sb-mode-btn--active', !sel.audioLoop && !(sel.audioRandom ?? false));
         if (loopBtn)          loopBtn.classList.toggle('sb-mode-btn--active', sel.audioLoop);
         if (randomBtn)        randomBtn.classList.toggle('sb-mode-btn--active', !!(sel.audioRandom));
-        if (randomRow)        randomRow.hidden             = !(sel.audioRandom);
-        if (randomFreqInput)  randomFreqInput.value        = String(sel.audioRandomFreq ?? 10);
-        if (randomFreqVal)    randomFreqVal.textContent    = `~${sel.audioRandomFreq ?? 10} / 10 min`;
-        if (mutedToggle)      mutedToggle.checked          = sel.audioMuted;
-        if (maxDistInput)     maxDistInput.value           = String(sel.audioMaxDistance);
-        if (maxDistVal)       maxDistVal.textContent       = sel.audioMaxDistance.toFixed(2);
+        if (randomRow)        randomRow.hidden          = !(sel.audioRandom);
+        if (randomFreqInput)  randomFreqInput.value     = String(sel.audioRandomFreq ?? 10);
+        if (randomFreqVal)    randomFreqVal.textContent = `~${sel.audioRandomFreq ?? 10} / 10 min`;
+        if (maxDistInput)     maxDistInput.value        = String(sel.audioMaxDistance);
+        if (maxDistVal)       maxDistVal.textContent    = sel.audioMaxDistance.toFixed(2);
       }
     }
   }

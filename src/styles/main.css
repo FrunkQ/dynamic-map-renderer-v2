@@ -513,6 +513,12 @@ body.player-view #renderer-canvas {
   cursor: pointer;
 }
 
+.param-hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
 .param-value {
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
@@ -605,6 +611,14 @@ body.player-view #renderer-canvas {
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(16px);
   background: var(--accent);
+}
+
+.toggle-switch--warning input:checked + .toggle-slider {
+  background: rgba(249, 115, 22, 0.25);
+  border-color: #f97316;
+}
+.toggle-switch--warning input:checked + .toggle-slider::before {
+  background: #f97316;
 }
 
 /* ── Map panel sub-sections ─────────────────────────────────────────────── */

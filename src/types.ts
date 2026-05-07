@@ -87,6 +87,12 @@ export interface Marker {
   // Listener fields (Phase 3+)
   trackerEnabled: boolean;
   trackerScale:   number;     // 0.2–2.0
+
+  // Motion source (Phase 4 — tracker)
+  motionSource: boolean;      // emits movement events for the tracker
+
+  // Interaction lock — side-panel only; dims icon, blocks canvas selection
+  locked: boolean;
 }
 
 export function defaultMarker(id: string, x = 0.5, y = 0.5): Marker {
@@ -110,6 +116,8 @@ export function defaultMarker(id: string, x = 0.5, y = 0.5): Marker {
     audioRandomFreq:   10,
     trackerEnabled:    false,
     trackerScale:      1.0,
+    motionSource:      false,
+    locked:            false,
   };
 }
 
