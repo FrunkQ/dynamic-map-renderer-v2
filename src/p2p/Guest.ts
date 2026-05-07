@@ -131,8 +131,8 @@ export class Guest {
     const msg = parsed as unknown as GMMessage;
 
     // If a blob follows, hold until assembled.
-    // map blobs: full_state / map_change  |  audio blobs: soundboard_play / soundboard_asset
-    if ((msg.type === 'full_state' || msg.type === 'map_change' || msg.type === 'soundboard_play' || msg.type === 'soundboard_asset') && this.blobTotal > 0) {
+    // map blobs: full_state / map_change  |  audio blobs: soundboard_play / soundboard_asset / positional_play
+    if ((msg.type === 'full_state' || msg.type === 'map_change' || msg.type === 'soundboard_play' || msg.type === 'soundboard_asset' || msg.type === 'positional_play') && this.blobTotal > 0) {
       this.pendingMsg = msg;
       return;
     }
