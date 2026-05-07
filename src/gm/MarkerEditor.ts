@@ -22,7 +22,8 @@ export class MarkerEditor {
   private selectedId: string | null = null;
   private dragging    = false;
 
-  private ctxMenuEl: HTMLElement;
+  private ctxMenuEl:  HTMLElement;
+  private _tooltip:   HTMLDivElement;
   private _ctxPos = { x: 0.5, y: 0.5 }; // normalised map position of last right-click
 
   private readonly _onChange:     (markers: Marker[]) => void;
@@ -42,6 +43,11 @@ export class MarkerEditor {
     this._onChange      = onChange;
     this._onSelect      = onSelect;
     this._getIconCache  = getIconCache;
+
+    this._tooltip = document.createElement('div');
+    this._tooltip.className = 'marker-badge-tooltip';
+    this._tooltip.hidden = true;
+    document.body.appendChild(this._tooltip);
 
     this._bindEvents(canvas);
   }
@@ -98,10 +104,11 @@ export class MarkerEditor {
   // ── Event binding ──────────────────────────────────────────────────────────
 
   private _bindEvents(canvas: HTMLCanvasElement): void {
-    canvas.addEventListener('pointerdown', (e) => this._onDown(e));
-    canvas.addEventListener('pointermove', (e) => this._onMove(e));
-    canvas.addEventListener('pointerup',   (e) => this._onUp(e));
-    canvas.addEventListener('contextmenu', (e) => this._onCtxMenu(e));
+    canvas.addEventListener('pointerdown',  (e) => this._onDown(e));
+    canvas.addEventListener('pointermove',  (e) => this._onMove(e));
+    canvas.addEventListener('pointerup',    (e) => this._onUp(e));
+    canvas.addEventListener('pointerleave', ()  => { this._tooltip.hidden = true; });
+    canvas.addEventListener('contextmenu',  (e) => this._onCtxMenu(e));
 
     // Dismiss context menu when clicking anywhere else
     document.addEventListener('pointerdown', (e) => {
@@ -145,21 +152,47 @@ export class MarkerEditor {
   }
 
   private _onMove(e: PointerEvent): void {
-    if (!this.dragging || !this.selectedId) return;
     const { x, y } = this._toCanvas(e);
-    const norm = this.layer.unproject(x, y, null);
 
-    this.markers = this.markers.map((m) =>
-      m.id !== this.selectedId ? m : {
-        ...m,
-        position: {
-          x: Math.max(0, Math.min(1, norm.x)),
-          y: Math.max(0, Math.min(1, norm.y)),
-        },
-      }
-    );
+    if (this.dragging && this.selectedId) {
+      const norm = this.layer.unproject(x, y, null);
+      this.markers = this.markers.map((m) =>
+        m.id !== this.selectedId ? m : {
+          ...m,
+          position: {
+            x: Math.max(0, Math.min(1, norm.x)),
+            y: Math.max(0, Math.min(1, norm.y)),
+          },
+        }
+      );
+      this._redraw();
+      this._tooltip.hidden = true;
+      return;
+    }
 
-    this._redraw();
+    // Badge tooltip hover
+    const hit = this.layer.hitTestBadgeAny(x, y, this.markers, null);
+    if (hit) {
+      this._tooltip.textContent = this._badgeLabel(hit.marker, hit.badge);
+      this._tooltip.hidden = false;
+      const TW = this._tooltip.offsetWidth;
+      const TH = this._tooltip.offsetHeight;
+      const left = Math.min(e.clientX + 12, window.innerWidth  - TW - 6);
+      const top  = Math.max(e.clientY - TH - 8, 6);
+      this._tooltip.style.left = `${left}px`;
+      this._tooltip.style.top  = `${top}px`;
+    } else {
+      this._tooltip.hidden = true;
+    }
+  }
+
+  private _badgeLabel(m: Marker, badge: 'hidden' | 'audio' | 'motion'): string {
+    if (badge === 'hidden') return m.hidden ? 'Hidden' : 'Visible';
+    if (badge === 'audio') {
+      if (m.role === 'audio_source') return m.audioMuted ? 'Muted Sound Source' : 'Sound Source';
+      if (m.role === 'listener')     return m.audioMuted ? 'Deaf Listener'       : 'Listener';
+    }
+    return m.motionSource ? 'Motion Source' : 'Stationary';
   }
 
   private _onUp(_e: PointerEvent): void {

@@ -400,6 +400,21 @@ export class MarkerLayer {
     return null;
   }
 
+  /** Returns the topmost badge under (px, py) across all markers, or null. */
+  hitTestBadgeAny(
+    px: number, py: number,
+    markers: Marker[],
+    view: ViewState | null,
+  ): { marker: Marker; badge: 'hidden' | 'audio' | 'motion' } | null {
+    for (let i = markers.length - 1; i >= 0; i--) {
+      const m = markers[i]!;
+      if (m.locked) continue;
+      const badge = this.hitTestBadge(px, py, m, view);
+      if (badge) return { marker: m, badge };
+    }
+    return null;
+  }
+
   /** Returns which GM badge is under canvas pixel (px, py) for the given marker. */
   hitTestBadge(
     px: number, py: number,
