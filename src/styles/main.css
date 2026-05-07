@@ -690,46 +690,6 @@ body.player-view #renderer-canvas {
   z-index: 1;           /* below fog-canvas.fog-active (z-index:2) so fog events win */
 }
 
-/* ── Marker HUD (floating above selected marker on GM canvas) ───────────── */
-.marker-hud {
-  position: absolute;
-  z-index: 15;
-  display: flex;
-  gap: var(--space-xs);
-  background: rgba(10, 14, 26, 0.85);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-xs);
-  backdrop-filter: blur(4px);
-  pointer-events: auto;
-}
-
-.marker-hud-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.marker-hud-btn:hover { background: var(--bg-hover); }
-
-.marker-hud-btn--danger {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.marker-hud-btn--danger:hover {
-  background: var(--danger);
-  color: #fff;
-}
 
 /* ── Context menu ───────────────────────────────────────────────────────── */
 .context-menu {

@@ -729,7 +729,6 @@ export class GMApp {
 
   private bindMarkerEditor(): void {
     const canvas    = document.querySelector<HTMLCanvasElement>('#gm-markers-canvas')!;
-    const hudEl     = document.querySelector<HTMLElement>('#marker-hud')!;
     const ctxMenuEl = document.querySelector<HTMLElement>('#marker-context-menu')!;
 
     this.iconPicker = new IconPicker();
@@ -737,7 +736,6 @@ export class GMApp {
 
     this.markerEditor = new MarkerEditor(
       canvas,
-      hudEl,
       ctxMenuEl,
       (markers) => this.state.setMarkers(markers),
       (marker) => {
@@ -775,18 +773,6 @@ export class GMApp {
       this.state.setMarkers(markers);
     });
 
-    document.querySelector('#marker-hud-hide')?.addEventListener('click', () => {
-      if (!this.selectedMarkerId) return;
-      this.updateSelectedMarker({ hidden: !this.state.getState().markers.find((m) => m.id === this.selectedMarkerId)?.hidden });
-    });
-
-    document.querySelector('#marker-hud-delete')?.addEventListener('click', () => {
-      if (!this.selectedMarkerId) return;
-      const markers = this.state.getState().markers.filter((m) => m.id !== this.selectedMarkerId);
-      this.selectedMarkerId = null;
-      this.markerEditor.selectById(null);
-      this.state.setMarkers(markers);
-    });
 
     this.markerSelect.addEventListener('change', () => {
       const id = this.markerSelect.value || null;

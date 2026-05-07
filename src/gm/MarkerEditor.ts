@@ -6,7 +6,7 @@ import { MarkerLayer } from '../rendering/MarkerLayer.ts';
  * MarkerEditor — GM-side canvas interaction for markers.
  *
  * Handles:
- *   - Click to select a marker (shows HUD)
+ *   - Click to select a marker
  *   - Badge clicks (toggle hidden / audioMuted / trackerEnabled)
  *   - Pointer drag to move selected marker (broadcasts on pointerup)
  *   - Right-click context menu ("Add marker here")
@@ -22,7 +22,6 @@ export class MarkerEditor {
   private selectedId: string | null = null;
   private dragging    = false;
 
-  private hudEl:     HTMLElement;
   private ctxMenuEl: HTMLElement;
   private _ctxPos = { x: 0.5, y: 0.5 }; // normalised map position of last right-click
 
@@ -33,14 +32,12 @@ export class MarkerEditor {
 
   constructor(
     canvas:       HTMLCanvasElement,
-    hudEl:        HTMLElement,
     ctxMenuEl:    HTMLElement,
     onChange:     (markers: Marker[]) => void,
     onSelect:     (marker: Marker | null) => void,
     getIconCache: () => Map<string, ImageBitmap> = () => new Map(),
   ) {
     this.layer          = new MarkerLayer(canvas);
-    this.hudEl          = hudEl;
     this.ctxMenuEl      = ctxMenuEl;
     this._onChange      = onChange;
     this._onSelect      = onSelect;
@@ -56,13 +53,11 @@ export class MarkerEditor {
     this.markers = markers;
     this.layer.setAspectRatio(aspectRatio);
     this._redraw();
-    this._positionHUD();
   }
 
   /** Programmatically select a marker by ID (e.g. from the sidebar dropdown). */
   selectById(id: string | null): void {
     this.selectedId = id;
-    this._positionHUD();
     this._redraw();
   }
 
@@ -77,7 +72,6 @@ export class MarkerEditor {
     if (!enabled) {
       this.selectedId = null;
       this.dragging   = false;
-      this.hudEl.hidden     = true;
       this.ctxMenuEl.hidden = true;
       this._redraw();
     }
@@ -147,7 +141,6 @@ export class MarkerEditor {
       this._fogSelectCb?.(this.layer.unproject(x, y, null));
     }
 
-    this._positionHUD();
     this._redraw();
   }
 
@@ -166,7 +159,6 @@ export class MarkerEditor {
       }
     );
 
-    this._positionHUD();
     this._redraw();
   }
 
@@ -201,31 +193,6 @@ export class MarkerEditor {
     this._redraw();
   }
 
-  // ── HUD positioning ────────────────────────────────────────────────────────
-
-  /** Reposition the floating HUD above the selected marker. */
-  _positionHUD(): void {
-    const sel = this.markers.find((m) => m.id === this.selectedId);
-    if (!sel) { this.hudEl.hidden = true; return; }
-
-    const pos = this.layer.project(sel.position.x, sel.position.y, null);
-    if (!pos) { this.hudEl.hidden = true; return; }
-
-    const canvas     = this.layer.canvas;
-    const canvasRect = canvas.getBoundingClientRect();
-    const mainArea   = document.getElementById('main-area')!;
-    const areaRect   = mainArea.getBoundingClientRect();
-
-    // canvas buffer px → CSS px → main-area relative
-    const cssX = (pos.x / canvas.width)  * canvasRect.width  + canvasRect.left - areaRect.left;
-    const cssY = (pos.y / canvas.height) * canvasRect.height + canvasRect.top  - areaRect.top;
-    const rCss = (Math.min(canvas.width, canvas.height) * 0.025 * sel.size / canvas.height) * canvasRect.height;
-
-    this.hudEl.style.left      = `${cssX}px`;
-    this.hudEl.style.top       = `${cssY - rCss - 6}px`;
-    this.hudEl.style.transform = 'translate(-50%, -100%)';
-    this.hudEl.hidden          = false;
-  }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
