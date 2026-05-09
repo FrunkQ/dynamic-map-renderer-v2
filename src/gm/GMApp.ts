@@ -128,6 +128,29 @@ export class GMApp {
     // Motion-tracker rendering: redraw the GM marker layer every frame while
     // a scan ring is expanding or any return blob is still fading.
     this.motionTracker.onChange = () => this._kickMotionRaf();
+    // Broadcast scan events so connected players can mirror the visuals.
+    this.motionTracker.onScanStart = (scan) => {
+      this.host.broadcast({
+        type:      'tracker_scan',
+        centre:    scan.centre,
+        range:     scan.range,
+        speedSecs: scan.speedSecs,
+        colour:    scan.colour,
+      });
+    };
+    this.motionTracker.onSourceHit = (source) => {
+      const cfg = this.motionTracker.getConfig();
+      // Players don't render blobs when the GM has hidden them
+      if (cfg.hideBlobs) return;
+      this.host.broadcast({
+        type:     'tracker_blob',
+        position: { ...source.position },
+        fadeMs:   cfg.rate * 1000,
+        mode:     source.motionBlobMode,
+        sourceId: source.id,
+        colour:   cfg.colour,
+      });
+    };
 
     // Register the state listener BEFORE loading maps so that the initial
     // populateMapList() → loadMap() → state.loadForMap() → _notify() chain

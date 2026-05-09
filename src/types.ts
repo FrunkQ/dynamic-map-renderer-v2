@@ -394,6 +394,25 @@ export interface MsgSoundboardAsset {
   dataUrl?: string;
 }
 
+/** Sent when a tracker scan begins. Player kicks a local ring animation on receipt. */
+export interface MsgTrackerScan {
+  type:      'tracker_scan';
+  centre:    { x: number; y: number };
+  range:     number;
+  speedSecs: number;
+  colour:    string;
+}
+
+/** Sent when the expanding ring has crossed a source marker — player draws a return blob. */
+export interface MsgTrackerBlob {
+  type:     'tracker_blob';
+  position: { x: number; y: number };
+  fadeMs:   number;
+  mode:     'single' | 'cluster';
+  sourceId: string;
+  colour:   string;
+}
+
 export type GMMessage =
   | MsgFullState
   | MsgViewUpdate
@@ -409,7 +428,9 @@ export type GMMessage =
   | MsgSoundboardAsset
   | MsgPositionalPlay
   | MsgPositionalVolume
-  | MsgPositionalStop;
+  | MsgPositionalStop
+  | MsgTrackerScan
+  | MsgTrackerBlob;
 
 // ─── Storage types ───────────────────────────────────────────────────────────
 

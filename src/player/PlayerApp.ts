@@ -5,6 +5,7 @@ import { filterRegistry } from '../filters/FilterRegistry.ts';
 import { TransitionEngine } from '../transitions/TransitionEngine.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import type { GMMessage, TransitionConfig, Marker, MarkerIconData, SoundboardAudioData, SoundboardSlot, FogState, FilterState, ViewState } from '../types.ts';
+import type { MotionOverlay, MotionOverlayScan, MotionOverlayBlob } from '../rendering/MarkerLayer.ts';
 
 /**
  * PlayerApp — top-level orchestrator for the player view.
@@ -43,6 +44,10 @@ export class PlayerApp {
   /** assetId → URL so re-plays (late join / random fires) don't need the data resent */
   private _posAssetUrls = new Map<string, string>();
   private _muteIndicatorEl: HTMLElement | null = null;
+  // ── Motion-tracker overlay (rings + return blobs broadcast by the GM) ──────
+  private _trackerScans: MotionOverlayScan[] = [];
+  private _trackerBlobs: MotionOverlayBlob[] = [];
+  private _trackerRafId: number | null       = null;
   // ── WebGL context-loss recovery ──────────────────────────────────────────
   /** Room code retained so we can reconnect if cached state is unavailable. */
   private roomCode = '';
@@ -139,7 +144,10 @@ export class PlayerApp {
       // Re-feed the cached state — recreates all GPU resources from scratch.
       void this.renderer.loadMap(this.lastMapBlob, this.lastFog).then(() => {
         if (this.lastFilter) this.renderer.setFilter(this.lastFilter);
-        if (this.lastView)   this.renderer.setView(this.lastView);
+        if (this.lastView) {
+          this.renderer.setView(this.lastView);
+          this.markerTexture.setViewHeight(this.lastView.viewNH);
+        }
         this.markerTexture.render(this.currentMarkers, this.playerIconCache);
         this.renderer.markMarkersDirty();
         this.setStatus('');
@@ -210,6 +218,7 @@ export class PlayerApp {
         if (msg.payload.view)   this.lastView   = msg.payload.view;
         this.renderer.setFilter(msg.payload.filter);
         this.renderer.setView(msg.payload.view);
+        this.markerTexture.setViewHeight(msg.payload.view.viewNH);
         void (async () => {
           if (msg.iconData?.length)         await this._decodeIconData(msg.iconData);
           if (msg.soundboardAssets?.length) this._cacheSoundboardAssets(msg.soundboardAssets);
@@ -228,6 +237,9 @@ export class PlayerApp {
         // Stop any playing audio from the previous map
         this._stopAllSoundboard();
         this._stopAllPositional();
+        // Drop any in-flight tracker visuals from the previous map
+        this._trackerScans = [];
+        this._trackerBlobs = [];
         if (mapBlob) {
           const fog    = msg.fog    ?? { polygons: [] };
           const filter = msg.filter;
@@ -243,7 +255,10 @@ export class PlayerApp {
             await this.runTransition(msg.transition, async () => {
               await this.renderer.loadMap(blob, fog);
               if (filter) this.renderer.setFilter(filter);
-              if (view)   this.renderer.setView(view);
+              if (view) {
+                this.renderer.setView(view);
+                this.markerTexture.setViewHeight(view.viewNH);
+              }
             });
           })();
         }
@@ -269,6 +284,11 @@ export class PlayerApp {
       case 'view_update': {
         this.lastView = msg.payload;
         this.renderer.setView(msg.payload);
+        this.markerTexture.setViewHeight(msg.payload.viewNH);
+        // Re-render markers so the new size kicks in immediately even if the
+        // marker list itself hasn't changed.
+        this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+        this.renderer.markMarkersDirty();
         break;
       }
 
@@ -362,7 +382,63 @@ export class PlayerApp {
         for (const el of this.sbAudioEls.values()) el.muted = msg.muted;
         break;
       }
+
+      case 'tracker_scan': {
+        this._trackerScans.push({
+          startTime: performance.now(),
+          centre:    msg.centre,
+          range:     msg.range,
+          speedSecs: msg.speedSecs,
+          colour:    msg.colour,
+        });
+        this._kickTrackerRaf();
+        break;
+      }
+
+      case 'tracker_blob': {
+        this._trackerBlobs.push({
+          startTime: performance.now(),
+          sourceId:  msg.sourceId,
+          position:  msg.position,
+          fadeMs:    msg.fadeMs,
+          mode:      msg.mode,
+          colour:    msg.colour,
+        });
+        this._kickTrackerRaf();
+        break;
+      }
     }
+  }
+
+  // ─── Motion-tracker overlay ───────────────────────────────────────────────
+
+  /** Drive the tracker overlay redraw loop. Idempotent; self-terminates when
+   *  there are no rings expanding and no blobs still fading. */
+  private _kickTrackerRaf(): void {
+    if (this._trackerRafId !== null) return;
+    const tick = (now: number) => {
+      // Prune expired
+      this._trackerScans = this._trackerScans.filter((s) => now - s.startTime < s.speedSecs * 1000);
+      this._trackerBlobs = this._trackerBlobs.filter((b) => now - b.startTime < b.fadeMs);
+
+      const overlay: MotionOverlay = {
+        now,
+        scans: this._trackerScans,
+        blobs: this._trackerBlobs,
+      };
+      this.markerTexture.render(this.currentMarkers, this.playerIconCache, overlay);
+      this.renderer.markMarkersDirty();
+
+      if (this._trackerScans.length > 0 || this._trackerBlobs.length > 0) {
+        this._trackerRafId = requestAnimationFrame(tick);
+      } else {
+        this._trackerRafId = null;
+        // Final draw with no overlay so the texture is clean
+        this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+        this.renderer.markMarkersDirty();
+      }
+    };
+    this._trackerRafId = requestAnimationFrame(tick);
   }
 
   // ─── Soundboard ───────────────────────────────────────────────────────────

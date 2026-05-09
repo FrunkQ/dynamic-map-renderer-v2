@@ -511,7 +511,8 @@ export class MarkerLayer {
       const radiusPx    = t * scan.range * yScale;
       const pos         = this.project(scan.centre.x, scan.centre.y, view);
       if (!pos || radiusPx <= 1) continue;
-      const alpha = (1 - t) * 0.7;
+      // Hold near-full alpha through most of the scan; the fade compresses into the last ~15%.
+      const alpha = (1 - Math.pow(t, 4)) * 0.7;
       ctx.save();
       ctx.lineWidth   = 2;
       ctx.strokeStyle = _hexWithAlpha(scan.colour, alpha);
