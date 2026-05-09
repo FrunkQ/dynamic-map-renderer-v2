@@ -469,11 +469,49 @@ export type GMMessage =
 
 // ─── Storage types ───────────────────────────────────────────────────────────
 
+/**
+ * A named map instance the GM picks from the dropdown. Owns its own per-map
+ * config (fog, markers, audio, tracker etc.) but does NOT own its image data —
+ * that's stored once in a MapAsset that any number of map instances can point at.
+ */
 export interface StoredMap {
-  id: string;
-  name: string;
-  blob: Blob;
-  addedAt: number;
+  id:         string;
+  name:       string;
+  /** Points at the MapAsset whose image this map renders. */
+  mapAssetId: string;
+  addedAt:    number;
+}
+
+/**
+ * A reusable map image. Multiple StoredMap instances can share one MapAsset
+ * (e.g. the same dungeon image used for two different encounters with their
+ * own fog, markers, and tracker configs).
+ *
+ * Mirrors AudioAsset's tag model:
+ *   • upload    — user uploaded a local file; blob present in IDB
+ *   • web-link  — user pasted a URL; blob fetched at runtime; blob in IDB
+ *                 only after the user clicks Store
+ */
+export interface MapAsset {
+  id:            string;
+  /** Display name — derived from the original file or URL, user-renameable. */
+  filename:      string;
+  source:        'upload' | 'web-link';
+  /** True when the blob is in IDB (and travels in bundle exports). */
+  locallyStored: boolean;
+  /** Set for web-link assets; the URL the blob is fetched from. */
+  sourceUrl?:    string;
+  /** The image bytes. Present iff locallyStored=true. */
+  blob?:         Blob;
+  /** Cached on first load — used by the missing-asset placeholder so fog/marker
+   *  coords stay correct when an asset goes missing. */
+  imageWidth?:   number;
+  imageHeight?:  number;
+  /** Optional editable attribution metadata, mirroring AudioAsset. */
+  attribution?:     string;
+  attributionLink?: string;
+  license?:         string;
+  addedAt:       number;
 }
 
 export interface StoredSession {

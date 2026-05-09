@@ -111,6 +111,8 @@ export class FreesoundModal {
     this.el.querySelector('#library-store-all-btn')?.addEventListener('click', () => void this._storeAllInLibrary(false));
     // Library 'Store All Used' — same but only the assets actually referenced somewhere
     this.el.querySelector('#library-store-used-btn')?.addEventListener('click', () => void this._storeAllInLibrary(true));
+    // Library 'Delete All Unused' — permanently remove every audio asset not referenced anywhere
+    this.el.querySelector('#library-delete-unused-btn')?.addEventListener('click', () => void this._deleteUnusedInLibrary());
 
     // Library 'Attributions' — opens the global attributions modal
     this.el.querySelector('#library-attributions-btn')?.addEventListener('click', () => void this._showAttributions());
@@ -193,18 +195,23 @@ export class FreesoundModal {
       listEl.appendChild(this._libraryRow(asset, usedIds));
     }
 
-    // Store-All / Store-All-Used visible only when there's work to do.
-    const storeAllBtn  = this.el.querySelector<HTMLButtonElement>('#library-store-all-btn');
-    const storeUsedBtn = this.el.querySelector<HTMLButtonElement>('#library-store-used-btn');
-    const allCountEl   = this.el.querySelector<HTMLElement>('#library-store-all-count');
-    const usedCountEl  = this.el.querySelector<HTMLElement>('#library-store-used-count');
-    const status       = this.el.querySelector<HTMLElement>('#library-store-all-status');
-    const nonStored    = all.filter((a) => !a.locallyStored && (a.source === 'freesound' || a.source === 'web-link'));
+    // Footer buttons — visible only when there's work for each.
+    const storeAllBtn   = this.el.querySelector<HTMLButtonElement>('#library-store-all-btn');
+    const storeUsedBtn  = this.el.querySelector<HTMLButtonElement>('#library-store-used-btn');
+    const deleteBtn     = this.el.querySelector<HTMLButtonElement>('#library-delete-unused-btn');
+    const allCountEl    = this.el.querySelector<HTMLElement>('#library-store-all-count');
+    const usedCountEl   = this.el.querySelector<HTMLElement>('#library-store-used-count');
+    const delCountEl    = this.el.querySelector<HTMLElement>('#library-delete-unused-count');
+    const status        = this.el.querySelector<HTMLElement>('#library-store-all-status');
+    const nonStored     = all.filter((a) => !a.locallyStored && (a.source === 'freesound' || a.source === 'web-link'));
     const nonStoredUsed = nonStored.filter((a) => usedIds.has(a.id));
+    const unused        = all.filter((a) => !usedIds.has(a.id));
     if (storeAllBtn)  storeAllBtn.hidden  = nonStored.length === 0;
     if (storeUsedBtn) storeUsedBtn.hidden = nonStoredUsed.length === 0;
+    if (deleteBtn)    deleteBtn.hidden    = unused.length === 0;
     if (allCountEl)   allCountEl.textContent  = nonStored.length     > 0 ? `(${nonStored.length})`     : '';
     if (usedCountEl)  usedCountEl.textContent = nonStoredUsed.length > 0 ? `(${nonStoredUsed.length})` : '';
+    if (delCountEl)   delCountEl.textContent  = unused.length        > 0 ? `(${unused.length})`        : '';
     if (status)       status.textContent = '';
   }
 
@@ -246,6 +253,29 @@ export class FreesoundModal {
     if (status) status.textContent = msg;
     if (allBtn)  allBtn.disabled  = false;
     if (usedBtn) usedBtn.disabled = false;
+  }
+
+  private async _deleteUnusedInLibrary(): Promise<void> {
+    const status = this.el.querySelector<HTMLElement>('#library-store-all-status');
+
+    const [all, usedIds] = await Promise.all([
+      AudioAssetStore.getAll(),
+      getUsedAudioAssetIds(),
+    ]);
+    const unused = all.filter((a) => !usedIds.has(a.id));
+    if (unused.length === 0) return;
+
+    const ok = confirm(
+      `Delete ${unused.length} unused audio asset${unused.length === 1 ? '' : 's'}?\n\n` +
+      'These aren\'t referenced by any map\'s soundboard slots, marker audio sources, or motion-tracker pings.\n\n' +
+      'This cannot be undone.'
+    );
+    if (!ok) return;
+
+    for (const asset of unused) await AudioAssetStore.delete(asset.id);
+
+    await this._renderLibrary();
+    if (status) status.textContent = `Deleted ${unused.length} unused asset${unused.length === 1 ? '' : 's'}.`;
   }
 
   private _libraryRow(asset: AudioAsset, usedIds: Set<string> = new Set()): HTMLElement {

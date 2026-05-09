@@ -1,11 +1,11 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { SessionState, StoredMap, StoredSession, AudioAsset } from '../types.ts';
+import type { SessionState, StoredMap, StoredSession, AudioAsset, MapAsset } from '../types.ts';
 
 export type StoredAsset = { id: string; name: string; type: string; blob: Blob; addedAt: number };
 
 interface DMRSchema extends DBSchema {
   maps: {
-    key: string; // StoredMap.id
+    key: string; // StoredMap.id (post-v3 schema points at mapAssetId; pre-v3 had blob inline)
     value: StoredMap;
     indexes: { by_name: string };
   };
@@ -27,29 +27,64 @@ interface DMRSchema extends DBSchema {
     key: string; // AudioAsset.id
     value: AudioAsset;
   };
+  mapAssets: {
+    // Map asset library — blob lives inline on the record when locallyStored=true.
+    key: string; // MapAsset.id
+    value: MapAsset;
+  };
 }
 
 const DB_NAME = 'dynamic-map-renderer';
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 
 let _db: IDBPDatabase<DMRSchema> | null = null;
 
 async function getDB(): Promise<IDBPDatabase<DMRSchema>> {
   if (_db) return _db;
   _db = await openDB<DMRSchema>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
-      if (oldVersion < 1) {
+    upgrade(db) {
+      // Idempotent: each store is created only if it doesn't already exist on
+      // the connection. This protects against stuck-version states where the
+      // DB version was bumped but a store somehow never got created (e.g. an
+      // interrupted prior upgrade). On a clean install all branches fire; on
+      // an existing install only the missing stores are created.
+      if (!db.objectStoreNames.contains('maps')) {
         const mapStore = db.createObjectStore('maps', { keyPath: 'id' });
         mapStore.createIndex('by_name', 'name', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('configs')) {
         db.createObjectStore('configs', { keyPath: 'mapId' });
+      }
+      if (!db.objectStoreNames.contains('session')) {
         db.createObjectStore('session', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('assets')) {
         db.createObjectStore('assets', { keyPath: 'id' });
       }
-      if (oldVersion < 2) {
+      if (!db.objectStoreNames.contains('audioAssets')) {
         db.createObjectStore('audioAssets', { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains('mapAssets')) {
+        db.createObjectStore('mapAssets', { keyPath: 'id' });
+        // Legacy 'maps' rows still carry their blob inline; src/storage/seedMapAssets
+        // splits them out of the maps store into mapAssets the next time the app loads.
+      }
+    },
+    blocked() {
+      console.warn(
+        '[DB] upgrade is blocked by another open tab — close any other Dynamic Map Renderer windows ' +
+        '(e.g. the player view) and reload to apply the schema upgrade.'
+      );
     },
   });
+
+  if (!_db.objectStoreNames.contains('mapAssets')) {
+    console.warn(
+      '[DB] mapAssets store missing — schema upgrade may have been blocked by another open tab. ' +
+      'Close any other Dynamic Map Renderer windows and reload to apply the upgrade. ' +
+      'In the meantime, map asset operations will be no-ops.'
+    );
+  }
   return _db;
 }
 
@@ -156,11 +191,48 @@ export async function deleteAudioAsset(id: string): Promise<void> {
   await db.delete('assets', id); // also remove the blob
 }
 
+/** True when the v3 mapAssets store is available on the open connection. */
+export async function hasMapAssetsStore(): Promise<boolean> {
+  const db = await getDB();
+  return db.objectStoreNames.contains('mapAssets');
+}
+
+// ─── Map asset library ──────────────────────────────────────────────────────
+// Each helper guards against the store being absent: when a schema upgrade was
+// blocked by another tab, the connection has the older shape. Operations turn
+// into no-ops / empty results so the rest of the app keeps running and the
+// user sees the warning printed in getDB above.
+
+export async function saveMapAsset(asset: MapAsset): Promise<void> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('mapAssets')) return;
+  await db.put('mapAssets', asset);
+}
+
+export async function getMapAsset(id: string): Promise<MapAsset | undefined> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('mapAssets')) return undefined;
+  return db.get('mapAssets', id);
+}
+
+export async function getAllMapAssets(): Promise<MapAsset[]> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('mapAssets')) return [];
+  return db.getAll('mapAssets');
+}
+
+export async function deleteMapAsset(id: string): Promise<void> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('mapAssets')) return;
+  await db.delete('mapAssets', id);
+}
+
 /** Wipe every asset-library store. Used by bundle import to replace the workspace. */
 export async function clearAssetLibraries(): Promise<void> {
   const db = await getDB();
   await Promise.all([
     db.clear('audioAssets'),
     db.clear('assets'),
+    db.clear('mapAssets'),
   ]);
 }

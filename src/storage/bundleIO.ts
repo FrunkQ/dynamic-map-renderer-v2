@@ -1,9 +1,13 @@
-import { getAllMaps, getMap, saveMap, loadConfig, saveConfig, getAllAssets, saveAsset, getAllAudioAssets, saveAudioAsset, getAsset } from './db.ts';
-import type { SessionState, StoredMap, AudioAsset } from '../types.ts';
+import { getAllMaps, getMap, saveMap, loadConfig, saveConfig, getAllAssets, saveAsset, getAllAudioAssets, saveAudioAsset, getAsset, saveMapAsset, getAllMapAssets, getMapAsset, hasMapAssetsStore } from './db.ts';
+import type { SessionState, AudioAsset, MapAsset } from '../types.ts';
 
 const BUNDLE_VERSION = 1;
 
-interface MapEntry {
+/**
+ * Legacy v1 bundle map entry — combines map + asset + config into one record.
+ * Written by exports before v2.7.15; still readable for back-compat.
+ */
+interface LegacyMapEntry {
   id:       string;
   name:     string;
   addedAt:  number;
@@ -11,6 +15,34 @@ interface MapEntry {
   imageB64: string;
   config:   SessionState | null;
 }
+
+/** Named map instance — points at a MapAsset by id. */
+interface MapInstanceEntry {
+  id:         string;
+  name:       string;
+  mapAssetId: string;
+  addedAt:    number;
+  config:     SessionState | null;
+}
+
+/** Map asset with embedded blob — any locallyStored MapAsset travels here. */
+interface StoredMapAssetEntry {
+  id:               string;
+  filename:         string;
+  source:           MapAsset['source'];
+  addedAt:          number;
+  mimeType:         string;
+  dataB64:          string;
+  imageWidth?:      number;
+  imageHeight?:     number;
+  sourceUrl?:       string;
+  license?:         string;
+  attribution?:     string;
+  attributionLink?: string;
+}
+
+/** Map asset known only by URL — metadata travels, blob does not. */
+type RemoteMapAssetEntry = MapAsset;
 
 interface IconEntry {
   id:       string;
@@ -57,14 +89,25 @@ interface StoredAudioEntry {
 type RemoteAudioEntry = AudioAsset;
 
 export interface DMRBundle {
-  version:      typeof BUNDLE_VERSION;
-  exportedAt:   number;
-  maps:         MapEntry[];
-  customIcons?: IconEntry[];
+  version:        typeof BUNDLE_VERSION;
+  exportedAt:     number;
+  /** Bundle format flavour — written by exports from v2.7.15+. Legacy bundles
+   *  predate the field and use the `maps` (LegacyMapEntry) array. */
+  bundleSchema?:  2;
+  /** Legacy combined map+asset+config records. Always written for back-compat
+   *  with older importers; new importers prefer `mapInstances` + `*MapAssets`. */
+  maps:           LegacyMapEntry[];
+  /** New shape: named map instances pointing at MapAsset ids. */
+  mapInstances?:  MapInstanceEntry[];
+  /** Map assets with embedded blob — any locallyStored=true MapAsset. */
+  storedMapAssets?: StoredMapAssetEntry[];
+  /** Map assets known only by URL — metadata only. */
+  remoteMapAssets?: RemoteMapAssetEntry[];
+  customIcons?:   IconEntry[];
   /** Audio with embedded blob — any `locallyStored=true` asset goes here. */
-  storedAudio?:  StoredAudioEntry[];
+  storedAudio?:   StoredAudioEntry[];
   /** Metadata-only audio — Freesound + Web Link items the user hasn't Stored. */
-  remoteAudio?:  RemoteAudioEntry[];
+  remoteAudio?:   RemoteAudioEntry[];
 
   // ── Legacy fields (read on import, no longer written on export) ──
   /** @deprecated read-only, replaced by `storedAudio`. */
@@ -108,21 +151,65 @@ function b64ToBlob(b64: string, mimeType: string): Blob {
  * Export all maps + their saved configs as a downloadable .json bundle.
  */
 export async function exportBundle(): Promise<void> {
-  const maps = await getAllMaps();
-  const entries: MapEntry[] = [];
+  const maps          = await getAllMaps();
+  const mapAssetsAll  = await getAllMapAssets();
+  const mapInstances: MapInstanceEntry[]      = [];
+  const storedMapAssets: StoredMapAssetEntry[] = [];
+  const remoteMapAssets: RemoteMapAssetEntry[] = [];
+  const legacyEntries: LegacyMapEntry[]       = [];
 
   for (const map of maps) {
-    const ab     = await map.blob.arrayBuffer();
     const config = await loadConfig(map.id);
-    entries.push({
-      id:       map.id,
-      name:     map.name,
-      addedAt:  map.addedAt,
-      mimeType: map.blob.type || 'image/png',
-      imageB64: ab2b64(ab),
-      config:   config ?? null,
+    mapInstances.push({
+      id:         map.id,
+      name:       map.name,
+      mapAssetId: map.mapAssetId,
+      addedAt:    map.addedAt,
+      config:     config ?? null,
     });
+
+    // Build a legacy MapEntry too — older importers can still pull the maps
+    // out of the bundle. They lose the asset-sharing relationship but get a
+    // working map each. We embed the asset's blob inline.
+    const asset = await getMapAsset(map.mapAssetId);
+    if (asset?.blob) {
+      const ab = await asset.blob.arrayBuffer();
+      legacyEntries.push({
+        id:       map.id,
+        name:     map.name,
+        addedAt:  map.addedAt,
+        mimeType: asset.blob.type || 'image/png',
+        imageB64: ab2b64(ab),
+        config:   config ?? null,
+      });
+    }
   }
+
+  // Stored vs Remote map assets
+  for (const asset of mapAssetsAll) {
+    if (asset.locallyStored && asset.blob) {
+      const ab = await asset.blob.arrayBuffer();
+      storedMapAssets.push(_omitUndefined({
+        id:               asset.id,
+        filename:         asset.filename,
+        source:           asset.source,
+        addedAt:          asset.addedAt,
+        mimeType:         asset.blob.type || 'image/png',
+        dataB64:          ab2b64(ab),
+        imageWidth:       asset.imageWidth,
+        imageHeight:      asset.imageHeight,
+        sourceUrl:        asset.sourceUrl,
+        license:          asset.license,
+        attribution:      asset.attribution,
+        attributionLink:  asset.attributionLink,
+      }) as StoredMapAssetEntry);
+    } else if (asset.source === 'web-link') {
+      const { blob: _b, ...metaOnly } = asset;
+      void _b;
+      remoteMapAssets.push(metaOnly as RemoteMapAssetEntry);
+    }
+  }
+  const entries = legacyEntries; // legacy field still populated for back-compat
 
   // Export custom icon assets
   const iconAssets = await getAllAssets('icon');
@@ -173,12 +260,16 @@ export async function exportBundle(): Promise<void> {
   }
 
   const bundle: DMRBundle = {
-    version:    BUNDLE_VERSION,
-    exportedAt: Date.now(),
-    maps:       entries,
-    ...(iconEntries.length > 0   ? { customIcons:  iconEntries }  : {}),
-    ...(storedAudio.length > 0   ? { storedAudio:  storedAudio }  : {}),
-    ...(remoteAudio.length > 0   ? { remoteAudio:  remoteAudio }  : {}),
+    version:       BUNDLE_VERSION,
+    bundleSchema:  2,
+    exportedAt:    Date.now(),
+    maps:          entries,
+    mapInstances,
+    ...(storedMapAssets.length > 0 ? { storedMapAssets } : {}),
+    ...(remoteMapAssets.length > 0 ? { remoteMapAssets } : {}),
+    ...(iconEntries.length > 0     ? { customIcons:  iconEntries } : {}),
+    ...(storedAudio.length > 0     ? { storedAudio:  storedAudio } : {}),
+    ...(remoteAudio.length > 0     ? { remoteAudio:  remoteAudio } : {}),
   };
 
   const blob = new Blob([JSON.stringify(bundle)], { type: 'application/json' });
@@ -215,24 +306,79 @@ export async function importBundle(
   if (!Array.isArray(bundle.maps)) {
     throw new Error('Invalid bundle — missing maps array');
   }
+  if (!await hasMapAssetsStore()) {
+    throw new Error(
+      'Database upgrade pending — close any other Dynamic Map Renderer tabs and reload before importing.'
+    );
+  }
 
   let added   = 0;
   let updated = 0;
 
-  for (const entry of bundle.maps) {
-    const existing = await getMap(entry.id);
-
-    const map: StoredMap = {
-      id:      entry.id,
-      name:    entry.name,
-      addedAt: entry.addedAt,
-      blob:    b64ToBlob(entry.imageB64, entry.mimeType),
-    };
-
-    await saveMap(map);
-    if (entry.config) await saveConfig(entry.id, entry.config);
-
-    if (existing) updated++; else added++;
+  if (bundle.bundleSchema === 2 && Array.isArray(bundle.mapInstances)) {
+    // New format — split asset / instance shape.
+    if (Array.isArray(bundle.storedMapAssets)) {
+      for (const e of bundle.storedMapAssets) {
+        const blob = b64ToBlob(e.dataB64, e.mimeType);
+        const asset = _omitUndefined({
+          id:              e.id,
+          filename:        e.filename,
+          source:          e.source,
+          locallyStored:   true,
+          blob,
+          imageWidth:      e.imageWidth,
+          imageHeight:     e.imageHeight,
+          sourceUrl:       e.sourceUrl,
+          license:         e.license,
+          attribution:     e.attribution,
+          attributionLink: e.attributionLink,
+          addedAt:         e.addedAt,
+        }) as MapAsset;
+        await saveMapAsset(asset);
+      }
+    }
+    if (Array.isArray(bundle.remoteMapAssets)) {
+      for (const asset of bundle.remoteMapAssets) {
+        const { blob: _b, ...metaOnly } = asset;
+        void _b;
+        await saveMapAsset({ ...metaOnly, locallyStored: false } as MapAsset);
+      }
+    }
+    for (const entry of bundle.mapInstances) {
+      const existing = await getMap(entry.id);
+      await saveMap({
+        id:         entry.id,
+        name:       entry.name,
+        mapAssetId: entry.mapAssetId,
+        addedAt:    entry.addedAt,
+      });
+      if (entry.config) await saveConfig(entry.id, entry.config);
+      if (existing) updated++; else added++;
+    }
+  } else {
+    // Legacy v1 shape — combine the entry's blob into a fresh MapAsset (id == entry.id),
+    // then a StoredMap pointing at it.
+    for (const entry of bundle.maps) {
+      const existing = await getMap(entry.id);
+      const blob = b64ToBlob(entry.imageB64, entry.mimeType);
+      const asset: MapAsset = {
+        id:            entry.id,
+        filename:      entry.name,
+        source:        'upload',
+        locallyStored: true,
+        blob,
+        addedAt:       entry.addedAt,
+      };
+      await saveMapAsset(asset);
+      await saveMap({
+        id:         entry.id,
+        name:       entry.name,
+        mapAssetId: entry.id,
+        addedAt:    entry.addedAt,
+      });
+      if (entry.config) await saveConfig(entry.id, entry.config);
+      if (existing) updated++; else added++;
+    }
   }
 
   // Restore custom icons if present

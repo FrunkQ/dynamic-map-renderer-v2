@@ -16,6 +16,7 @@ import { generateRoomCode } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, deleteMap, clearAssetLibraries } from '../storage/db.ts';
 import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
+import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
 import { exportBundle, importBundle } from '../storage/bundleIO.ts';
 import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
 import { MarkerInteractionRegistry, type InteractionContext } from './markerInteractions/MarkerInteraction.ts';
@@ -192,6 +193,7 @@ export class GMApp {
     });
 
     await seedAudioAssets();
+    await migrateLegacyMaps();
     await seedDefaultMaps();
     await this.populateMapList();
     await this.startHost();
