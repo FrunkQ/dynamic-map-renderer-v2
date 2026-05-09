@@ -30,8 +30,6 @@ export class SoundboardPanel {
   private prevBtn!:      HTMLButtonElement;
   private nextBtn!:      HTMLButtonElement;
   private addBtn!:       HTMLButtonElement;
-  private attrBtn!:      HTMLButtonElement;
-  private attrModal!:    HTMLElement;
   private muteAllToggle!: HTMLInputElement;
 
   private slots:   SoundboardSlot[] = [];
@@ -117,8 +115,6 @@ export class SoundboardPanel {
     this.prevBtn       = q<HTMLButtonElement>('#sb-prev-btn');
     this.nextBtn       = q<HTMLButtonElement>('#sb-next-btn');
     this.addBtn        = q<HTMLButtonElement>('#sb-add-slot-btn');
-    this.attrBtn       = q<HTMLButtonElement>('#sb-attributions-btn');
-    this.attrModal     = q('#attributions-modal');
     this.muteAllToggle = q<HTMLInputElement>('#mute-all-toggle');
 
     this.prevBtn.addEventListener('click', () => { this.page--; this._render(); });
@@ -133,13 +129,7 @@ export class SoundboardPanel {
       this._render();
     });
 
-    this.attrBtn.addEventListener('click',  () => void this._showAttributions());
-    this.attrModal.querySelector('#attr-modal-close')?.addEventListener('click', () => {
-      this.attrModal.hidden = true;
-    });
-    this.attrModal.addEventListener('click', (e) => {
-      if (e.target === this.attrModal) this.attrModal.hidden = true;
-    });
+    // Attributions handling moved to FreesoundModal (My Library footer) in v2.7.10.
   }
 
   private _render(): void {
@@ -489,28 +479,6 @@ export class SoundboardPanel {
   }
 
   // ─── Attributions modal ───────────────────────────────────────────────────
-
-  private async _showAttributions(): Promise<void> {
-    const list   = await AudioAssetStore.getAttributions();
-    const bodyEl = this.attrModal.querySelector('#attr-list')!;
-    bodyEl.innerHTML = '';
-
-    if (list.length === 0) {
-      bodyEl.innerHTML = '<p class="attr-empty">No sounds with attribution requirements in library.</p>';
-    } else {
-      for (const item of list) {
-        const row = document.createElement('div');
-        row.className = 'attr-row';
-        row.innerHTML = `
-          <span class="attr-text">${this._esc(item.attribution)}</span>
-          <span class="attr-license ${item.license.startsWith('CC0') ? '' : 'attr-license--required'}">${this._esc(item.license)}</span>
-          ${item.pageUrl ? `<a href="${this._esc(item.pageUrl)}" target="_blank" rel="noopener" class="attr-link">Freesound ↗</a>` : ''}
-        `;
-        bodyEl.appendChild(row);
-      }
-    }
-    this.attrModal.hidden = false;
-  }
 
   private _esc(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

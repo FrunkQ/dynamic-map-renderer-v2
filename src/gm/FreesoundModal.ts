@@ -14,6 +14,19 @@ const DURATION_OPTIONS: Array<{ label: string; value: number | null }> = [
   { label: 'Any length', value: null },
 ];
 
+/** Standard licence options offered when a user edits an asset's attribution. */
+const LICENSE_OPTIONS: string[] = [
+  'CC0 (Public Domain)',
+  'CC-BY',
+  'CC-BY-SA',
+  'CC-BY-NC',
+  'CC-BY-NC-SA',
+  'CC-BY-ND',
+  'CC-BY-NC-ND',
+  'Permission Granted',
+  'Other',
+];
+
 type AssignCallback = (asset: AudioAsset) => void;
 
 export class FreesoundModal {
@@ -96,6 +109,17 @@ export class FreesoundModal {
     // Library 'Store All' — fetch + persist every non-stored Freesound / URL asset
     this.el.querySelector('#library-store-all-btn')?.addEventListener('click', () => void this._storeAllInLibrary());
 
+    // Library 'Attributions' — opens the global attributions modal
+    this.el.querySelector('#library-attributions-btn')?.addEventListener('click', () => void this._showAttributions());
+
+    // Attributions modal close + click-outside (binds once at construction time)
+    const attrModal = document.getElementById('attributions-modal');
+    if (attrModal) {
+      attrModal.querySelector('#attr-modal-close')?.addEventListener('click', () => { attrModal.hidden = true; });
+      attrModal.addEventListener('click', (e) => { if (e.target === attrModal) attrModal.hidden = true; });
+      attrModal.querySelector('#attr-copy-all-btn')?.addEventListener('click', () => void this._copyAllAttributions());
+    }
+
     // Freesound search
     this.el.querySelector('#fs-search-btn')?.addEventListener('click', () => void this._doSearch());
     this.el.querySelector<HTMLInputElement>('#fs-search-input')?.addEventListener('keydown', (e) => {
@@ -163,14 +187,15 @@ export class FreesoundModal {
       listEl.appendChild(this._libraryRow(asset));
     }
 
-    // Footer: 'Store All' button. Visible only when there are non-stored assets.
-    const footer    = this.el.querySelector<HTMLElement>('#library-footer');
-    const countEl   = this.el.querySelector<HTMLElement>('#library-store-all-count');
-    const status    = this.el.querySelector<HTMLElement>('#library-store-all-status');
-    const nonStored = all.filter((a) => !a.locallyStored && (a.source === 'freesound' || a.source === 'web-link'));
-    if (footer) footer.hidden = nonStored.length === 0;
-    if (countEl) countEl.textContent = nonStored.length > 0 ? `(${nonStored.length})` : '';
-    if (status) status.textContent = '';
+    // 'Store All' visible only when there are non-stored assets to fetch.
+    // The Attributions button beside it is always visible.
+    const storeAllBtn = this.el.querySelector<HTMLButtonElement>('#library-store-all-btn');
+    const countEl     = this.el.querySelector<HTMLElement>('#library-store-all-count');
+    const status      = this.el.querySelector<HTMLElement>('#library-store-all-status');
+    const nonStored   = all.filter((a) => !a.locallyStored && (a.source === 'freesound' || a.source === 'web-link'));
+    if (storeAllBtn) storeAllBtn.hidden = nonStored.length === 0;
+    if (countEl)     countEl.textContent = nonStored.length > 0 ? `(${nonStored.length})` : '';
+    if (status)      status.textContent = '';
   }
 
   private async _storeAllInLibrary(): Promise<void> {
@@ -223,25 +248,62 @@ export class FreesoundModal {
       ? ''
       : `<button class="btn btn--ghost btn--xs sound-store-btn" title="Download and keep a local copy">Store</button>`;
 
+    // Freesound attributions are locked (the API supplies them); Upload + Web Link
+    // rows are editable so users can record where the audio came from. Edit
+    // affordance sits next to the licence text since that's what it edits.
+    const editable = asset.source !== 'freesound';
+    const editIconHtml = editable
+      ? `<button class="sound-edit-btn" title="Edit licence + attribution">✎</button>`
+      : '';
+
     const row = document.createElement('div');
-    row.className = 'sound-row';
+    row.className = 'sound-row-wrap';
     row.innerHTML = `
-      <div class="sound-row-info">
-        <span class="sound-name">${tagsHtml}${this._esc(asset.name)}</span>
-        <span class="sound-meta">${this._esc(asset.license ?? asset.source)}</span>
+      <div class="sound-row">
+        <div class="sound-row-info">
+          <span class="sound-name">${tagsHtml}${this._esc(asset.name)}</span>
+          <span class="sound-meta-row">
+            <span class="sound-meta">${this._esc(asset.license ?? asset.source)}</span>
+            ${editIconHtml}
+          </span>
+        </div>
+        <div class="sound-row-actions">
+          <button class="btn btn--ghost btn--xs sound-preview-btn" data-url="">▶ Preview</button>
+          ${storeBtnHtml}
+          <button class="btn btn--primary btn--xs sound-use-btn">Use</button>
+          <button class="btn btn--danger btn--xs sound-del-btn" title="Remove from library">✕</button>
+        </div>
       </div>
-      <div class="sound-row-actions">
-        <button class="btn btn--ghost btn--xs sound-preview-btn" data-url="">▶ Preview</button>
-        ${storeBtnHtml}
-        <button class="btn btn--primary btn--xs sound-use-btn">Use</button>
-        <button class="btn btn--danger btn--xs sound-del-btn" title="Remove from library">✕</button>
-      </div>
+      ${editable ? `
+        <div class="sound-row-edit" hidden>
+          <div class="sound-edit-row">
+            <label>Licence</label>
+            <select class="sound-edit-license">
+              ${LICENSE_OPTIONS.map((l) => `<option value="${this._esc(l)}"${asset.license === l ? ' selected' : ''}>${this._esc(l)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="sound-edit-row">
+            <label>Attribution</label>
+            <input type="text" class="sound-edit-attribution" placeholder='e.g. "Sound: My Recording" by Author' value="${this._esc(asset.attribution ?? '')}" />
+          </div>
+          <div class="sound-edit-row">
+            <label>Link</label>
+            <input type="url" class="sound-edit-link" placeholder="https://… (optional)" value="${this._esc(asset.attributionLink ?? asset.sourceUrl ?? '')}" />
+          </div>
+          <div class="sound-edit-actions">
+            <button class="btn btn--primary btn--xs sound-edit-save">Save</button>
+            <button class="btn btn--ghost btn--xs sound-edit-cancel">Cancel</button>
+          </div>
+        </div>
+      ` : ''}
     `;
 
     const previewBtn = row.querySelector<HTMLButtonElement>('.sound-preview-btn')!;
     const useBtn     = row.querySelector<HTMLButtonElement>('.sound-use-btn')!;
     const delBtn     = row.querySelector<HTMLButtonElement>('.sound-del-btn')!;
     const storeBtn   = row.querySelector<HTMLButtonElement>('.sound-store-btn');
+    const editBtn    = row.querySelector<HTMLButtonElement>('.sound-edit-btn');
+    const editPanel  = row.querySelector<HTMLElement>('.sound-row-edit');
 
     previewBtn.addEventListener('click', async () => {
       const blob = await AudioAssetStore.getBlob(asset);
@@ -271,6 +333,26 @@ export class FreesoundModal {
     delBtn.addEventListener('click', async () => {
       if (!confirm(`Remove "${asset.name}" from your library?`)) return;
       await AudioAssetStore.delete(asset.id);
+      await this._renderLibrary();
+    });
+
+    editBtn?.addEventListener('click', () => {
+      if (editPanel) editPanel.hidden = !editPanel.hidden;
+    });
+
+    row.querySelector<HTMLButtonElement>('.sound-edit-cancel')?.addEventListener('click', () => {
+      if (editPanel) editPanel.hidden = true;
+    });
+
+    row.querySelector<HTMLButtonElement>('.sound-edit-save')?.addEventListener('click', async () => {
+      const license     = row.querySelector<HTMLSelectElement>('.sound-edit-license')?.value ?? asset.license;
+      const attribution = row.querySelector<HTMLInputElement>('.sound-edit-attribution')?.value.trim() ?? '';
+      const link        = row.querySelector<HTMLInputElement>('.sound-edit-link')?.value.trim() ?? '';
+      const patch: Partial<AudioAsset> = {};
+      if (license)     patch.license         = license;
+      if (attribution) patch.attribution     = attribution;
+      if (link)        patch.attributionLink = link;
+      await AudioAssetStore.update(asset.id, patch);
       await this._renderLibrary();
     });
 
@@ -492,6 +574,65 @@ export class FreesoundModal {
     } catch {
       addBtn.disabled    = false;
       addBtn.textContent = 'Add to Library';
+    }
+  }
+
+  // ─── Attributions modal ───────────────────────────────────────────────────
+
+  private async _showAttributions(): Promise<void> {
+    const modal = document.getElementById('attributions-modal');
+    if (!modal) return;
+    const list   = await AudioAssetStore.getAttributions();
+    const bodyEl = modal.querySelector('#attr-list')!;
+    bodyEl.innerHTML = '';
+
+    if (list.length === 0) {
+      bodyEl.innerHTML = '<p class="attr-empty">No audio assets in library yet.</p>';
+    } else {
+      for (const item of list) {
+        const row = document.createElement('div');
+        row.className = 'attr-row';
+        const linkHtml = item.pageUrl
+          ? ` <a href="${this._esc(item.pageUrl)}" target="_blank" rel="noopener" class="attr-link">Link ↗</a>`
+          : '';
+        row.innerHTML = `
+          <span class="attr-text">${this._esc(item.attribution)}</span>
+          <span class="attr-license ${item.license.startsWith('CC0') ? '' : 'attr-license--required'}">${this._esc(item.license)}</span>${linkHtml}
+        `;
+        bodyEl.appendChild(row);
+      }
+    }
+    const status = modal.querySelector<HTMLElement>('#attr-copy-status');
+    if (status) status.textContent = '';
+    modal.hidden = false;
+  }
+
+  /** Build a clipboard-friendly attribution block for the user's docs / credits. */
+  private async _copyAllAttributions(): Promise<void> {
+    const modal  = document.getElementById('attributions-modal');
+    const status = modal?.querySelector<HTMLElement>('#attr-copy-status') ?? null;
+    const list   = await AudioAssetStore.getAttributions();
+    if (list.length === 0) {
+      if (status) status.textContent = 'Nothing to copy.';
+      return;
+    }
+    const lines: string[] = ['Audio assets used in map pack:', ''];
+    for (const item of list) {
+      const parts = [`"${item.name}"`];
+      if (item.attribution && item.attribution !== `Sound: "${item.name}" — ${item.license || 'Unknown'}`) {
+        parts.push(item.attribution);
+      }
+      if (item.license) parts.push(item.license);
+      if (item.pageUrl) parts.push(item.pageUrl);
+      lines.push(parts.join(' — '));
+    }
+    const text = lines.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      if (status) status.textContent = `Copied ${list.length} entr${list.length === 1 ? 'y' : 'ies'} to clipboard.`;
+    } catch {
+      if (status) status.textContent = 'Copy failed — see console.';
+      console.log('[Attributions]\n', text);
     }
   }
 

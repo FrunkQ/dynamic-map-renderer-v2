@@ -1245,6 +1245,19 @@ body.player-view #renderer-canvas {
 .attr-link:hover { text-decoration: underline; }
 .attr-empty { font-size: var(--font-size-sm); color: var(--text-dim); text-align: center; padding: var(--space-md); }
 
+.attr-footer {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.attr-copy-status {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
 /* Upload tab */
 .upload-drop-zone {
   border: 2px dashed var(--border);
@@ -1329,6 +1342,70 @@ body.player-view #renderer-canvas {
   margin: 0;
   text-align: center;
   min-height: 1em;
+}
+
+/* Library asset edit panel — inline editor for licence + attribution + link. */
+.sound-row-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-xs);
+}
+.sound-row-wrap .sound-row { margin-bottom: 0; }
+
+/* Pen icon next to the licence text — editable rows only. */
+.sound-meta-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sound-edit-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.8rem;
+  line-height: 1;
+  border-radius: 3px;
+}
+.sound-edit-btn:hover { color: var(--accent); background: rgba(72, 209, 204, 0.1); }
+.sound-row-edit {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sound-edit-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: var(--space-xs);
+  align-items: center;
+}
+.sound-edit-row label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.sound-edit-row select,
+.sound-edit-row input {
+  font-size: 0.8rem;
+  padding: 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  width: 100%;
+}
+.sound-edit-row select:focus,
+.sound-edit-row input:focus { outline: none; border-color: var(--border-focus); }
+.sound-edit-actions {
+  display: flex;
+  gap: var(--space-xs);
+  justify-content: flex-end;
+  margin-top: 2px;
 }
 
 .upload-file-info {

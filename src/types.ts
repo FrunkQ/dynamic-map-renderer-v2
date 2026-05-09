@@ -221,6 +221,9 @@ export interface AudioAsset {
   username?:           string;
   license?:            string;  // human-readable, e.g. "CC0" or "CC-BY"
   attribution?:        string;  // "Sound: [name] by [username] via Freesound"
+  /** User-editable link added via the My Library attribution editor. Falls back
+   *  to freesoundPageUrl / sourceUrl when not set, when displaying attributions. */
+  attributionLink?:    string;
   durationSecs?:       number;
   addedAt:             number;
 }

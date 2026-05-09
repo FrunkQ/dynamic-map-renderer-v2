@@ -94,7 +94,6 @@
         </div>
         <div id="soundboard-slots"></div>
         <button id="sb-add-slot-btn" class="btn btn--ghost btn--sm btn--full">+ Add Slot</button>
-        <button id="sb-attributions-btn" class="btn btn--ghost btn--xs btn--full sb-attr-btn">ℹ Attributions</button>
       </div>
     </section>
 
@@ -354,9 +353,10 @@
           </div>
           <div id="library-list" class="sound-list"></div>
           <p id="library-empty" class="sound-list-empty" hidden>No sounds in library yet. Use Freesound Search to add some, or upload your own.</p>
-          <div id="library-footer" class="library-footer" hidden>
-            <button id="library-store-all-btn" class="btn btn--ghost btn--sm btn--full" title="Download every non-stored asset and persist it locally — useful for going offline">Store All <span id="library-store-all-count"></span></button>
+          <div id="library-footer" class="library-footer">
+            <button id="library-store-all-btn" class="btn btn--ghost btn--sm btn--full" title="Download every non-stored asset and persist it locally — useful for going offline" hidden>Store All <span id="library-store-all-count"></span></button>
             <p id="library-store-all-status" class="library-store-status"></p>
+            <button id="library-attributions-btn" class="btn btn--ghost btn--xs btn--full">ℹ Attributions &amp; Licences</button>
           </div>
         </div>
         <div id="tab-weblinks" class="tab-content" hidden>
@@ -411,12 +411,16 @@ https://example.com/sound2.wav"></textarea>
   <div id="attributions-modal" class="modal-overlay" hidden>
     <div class="modal-dialog modal-dialog--sm">
       <div class="modal-header">
-        <span class="modal-title">Sound Attributions</span>
+        <span class="modal-title">Asset Attributions</span>
         <button id="attr-modal-close" class="modal-close">×</button>
       </div>
       <div class="modal-body">
-        <p class="attr-intro">These credits are required when sharing recordings that used CC-BY sounds.</p>
+        <p class="attr-intro">Credits for every audio asset in your map pack. Required when sharing recordings that used CC-BY material.</p>
         <div id="attr-list" class="attr-list"></div>
+        <div class="attr-footer">
+          <button id="attr-copy-all-btn" class="btn btn--primary btn--sm">Copy All to clipboard</button>
+          <span id="attr-copy-status" class="attr-copy-status"></span>
+        </div>
       </div>
     </div>
   </div>

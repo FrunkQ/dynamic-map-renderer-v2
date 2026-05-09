@@ -34,6 +34,13 @@ export class AudioAssetStore {
     await saveAudioAsset(asset);
   }
 
+  /** Apply a partial update to an asset's metadata. */
+  static async update(id: string, patch: Partial<AudioAsset>): Promise<void> {
+    const existing = await getAudioAsset(id);
+    if (!existing) return;
+    await saveAudioAsset({ ...existing, ...patch });
+  }
+
   /**
    * Promote a non-stored asset to locally-stored: fetch its blob (via getBlob,
    * which handles web-link fetching + freesound re-download), persist it to the
@@ -117,11 +124,16 @@ export class AudioAssetStore {
     const all = await AudioAssetStore.getAll();
     const results: Array<{ name: string; attribution: string; license: string; pageUrl: string }> = [];
     for (const a of all) {
-      if (a.source === 'freesound' && a.attribution) {
-        results.push({ name: a.name, attribution: a.attribution, license: a.license ?? '', pageUrl: a.freesoundPageUrl ?? '' });
-      } else if (a.source === 'upload') {
-        results.push({ name: a.name, attribution: `Sound: "${a.name}" — Uploaded manually — unknown licence — BEWARE!`, license: 'Unknown', pageUrl: '' });
-      }
+      // Link priority: user-edited > freesound page > web-link source > none
+      const pageUrl = a.attributionLink ?? a.freesoundPageUrl ?? a.sourceUrl ?? '';
+      const license = a.license ?? 'Unknown';
+      const fallback = `Sound: "${a.name}" — ${a.source} — ${license}`;
+      results.push({
+        name:        a.name,
+        attribution: a.attribution || fallback,
+        license,
+        pageUrl,
+      });
     }
     return results;
   }
