@@ -22,16 +22,23 @@ export default defineConfig(({ command }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       manifest: {
-        name: 'Dynamic Map Renderer',
-        short_name: 'MapRenderer',
-        description: 'Serverless TTRPG map presentation tool for Game Masters',
-        theme_color: '#0a0e1a',
+        // Stable identifier — Chrome uses this to decide whether two manifest
+        // versions refer to the same installed app. Without it, install state
+        // can drift between deploys.
+        id:               '/?source=pwa',
+        // Required for the browser install prompt to fire.
+        start_url:        '/?source=pwa',
+        scope:            '/',
+        name:             'Dynamic Map Renderer',
+        short_name:       'MapRenderer',
+        description:      'Free, serverless, browser-based virtual tabletop for in-person and online TTRPG play.',
+        theme_color:      '#0a0e1a',
         background_color: '#0a0e1a',
-        display: 'standalone',
-        orientation: 'landscape',
+        display:          'standalone',
+        orientation:      'landscape',
         icons: [
-          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
