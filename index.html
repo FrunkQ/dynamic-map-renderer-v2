@@ -38,6 +38,7 @@
           <label for="map-name-input">Name</label>
           <input type="text" id="map-name-input" class="marker-text-input" placeholder="Map name…" />
         </div>
+        <button id="fix-missing-map-btn" class="btn btn--danger btn--sm btn--full" hidden>⚠ Fix Missing Map</button>
         <button id="add-map-btn" class="btn btn--ghost btn--sm btn--full">+ Add New Map</button>
         <div class="btn-row">
           <button id="clone-map-btn"  class="btn btn--ghost   btn--sm">Clone Map</button>
@@ -320,7 +321,10 @@
     </section>
 
     <div id="status" class="status-bar" data-level="ok">Ready</div>
-    <div id="app-version" class="app-version"></div>
+    <div class="app-footer-row">
+      <span id="storage-gauge" class="storage-gauge" title="Local storage used by this app"></span>
+      <span id="app-version" class="app-version"></span>
+    </div>
 
   </aside>
 
@@ -434,6 +438,15 @@ https://example.com/sound2.wav"></textarea>
           </div>
           <div id="map-library-list" class="sound-list"></div>
           <p id="map-library-empty" class="sound-list-empty" hidden>No map assets yet. Use Upload or Web Links to add one.</p>
+          <div id="map-library-footer" class="library-footer">
+            <div class="library-store-row">
+              <button id="map-library-store-used-btn"     class="btn btn--ghost  btn--sm" title="Download only the non-stored map assets actually referenced somewhere" hidden>Store All Used <span id="map-library-store-used-count"></span></button>
+              <button id="map-library-store-all-btn"      class="btn btn--ghost  btn--sm" title="Download every non-stored map asset and persist it locally" hidden>Store All <span id="map-library-store-all-count"></span></button>
+              <button id="map-library-delete-unused-btn"  class="btn btn--danger btn--sm" title="Permanently remove every map asset not referenced by any map" hidden>Delete All Unused <span id="map-library-delete-unused-count"></span></button>
+            </div>
+            <p id="map-library-store-status" class="library-store-status"></p>
+            <button id="map-library-attributions-btn" class="btn btn--ghost btn--xs btn--full">ℹ Attributions &amp; Licences</button>
+          </div>
         </div>
         <div id="map-tab-weblinks" class="tab-content" hidden>
           <p class="weblinks-hint">Paste one or more URLs to image files (png, jpg, webp). Each is validated and added to your library tagged <strong>URL</strong> — the file streams from the source at runtime and is <em>not</em> stored locally until you click <strong>Store</strong> in the library.</p>

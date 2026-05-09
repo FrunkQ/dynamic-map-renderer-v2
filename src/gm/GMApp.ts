@@ -585,6 +585,12 @@ export class GMApp {
 
     this.setStatus(map.name, 'ok');
 
+    // Show / hide the Fix Missing Map button based on whether the asset blob
+    // actually came back. The placeholder is rendered at this point if not.
+    const missing = await this.maps.isAssetMissing(map.id);
+    const fixBtn  = document.querySelector<HTMLButtonElement>('#fix-missing-map-btn');
+    if (fixBtn) fixBtn.hidden = !missing;
+
     // Persist last-opened map so it reopens on next page load
     void loadSession().then((s) => {
       if (s) void saveSession({ ...s, lastMapId: map.id });
@@ -863,6 +869,19 @@ export class GMApp {
       } catch (err) {
         this.setStatus(`Delete failed: ${(err as Error).message}`, 'error');
       }
+    });
+
+    // Fix Missing Map — open the picker, retarget the current map at the
+    // chosen asset, drop the scratch instance the modal created for the pick.
+    document.querySelector('#fix-missing-map-btn')?.addEventListener('click', () => {
+      const targetId = this.mapSelect.value;
+      if (!targetId) return;
+      this.mapAssetModal.open(async (scratchMap) => {
+        await this.maps.retargetMap(targetId, scratchMap.mapAssetId);
+        await this.maps.delete(scratchMap.id);
+        const fixed = (await this.maps.getAll()).find((m) => m.id === targetId);
+        if (fixed) await this.loadMap(fixed);
+      });
     });
 
     // Map clone

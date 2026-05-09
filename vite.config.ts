@@ -52,8 +52,14 @@ export default defineConfig(({ command }) => ({
   // is null, and the code path that reads it only runs when hostname is
   // localhost anyway, so it is safe to include in all builds.
   define: {
-    __DEV_LAN_IP__:   JSON.stringify(command === 'serve' ? getLanIp() : null),
-    __APP_VERSION__:  JSON.stringify(version),
+    __DEV_LAN_IP__:    JSON.stringify(command === 'serve' ? getLanIp() : null),
+    __APP_VERSION__:   JSON.stringify(version),
+    /**
+     * Vercel automatically sets `process.env.VERCEL='1'` during their build.
+     * Self-hosters / local dev / other CIs leave it unset, so the analytics
+     * import is dead code and tree-shaken out of the bundle entirely.
+     */
+    __VERCEL_DEPLOY__: JSON.stringify(process.env['VERCEL'] === '1'),
   },
 
   server: {

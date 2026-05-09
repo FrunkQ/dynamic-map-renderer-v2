@@ -702,14 +702,28 @@ body.player-view #renderer-canvas {
 .status-bar[data-level="ok"]    { color: var(--ok); }
 
 .app-version {
-  padding: 4px var(--space-md) 6px;
   font-family: var(--font-mono);
   font-size: 0.65rem;
   color: var(--text-dim);
-  text-align: right;
   letter-spacing: 0.05em;
   opacity: 0.5;
 }
+.app-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px var(--space-md) 6px;
+  gap: var(--space-sm);
+}
+.storage-gauge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  cursor: help;
+}
+.storage-gauge--warn { color: var(--warn); opacity: 0.85; }
 
 /* ── Markers canvas (GM) ────────────────────────────────────────────────── */
 #gm-markers-canvas {
@@ -1263,6 +1277,16 @@ body.player-view #renderer-canvas {
 .attr-link { font-size: 0.7rem; color: var(--accent); text-decoration: none; }
 .attr-link:hover { text-decoration: underline; }
 .attr-empty { font-size: var(--font-size-sm); color: var(--text-dim); text-align: center; padding: var(--space-md); }
+.attr-section-heading {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: var(--space-sm) 0 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
+.attr-section-heading:first-child { margin-top: 0; }
 
 .attr-footer {
   margin-top: var(--space-md);
@@ -1328,6 +1352,25 @@ body.player-view #renderer-canvas {
 .weblinks-result--ok    { border-left-color: #22c55e; }
 .weblinks-result--fail  { border-left-color: #dc2626; color: var(--text-dim); }
 .weblinks-result--busy  { border-left-color: var(--accent); color: var(--text-dim); }
+
+/* Map asset library hover-preview popover. */
+.map-preview-popover {
+  position: fixed;
+  pointer-events: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+}
+.map-preview-popover img {
+  display: block;
+  max-width: 280px;
+  max-height: 210px;
+  object-fit: contain;
+  border-radius: 2px;
+}
 
 /* My Library tag pills shown next to each asset's name. */
 .sound-tag {

@@ -1,6 +1,20 @@
 import type { MapAsset, StoredMap } from '../types.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { MapManager } from './MapManager.ts';
+import { getUsedMapAssetIds } from '../storage/assetUsage.ts';
+
+/** Standard licence options shared with the audio editor. */
+const LICENSE_OPTIONS: string[] = [
+  'CC0 (Public Domain)',
+  'CC-BY',
+  'CC-BY-SA',
+  'CC-BY-NC',
+  'CC-BY-NC-SA',
+  'CC-BY-ND',
+  'CC-BY-NC-ND',
+  'Permission Granted',
+  'Other',
+];
 
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -26,6 +40,10 @@ export class MapAssetModal {
   private onPick: MapPickedCallback;
   private maps: MapManager;
   private uploadFile: File | null = null;
+  /** assetId → object URL for hover-preview thumbnails. Created lazily on
+   *  first hover, revoked when the modal closes. */
+  private previewUrlCache = new Map<string, string>();
+  private previewPopover: HTMLElement | null = null;
 
   constructor(maps: MapManager, onPick: MapPickedCallback) {
     this.maps   = maps;
@@ -44,6 +62,17 @@ export class MapAssetModal {
     this.el.hidden = true;
     this._clearUpload();
     this._clearWebLinks();
+    this._teardownPreviewCache();
+  }
+
+  /** Drop hover-preview object URLs and the popover element. */
+  private _teardownPreviewCache(): void {
+    for (const url of this.previewUrlCache.values()) URL.revokeObjectURL(url);
+    this.previewUrlCache.clear();
+    if (this.previewPopover) {
+      this.previewPopover.remove();
+      this.previewPopover = null;
+    }
   }
 
   // ─── DOM ──────────────────────────────────────────────────────────────────
@@ -72,6 +101,19 @@ export class MapAssetModal {
 
     // Library search
     this.el.querySelector('#map-library-search')?.addEventListener('input', () => void this._renderLibrary());
+
+    // Library footer — Store All / Store All Used / Delete All Unused
+    this.el.querySelector('#map-library-store-all-btn')?.addEventListener('click',     () => void this._storeAllInLibrary(false));
+    this.el.querySelector('#map-library-store-used-btn')?.addEventListener('click',    () => void this._storeAllInLibrary(true));
+    this.el.querySelector('#map-library-delete-unused-btn')?.addEventListener('click', () => void this._deleteUnusedInLibrary());
+
+    // Attributions button — opens the unified attributions modal (audio + map).
+    // FreesoundModal owns the showAttributions logic and binds the close /
+    // copy-all handlers at construction; we just trigger it via a custom event
+    // so we don't have to plumb a reference through.
+    this.el.querySelector('#map-library-attributions-btn')?.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('dmr-show-attributions'));
+    });
 
     // Web Links
     this.el.querySelector('#map-weblinks-add-btn')?.addEventListener('click', () => void this._addWebLinks());
@@ -107,17 +149,102 @@ export class MapAssetModal {
     const emptyEl = this.el.querySelector<HTMLElement>('#map-library-empty')!;
     const filter  = (this.el.querySelector<HTMLInputElement>('#map-library-search')?.value ?? '').toLowerCase();
 
-    const all = await MapAssetStore.getAll();
+    const [all, usedIds] = await Promise.all([
+      MapAssetStore.getAll(),
+      getUsedMapAssetIds(),
+    ]);
     const filtered = filter ? all.filter((a) => a.filename.toLowerCase().includes(filter)) : all;
 
     emptyEl.hidden = filtered.length > 0;
     listEl.innerHTML = '';
     for (const asset of filtered) {
-      listEl.appendChild(this._libraryRow(asset));
+      listEl.appendChild(this._libraryRow(asset, usedIds));
     }
+
+    // Footer button visibility — same logic as the audio library.
+    const storeAllBtn  = this.el.querySelector<HTMLButtonElement>('#map-library-store-all-btn');
+    const storeUsedBtn = this.el.querySelector<HTMLButtonElement>('#map-library-store-used-btn');
+    const deleteBtn    = this.el.querySelector<HTMLButtonElement>('#map-library-delete-unused-btn');
+    const allCountEl   = this.el.querySelector<HTMLElement>('#map-library-store-all-count');
+    const usedCountEl  = this.el.querySelector<HTMLElement>('#map-library-store-used-count');
+    const delCountEl   = this.el.querySelector<HTMLElement>('#map-library-delete-unused-count');
+    const status       = this.el.querySelector<HTMLElement>('#map-library-store-status');
+    const nonStored    = all.filter((a) => !a.locallyStored && a.source === 'web-link');
+    const nonStoredUsed = nonStored.filter((a) => usedIds.has(a.id));
+    const unused       = all.filter((a) => !usedIds.has(a.id));
+    if (storeAllBtn)  storeAllBtn.hidden  = nonStored.length === 0;
+    if (storeUsedBtn) storeUsedBtn.hidden = nonStoredUsed.length === 0;
+    if (deleteBtn)    deleteBtn.hidden    = unused.length === 0;
+    if (allCountEl)   allCountEl.textContent  = nonStored.length      > 0 ? `(${nonStored.length})`     : '';
+    if (usedCountEl)  usedCountEl.textContent = nonStoredUsed.length  > 0 ? `(${nonStoredUsed.length})` : '';
+    if (delCountEl)   delCountEl.textContent  = unused.length         > 0 ? `(${unused.length})`        : '';
+    if (status)       status.textContent = '';
   }
 
-  private _libraryRow(asset: MapAsset): HTMLElement {
+  private async _storeAllInLibrary(onlyUsed: boolean): Promise<void> {
+    const status = this.el.querySelector<HTMLElement>('#map-library-store-status');
+    if (!status) return;
+
+    const [all, usedIds] = await Promise.all([
+      MapAssetStore.getAll(),
+      onlyUsed ? getUsedMapAssetIds() : Promise.resolve(new Set<string>()),
+    ]);
+    const candidates = all.filter((a) =>
+      !a.locallyStored && a.source === 'web-link' && (!onlyUsed || usedIds.has(a.id))
+    );
+    if (candidates.length === 0) return;
+
+    const allBtn  = this.el.querySelector<HTMLButtonElement>('#map-library-store-all-btn');
+    const usedBtn = this.el.querySelector<HTMLButtonElement>('#map-library-store-used-btn');
+    if (allBtn)  allBtn.disabled  = true;
+    if (usedBtn) usedBtn.disabled = true;
+
+    let ok = 0;
+    let fail = 0;
+    for (let i = 0; i < candidates.length; i++) {
+      const asset = candidates[i]!;
+      status.textContent = `Storing ${i + 1} of ${candidates.length}: ${asset.filename}…`;
+      const success = await MapAssetStore.store(asset);
+      if (success) ok++; else fail++;
+    }
+
+    const msg = fail === 0
+      ? `Stored ${ok} map asset${ok !== 1 ? 's' : ''}.`
+      : `Stored ${ok}; ${fail} failed (broken URL or CORS).`;
+
+    await this._renderLibrary();
+    if (status) status.textContent = msg;
+    if (allBtn)  allBtn.disabled  = false;
+    if (usedBtn) usedBtn.disabled = false;
+  }
+
+  private async _deleteUnusedInLibrary(): Promise<void> {
+    const status = this.el.querySelector<HTMLElement>('#map-library-store-status');
+    const [all, usedIds] = await Promise.all([
+      MapAssetStore.getAll(),
+      getUsedMapAssetIds(),
+    ]);
+    const unused = all.filter((a) => !usedIds.has(a.id));
+    if (unused.length === 0) return;
+
+    const ok = confirm(
+      `Delete ${unused.length} unused map asset${unused.length === 1 ? '' : 's'}?\n\n` +
+      'These aren\'t referenced by any map in this pack.\n\n' +
+      'This cannot be undone.'
+    );
+    if (!ok) return;
+
+    for (const asset of unused) await MapAssetStore.delete(asset.id);
+    await this._renderLibrary();
+    if (status) status.textContent = `Deleted ${unused.length} unused asset${unused.length === 1 ? '' : 's'}.`;
+  }
+
+  private _libraryRow(asset: MapAsset, usedIds: Set<string> = new Set()): HTMLElement {
+    const isUnused = !usedIds.has(asset.id);
+    const unusedChip = isUnused
+      ? `<span class="sound-unused" title="Not referenced by any map — safe to delete">[!]</span>`
+      : '';
+
     const tags: string[] = [];
     if (asset.source === 'web-link') tags.push('<span class="sound-tag sound-tag--url">URL</span>');
     if (asset.locallyStored)         tags.push('<span class="sound-tag sound-tag--local">Stored</span>');
@@ -131,20 +258,43 @@ export class MapAssetModal {
       ? `${asset.imageWidth} × ${asset.imageHeight}`
       : asset.source;
 
+    const licenceText = asset.license ?? 'Edit ▸';
+
     const row = document.createElement('div');
     row.className = 'sound-row-wrap';
     row.innerHTML = `
       <div class="sound-row">
         <div class="sound-row-info">
-          <span class="sound-name">${tagsHtml}${this._esc(asset.filename)}</span>
+          <span class="sound-name">${tagsHtml}${unusedChip}${this._esc(asset.filename)}</span>
           <span class="sound-meta-row">
-            <span class="sound-meta">${this._esc(dimText)}</span>
+            <span class="sound-meta">${this._esc(dimText)} · ${this._esc(licenceText)}</span>
+            <button class="sound-edit-btn" title="Edit licence + attribution">✎</button>
           </span>
         </div>
         <div class="sound-row-actions">
           ${storeBtnHtml}
           <button class="btn btn--primary btn--xs map-use-btn">Use</button>
           <button class="btn btn--danger btn--xs map-del-btn" title="Remove from library">✕</button>
+        </div>
+      </div>
+      <div class="sound-row-edit" hidden>
+        <div class="sound-edit-row">
+          <label>Licence</label>
+          <select class="map-edit-license">
+            ${LICENSE_OPTIONS.map((l) => `<option value="${this._esc(l)}"${asset.license === l ? ' selected' : ''}>${this._esc(l)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="sound-edit-row">
+          <label>Attribution</label>
+          <input type="text" class="map-edit-attribution" placeholder='e.g. "Map: My Dungeon" by Author' value="${this._esc(asset.attribution ?? '')}" />
+        </div>
+        <div class="sound-edit-row">
+          <label>Link</label>
+          <input type="url" class="map-edit-link" placeholder="https://… (optional)" value="${this._esc(asset.attributionLink ?? asset.sourceUrl ?? '')}" />
+        </div>
+        <div class="sound-edit-actions">
+          <button class="btn btn--primary btn--xs map-edit-save">Save</button>
+          <button class="btn btn--ghost btn--xs map-edit-cancel">Cancel</button>
         </div>
       </div>
     `;
@@ -175,7 +325,70 @@ export class MapAssetModal {
       await this._renderLibrary();
     });
 
+    // Hover preview — load the blob lazily on first hover, cache for the session.
+    row.addEventListener('mouseenter', (e) => void this._showPreview(asset, e as MouseEvent));
+    row.addEventListener('mousemove',  (e) => this._movePreview(e as MouseEvent));
+    row.addEventListener('mouseleave', () => this._hidePreview());
+
+    // Inline attribution editor.
+    const editPanel = row.querySelector<HTMLElement>('.sound-row-edit');
+    row.querySelector<HTMLButtonElement>('.sound-edit-btn')?.addEventListener('click', () => {
+      if (editPanel) editPanel.hidden = !editPanel.hidden;
+    });
+    row.querySelector<HTMLButtonElement>('.map-edit-cancel')?.addEventListener('click', () => {
+      if (editPanel) editPanel.hidden = true;
+    });
+    row.querySelector<HTMLButtonElement>('.map-edit-save')?.addEventListener('click', async () => {
+      const license     = row.querySelector<HTMLSelectElement>('.map-edit-license')?.value ?? asset.license;
+      const attribution = row.querySelector<HTMLInputElement>('.map-edit-attribution')?.value.trim() ?? '';
+      const link        = row.querySelector<HTMLInputElement>('.map-edit-link')?.value.trim() ?? '';
+      const patch: Partial<MapAsset> = {};
+      if (license)     patch.license         = license;
+      if (attribution) patch.attribution     = attribution;
+      if (link)        patch.attributionLink = link;
+      await MapAssetStore.update(asset.id, patch);
+      await this._renderLibrary();
+    });
+
     return row;
+  }
+
+  // ─── Hover preview ────────────────────────────────────────────────────────
+
+  private async _showPreview(asset: MapAsset, e: MouseEvent): Promise<void> {
+    let url = this.previewUrlCache.get(asset.id);
+    if (!url) {
+      const blob = await MapAssetStore.getBlob(asset);
+      if (!blob) return;
+      url = URL.createObjectURL(blob);
+      this.previewUrlCache.set(asset.id, url);
+    }
+    if (!this.previewPopover) {
+      this.previewPopover = document.createElement('div');
+      this.previewPopover.className = 'map-preview-popover';
+      document.body.appendChild(this.previewPopover);
+    }
+    this.previewPopover.innerHTML = `<img src="${url}" alt="" />`;
+    this.previewPopover.hidden = false;
+    this._movePreview(e);
+  }
+
+  private _movePreview(e: MouseEvent): void {
+    if (!this.previewPopover || this.previewPopover.hidden) return;
+    // Position to the right of the cursor by default; flip to left near the
+    // right edge so the popover doesn't go off-screen.
+    const popW = this.previewPopover.offsetWidth  || 250;
+    const popH = this.previewPopover.offsetHeight || 200;
+    let x = e.clientX + 16;
+    let y = e.clientY + 16;
+    if (x + popW > window.innerWidth - 8)  x = e.clientX - popW - 16;
+    if (y + popH > window.innerHeight - 8) y = e.clientY - popH - 16;
+    this.previewPopover.style.left = `${Math.max(8, x)}px`;
+    this.previewPopover.style.top  = `${Math.max(8, y)}px`;
+  }
+
+  private _hidePreview(): void {
+    if (this.previewPopover) this.previewPopover.hidden = true;
   }
 
   // ─── Web Links tab ────────────────────────────────────────────────────────

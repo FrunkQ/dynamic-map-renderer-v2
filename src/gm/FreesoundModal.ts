@@ -3,6 +3,7 @@ import { FreesoundClient } from '../audio/FreesoundClient.ts';
 import { freesoundConnector } from '../audio/connectors/FreesoundConnector.ts';
 import type { AssetSourceConnector, AssetSearchPage } from '../audio/connectors/AssetSourceConnector.ts';
 import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
+import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { getUsedAudioAssetIds } from '../storage/assetUsage.ts';
 
 // Duration filter options shown in the dropdown
@@ -116,6 +117,10 @@ export class FreesoundModal {
 
     // Library 'Attributions' — opens the global attributions modal
     this.el.querySelector('#library-attributions-btn')?.addEventListener('click', () => void this._showAttributions());
+
+    // Cross-modal trigger: the Map asset modal raises this event when its
+    // own Attributions button is clicked, so both libraries share the modal.
+    window.addEventListener('dmr-show-attributions', () => void this._showAttributions());
 
     // Attributions modal close + click-outside (binds once at construction time)
     const attrModal = document.getElementById('attributions-modal');
@@ -633,54 +638,85 @@ export class FreesoundModal {
   private async _showAttributions(): Promise<void> {
     const modal = document.getElementById('attributions-modal');
     if (!modal) return;
-    const list   = await AudioAssetStore.getAttributions();
+    const [audioList, mapList] = await Promise.all([
+      AudioAssetStore.getAttributions(),
+      MapAssetStore.getAttributions(),
+    ]);
     const bodyEl = modal.querySelector('#attr-list')!;
     bodyEl.innerHTML = '';
 
-    if (list.length === 0) {
-      bodyEl.innerHTML = '<p class="attr-empty">No audio assets in library yet.</p>';
+    if (audioList.length === 0 && mapList.length === 0) {
+      bodyEl.innerHTML = '<p class="attr-empty">No assets in library yet.</p>';
     } else {
-      for (const item of list) {
-        const row = document.createElement('div');
-        row.className = 'attr-row';
-        const linkHtml = item.pageUrl
-          ? ` <a href="${this._esc(item.pageUrl)}" target="_blank" rel="noopener" class="attr-link">Link ↗</a>`
-          : '';
-        row.innerHTML = `
-          <span class="attr-text">${this._esc(item.attribution)}</span>
-          <span class="attr-license ${item.license.startsWith('CC0') ? '' : 'attr-license--required'}">${this._esc(item.license)}</span>${linkHtml}
-        `;
-        bodyEl.appendChild(row);
-      }
+      this._appendAttrSection(bodyEl, 'Audio assets', audioList);
+      this._appendAttrSection(bodyEl, 'Map assets',   mapList);
     }
     const status = modal.querySelector<HTMLElement>('#attr-copy-status');
     if (status) status.textContent = '';
     modal.hidden = false;
   }
 
+  private _appendAttrSection(
+    parent: Element,
+    heading: string,
+    list: Array<{ name: string; attribution: string; license: string; pageUrl: string }>,
+  ): void {
+    if (list.length === 0) return;
+    const h = document.createElement('h4');
+    h.className = 'attr-section-heading';
+    h.textContent = heading;
+    parent.appendChild(h);
+    for (const item of list) {
+      const row = document.createElement('div');
+      row.className = 'attr-row';
+      const linkHtml = item.pageUrl
+        ? ` <a href="${this._esc(item.pageUrl)}" target="_blank" rel="noopener" class="attr-link">Link ↗</a>`
+        : '';
+      row.innerHTML = `
+        <span class="attr-text">${this._esc(item.attribution)}</span>
+        <span class="attr-license ${item.license.startsWith('CC0') ? '' : 'attr-license--required'}">${this._esc(item.license)}</span>${linkHtml}
+      `;
+      parent.appendChild(row);
+    }
+  }
+
   /** Build a clipboard-friendly attribution block for the user's docs / credits. */
   private async _copyAllAttributions(): Promise<void> {
     const modal  = document.getElementById('attributions-modal');
     const status = modal?.querySelector<HTMLElement>('#attr-copy-status') ?? null;
-    const list   = await AudioAssetStore.getAttributions();
-    if (list.length === 0) {
+    const [audioList, mapList] = await Promise.all([
+      AudioAssetStore.getAttributions(),
+      MapAssetStore.getAttributions(),
+    ]);
+    if (audioList.length === 0 && mapList.length === 0) {
       if (status) status.textContent = 'Nothing to copy.';
       return;
     }
-    const lines: string[] = ['Audio assets used in map pack:', ''];
-    for (const item of list) {
+
+    const formatRow = (item: { name: string; attribution: string; license: string; pageUrl: string }, kind: string) => {
       const parts = [`"${item.name}"`];
-      if (item.attribution && item.attribution !== `Sound: "${item.name}" — ${item.license || 'Unknown'}`) {
-        parts.push(item.attribution);
-      }
+      const fallback = `${kind}: "${item.name}" — ${item.license || 'Unknown'}`;
+      if (item.attribution && item.attribution !== fallback) parts.push(item.attribution);
       if (item.license) parts.push(item.license);
       if (item.pageUrl) parts.push(item.pageUrl);
-      lines.push(parts.join(' — '));
+      return parts.join(' — ');
+    };
+
+    const lines: string[] = [];
+    if (audioList.length > 0) {
+      lines.push('Audio assets used in map pack:', '');
+      for (const item of audioList) lines.push(formatRow(item, 'Sound'));
+      lines.push('');
     }
-    const text = lines.join('\n');
+    if (mapList.length > 0) {
+      lines.push('Map assets used in map pack:', '');
+      for (const item of mapList) lines.push(formatRow(item, 'Map'));
+    }
+    const text = lines.join('\n').trimEnd();
+    const total = audioList.length + mapList.length;
     try {
       await navigator.clipboard.writeText(text);
-      if (status) status.textContent = `Copied ${list.length} entr${list.length === 1 ? 'y' : 'ies'} to clipboard.`;
+      if (status) status.textContent = `Copied ${total} entr${total === 1 ? 'y' : 'ies'} to clipboard.`;
     } catch {
       if (status) status.textContent = 'Copy failed — see console.';
       console.log('[Attributions]\n', text);

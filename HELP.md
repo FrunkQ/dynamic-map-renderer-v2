@@ -20,17 +20,26 @@ The sidebar controls everything players see. Click any panel title to expand or 
 
 ## Map
 
-**Map selector** — Switch between your uploaded maps. Switching instantly updates all connected players.
+**Map selector** — Switch between your maps. Switching instantly updates all connected players.
 
-**Upload New Map** — Add a `.png`, `.jpg`, or `.webp` image. It's stored in your browser and loaded immediately.
+**Name** — Live-rename the selected map; the dropdown label updates as you type. The underlying image keeps its own filename — this is just the display name in your pack.
 
-**Delete Current Map** — Permanently removes the selected map and all its settings. Cannot be undone.
+**+ Add New Map** — Opens the Add Map dialog with three tabs:
+- **My Library** — every map image already in your pack. Hover for a thumbnail preview. Click **Use** to spin up a new map instance pointing at it (one image can back many maps with their own fog / markers / tracker config). Per-row Store / pen-edit / delete + footer bulk buttons (Store All Used / Store All / Delete All Unused), plus **ℹ Attributions & Licences**.
+- **Web Links** — paste image URLs (PNG / JPG / WebP). Each is validated; valid ones land in your library tagged `URL` and stream from the source at runtime.
+- **Upload** — drop a local image, name it, add. Uploaded images are always stored.
+
+**Clone Map** — Duplicates the active map with a `- copy` suffix. The image is shared with the original (no extra storage); fog, markers, audio, and tracker settings are copied independently so you can edit each map separately.
+
+**Delete Map** — Removes the named map and its per-map settings (fog, markers, audio). The underlying image asset stays in your library and can be reused.
+
+**⚠ Fix Missing Map** — Appears when the current map's image asset can't be retrieved (deleted, broken URL, offline + uncached). The map shows a placeholder so fog / marker positions stay sensible; click the button to relink to a different asset via the Add Map dialog.
 
 **Transition** — Choose an animated effect to play on the player screen when you switch maps (Fade, CRT Collapse, Wipe, etc.). Parameters for the selected transition appear below the dropdown.
 
-**Save to File** — Exports all maps, fog, markers, audio, and settings as a single `.json` backup file.
+**Save to File** — Exports the entire pack (maps, image assets, audio assets, fog, markers, tracker config) as a single `.json` backup file. **Stored** assets travel with their blobs; **URL** assets travel as references and re-fetch on the recipient.
 
-**Load Maps File** — Replaces everything with a previously saved bundle. You'll be asked to confirm first — back up first.
+**Load Maps File** — Replaces everything with a previously saved bundle. You'll be asked to confirm — back up first.
 
 ---
 
@@ -128,9 +137,12 @@ The visuals and audio are mirrored to connected players, with the rings and blob
 Play ambient music and sound effects to your players.
 
 **Slots** — Each slot holds one sound. Click **+ Assign Sound** to open the sound picker:
-- **My Library** — your previously saved sounds, searchable by name.
-- **Freesound Search** — search [freesound.org](https://freesound.org) by keyword. Requires a free API key (paste it in the Search tab — saved to your browser). Use the duration filter to narrow results. If there are more results, a **More results…** button loads the next batch.
-- **Upload** — drag and drop a local audio file, or click to browse.
+- **My Library** — your saved sounds. Each row shows source pills (`Freesound`, `URL`) and a `Stored` pill if it's been kept locally. **`[!]`** marks rows no map references — safe to delete. The pen icon lets you edit licence + attribution + link on user-added rows. Footer buttons: **Store All Used** / **Store All** / **Delete All Unused**, plus **ℹ Attributions & Licences** which opens a unified credits modal (audio + map assets) with **Copy All** to clipboard.
+- **Freesound Search** — search [freesound.org](https://freesound.org) by keyword. Imported sounds work like URL assets by default — click **Store** in the library to take a permanent local copy.
+- **Web Links** — paste one or more URLs to audio files. Each is validated; valid ones land in your library tagged `URL` and stream from the source at runtime.
+- **Upload** — drag and drop a local audio file. Uploads are always stored.
+
+**Stored vs URL** — A `Stored` asset is part of your data pack: it works offline and travels with bundle exports. A URL asset is a reference: it streams from the web at runtime and stays out of bundle exports unless you Store it. Click **Store** on any URL or Freesound row to flip it to Stored.
 
 **Playback modes** — Each slot has three modes (click the icons):
 - ** Once** — plays once and stops.

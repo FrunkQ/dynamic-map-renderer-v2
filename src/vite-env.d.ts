@@ -9,3 +9,10 @@ declare const __DEV_LAN_IP__: string | null;
 
 /** App version string from package.json, injected at build time. */
 declare const __APP_VERSION__: string;
+
+/**
+ * True when the build was produced by Vercel's CI (process.env.VERCEL='1').
+ * Gates lazy import of @vercel/analytics so non-Vercel builds tree-shake it
+ * out and stay analytics-free.
+ */
+declare const __VERCEL_DEPLOY__: boolean;

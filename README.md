@@ -18,7 +18,7 @@ Players connect via a peer-to-peer link; no server infrastructure is required be
 
 ## Features
 
-- **Map library** — upload `.png`, `.jpg`, `.jpeg`, `.webp` map images; store and switch between them.
+- **Map library** — add `.png`, `.jpg`, `.jpeg`, `.webp` images by upload, paste-by-URL, or pick from your existing library. One map image asset can back multiple named maps with their own fog / markers / audio / tracker config — handy for re-using the same battlemap across encounters. Hover for thumbnail preview, rename live, **Clone Map** for instant copies (image shared, settings duplicated independently). Missing or broken asset URLs render a placeholder so fog and marker positions stay sensible until you click **⚠ Fix Missing Map**.
 - **Fog of War** — draw arbitrary polygons to hide areas from players; click to select and delete.
 - **Visual filters** — full-screen post-processing effects applied to the player view only:
 
@@ -72,8 +72,9 @@ Players connect via a peer-to-peer link; no server infrastructure is required be
 - **Soundboard** — play ambient audio and sound effects to connected players from the Soundboard panel:
   - Up to 8 configurable slots per page, with unlimited pages.
   - **Assign sounds** — click any slot to open the sound picker:
-    - **My Library** — browse and manage previously saved sounds; filter by name.
-    - **Freesound Search** — search [freesound.org](https://freesound.org) by keyword with optional duration filter. Preview before importing. Results paginate with a **More results…** button. Requires a free Freesound API key (paste it into the search tab — it's saved to your browser).
+    - **My Library** — browse and manage previously saved sounds. Each row shows source / store-state tag pills (`Freesound`, `URL`, `Stored`), an `[!]` chip on assets no map references, an inline editor for licence + attribution + link on user-added rows, and Store / Use / Delete buttons. Footer adds bulk **Store All Used** / **Store All** / **Delete All Unused** plus an **ℹ Attributions & Licences** button that opens a unified credits modal with one-click **Copy All** for both audio + map assets.
+    - **Freesound Search** — search [freesound.org](https://freesound.org) by keyword with optional duration filter. Preview before importing. Results paginate with a **More results…** button. Requires a free Freesound API key (paste it into the search tab — it's saved to your browser). Imported sounds are URL-style by default — click **Store** in the library to make them offline-usable and bundle-portable.
+    - **Web Links** — paste comma / newline / space delimited URLs to audio files. Each is validated and added to your library tagged `URL`; the file streams from the source at runtime. Click **Store** to take a copy offline.
     - **Upload** — drag and drop any local audio file, or click to browse. Uploaded sounds are stored in IndexedDB and embedded in your bundle export.
   - **Playback modes** — two toggles per slot, combinable:
     - **Loop** 🔄 — plays continuously until stopped; auto-resumes when you return to the map.
@@ -86,7 +87,7 @@ Players connect via a peer-to-peer link; no server infrastructure is required be
   - **Attributions** — the ℹ Attributions button lists all CC-BY sounds currently in use, with full credit text ready to copy.
   - **Preloading** — all sounds assigned to a map are cached on the player client when the map loads, so playback starts instantly with no buffering delay.
 
-- **Bundle import/export** — save and restore your entire map library (images, fog, filter settings, and uploaded audio files) as a single `.json` file.
+- **Bundle import/export** — save and restore your entire pack as a single `.json` file. **Stored** assets (uploads + anything you've explicitly Stored) travel with their blobs and work offline on the recipient. **URL** assets travel as references only and re-fetch on first use, keeping bundle size small.
 - **Auto-save** — all per-map settings (fog polygons, filter, view position, background colour) save automatically to browser IndexedDB.
 - **PWA support** — installable as an app on desktop and mobile.
 - **GPU-efficient rendering** — static filters render only on change; animated filters run at full frame rate only when needed.

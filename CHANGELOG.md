@@ -1,5 +1,100 @@
 # Changelog
 
+## v2.8.0 — 2026-05-10
+
+### Asset Management Refresh
+
+A from-scratch overhaul of how the app stores, shares, and credits its audio
+and image assets. The user-facing TL;DR: every audio sound and every map image
+is now tracked separately from the maps that use them, so one image can back
+multiple maps with their own fog / markers / tracker config, and remote-source
+assets (Freesound, Web Links) only travel in your data pack when you say so.
+
+#### Sounds — `My Library` overhaul
+
+- **Web Links tab** in the Add Sound dialog. Paste comma / newline / space
+  delimited URLs to audio files; each is validated via an `<audio>` probe
+  with `crossOrigin='anonymous'` and a 15 s timeout. Valid ones land in your
+  library tagged **URL**; the file streams from the source at runtime.
+- **Tag pills** on every library row — `Freesound` (green), `URL` (blue),
+  `Stored` (grey, additive). Stored = "this asset will travel with bundle
+  exports". Uploads are always Stored; Freesound and URL items become Stored
+  only when you explicitly click **Store**.
+- **Store button** per row promotes a remote asset to fully-local. Bulk
+  variants in the footer:
+    - **Store All Used** — only assets actually referenced somewhere
+    - **Store All** — every non-stored asset
+    - **Delete All Unused** — permanently remove the un-referenced ones
+- **Trash chip** `[!]` next to library rows that no map references.
+  Hover-tooltip explains they're safe to delete.
+- **Editable attribution** on Upload + URL rows (Freesound rows are locked).
+  Pen icon next to the licence opens an inline form: Licence dropdown
+  (CC0 / CC-BY / CC-BY-SA / CC-BY-NC / CC-BY-NC-SA / CC-BY-ND / CC-BY-NC-ND
+  / Permission Granted / Other), Attribution text, Link URL.
+- **Attributions modal** moved out of the Soundboard panel into both
+  libraries' footers as **ℹ Attributions & Licences**. Now shows separate
+  **Audio assets** and **Map assets** sections with a clipboard-friendly
+  **Copy All** button.
+
+#### Maps — `Map / MapAsset` split
+
+- **Map / MapAsset entity split** under the hood. A `StoredMap` is now a
+  named instance pointing at a separate `MapAsset` that owns the actual
+  image. Two named maps can share one image asset with their own fog /
+  markers / audio / tracker config.
+- **`+ Add New Map` dialog** replaces the lone Upload button. Three tabs:
+    - **My Library** — every MapAsset, with `URL` / `Stored` tags,
+      pixel dimensions, hover-preview thumbnail, per-row Store /
+      Use / Delete + the same trash chip / inline editor / footer
+      bulk-action buttons as the Sounds library.
+    - **Web Links** — paste image URLs, validate via `Image()` probe.
+    - **Upload** — drop a PNG / JPG / WebP, name it, add.
+- **Name field under the dropdown** — live-edit the active map's display
+  name; the dropdown label updates as you type.
+- **Clone Map** alongside a renamed **Delete Map**. Clone copies the per-map
+  config (fog, markers, audio slots, tracker) with regenerated marker / slot
+  IDs, sharing the same MapAsset (no image duplication). Append `- copy` to
+  the name (de-duped).
+- **`⚠ Fix Missing Map` button** appears when the current map's asset isn't
+  retrievable (deleted, broken Web Link, offline + uncached). Reuses the
+  Add Map dialog to relink — the map's other settings are preserved.
+- **Procedural placeholder** image rendered at the asset's cached
+  `imageWidth × imageHeight` so fog / marker / viewport coords stay
+  positioned correctly during the missing state.
+
+#### Bundle format (`bundleSchema: 2`)
+
+- New `mapInstances`, `storedMapAssets`, `remoteMapAssets`, `storedAudio`,
+  `remoteAudio` fields. **Stored** assets travel with their blobs; **URL**
+  assets travel as metadata-only and re-fetch on the recipient.
+- Legacy fields (`maps[]`, `uploadedAudio[]`, `freesoundAudio[]`) still
+  written for back-compat — older clients can still read v2.8 bundles.
+- `Load Maps File` clears every asset library before importing, so two
+  bundles loaded back-to-back don't accumulate strays.
+
+#### Footer & misc
+
+- **Storage gauge** in the bottom corner shows `XX.X / YYY MB` of browser
+  storage used (via `navigator.storage.estimate()`). Refreshes every 30 s,
+  tints orange past 80 % of quota.
+- **DB schema** bumped to v4 with an idempotent upgrade callback that
+  self-heals stuck-version states from interrupted earlier upgrades.
+- **`@vercel/analytics`** added behind a build-time `__VERCEL_DEPLOY__`
+  flag (`process.env.VERCEL === '1'`). Vercel deploys get privacy-friendly
+  page-view tracking; self-hosters and local dev get a fully analytics-free
+  bundle (verified — no `@vercel/analytics` strings in `dist/` on a
+  non-Vercel build).
+
+### Refactors
+
+- New `MapAssetStore` facade mirroring `AudioAssetStore` (runtime cache for
+  non-stored URL fetches, `store()` / `getBlob()` priority chain,
+  `getAttributions()`, `readDimensions()`, `update(id, patch)`).
+- `assetUsage.ts` gains `getUsedMapAssetIds()` alongside the existing audio
+  + icon helpers, used by the Map Library trash tracking.
+
+---
+
 ## v2.7.0 — 2026-05-09
 
 ### New Features

@@ -1,4 +1,4 @@
-import { getAllConfigs } from './db.ts';
+import { getAllConfigs, getAllMaps } from './db.ts';
 
 /**
  * Compute the set of audio asset IDs currently referenced anywhere in the
@@ -33,6 +33,19 @@ export async function getUsedIconKeys(): Promise<Set<string>> {
     for (const m of cfg.markers ?? []) {
       if (m.icon?.startsWith('asset:')) used.add(m.icon);
     }
+  }
+  return used;
+}
+
+/**
+ * Compute the set of MapAsset ids currently referenced by any named map
+ * instance. Used by the Map Library to flag unused map assets.
+ */
+export async function getUsedMapAssetIds(): Promise<Set<string>> {
+  const used = new Set<string>();
+  const maps = await getAllMaps();
+  for (const m of maps) {
+    if (m.mapAssetId) used.add(m.mapAssetId);
   }
   return used;
 }

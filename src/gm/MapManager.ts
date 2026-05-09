@@ -3,6 +3,7 @@ import {
   saveMap, getAllMaps, deleteMap, getMap, loadConfig, saveConfig,
 } from '../storage/db.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
+import { generateMissingMapPlaceholder } from '../maps/placeholder.ts';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -144,18 +145,50 @@ export class MapManager {
     if (legacyBlob) return legacyBlob.arrayBuffer();
 
     const asset = await MapAssetStore.get(map.mapAssetId);
-    if (!asset) return null;
-    const blob = await MapAssetStore.getBlob(asset);
-    if (!blob) return null;
-
-    // Backfill image dimensions if we never recorded them — used by the
-    // missing-asset placeholder (C10) so fog/marker geometry stays sensible.
-    if (asset.imageWidth === undefined || asset.imageHeight === undefined) {
-      const dims = await MapAssetStore.readDimensions(blob);
-      if (dims) await MapAssetStore.update(asset.id, { imageWidth: dims.width, imageHeight: dims.height });
+    if (asset) {
+      const blob = await MapAssetStore.getBlob(asset);
+      if (blob) {
+        // Backfill image dimensions if we never recorded them — used by the
+        // missing-asset placeholder so fog/marker geometry stays sensible.
+        if (asset.imageWidth === undefined || asset.imageHeight === undefined) {
+          const dims = await MapAssetStore.readDimensions(blob);
+          if (dims) await MapAssetStore.update(asset.id, { imageWidth: dims.width, imageHeight: dims.height });
+        }
+        return blob.arrayBuffer();
+      }
     }
 
-    return blob.arrayBuffer();
+    // Asset metadata or blob unavailable — synthesise a placeholder at the
+    // remembered dimensions so existing fog/markers/viewport rectangles stay
+    // positioned correctly until the GM clicks Fix Missing Map.
+    const w = asset?.imageWidth  ?? 1920;
+    const h = asset?.imageHeight ?? 1080;
+    const placeholder = await generateMissingMapPlaceholder(w, h);
+    return placeholder.arrayBuffer();
+  }
+
+  /**
+   * True when the map's underlying asset blob isn't available — the asset
+   * was deleted, the web-link is broken, or the user is offline without a
+   * cached copy. Driven by MapAssetStore.getBlob's runtime cache so calling
+   * this twice is cheap.
+   */
+  async isAssetMissing(id: string): Promise<boolean> {
+    const map = await getMap(id);
+    if (!map) return false;
+    if ((map as unknown as { blob?: Blob }).blob) return false; // legacy inline blob
+    const asset = await MapAssetStore.get(map.mapAssetId);
+    if (!asset) return true;
+    if (asset.locallyStored && asset.blob) return false;
+    const blob = await MapAssetStore.getBlob(asset);
+    return !blob;
+  }
+
+  /** Re-point a map instance at a different MapAsset. Used by Fix Missing Map. */
+  async retargetMap(mapId: string, newAssetId: string): Promise<void> {
+    const map = await getMap(mapId);
+    if (!map) return;
+    await saveMap({ ...map, mapAssetId: newAssetId });
   }
 
   /**
