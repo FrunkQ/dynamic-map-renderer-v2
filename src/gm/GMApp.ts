@@ -4,6 +4,7 @@ import { FogEditor } from './FogEditor.ts';
 import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { IconPicker } from './IconPicker.ts';
+import { MapAssetModal } from './MapAssetModal.ts';
 import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts';
 import { SoundboardEngine } from '../audio/SoundboardEngine.ts';
 import { Renderer } from '../rendering/Renderer.ts';
@@ -59,6 +60,7 @@ export class GMApp {
   private transitionPanel!: TransitionPanel;
 
   private iconPicker!:       IconPicker;
+  private mapAssetModal!:    MapAssetModal;
   private soundboardEngine!: SoundboardEngine;
   private soundboardPanel!:  SoundboardPanel;
 
@@ -78,6 +80,7 @@ export class GMApp {
 
   // DOM references (assigned in init)
   private mapSelect!:               HTMLSelectElement;
+  private mapNameInput!:            HTMLInputElement;
   private transitionSelect!:        HTMLSelectElement;
   private transitionParamsContainer!: HTMLElement;
   private filterSelect!:            HTMLSelectElement;
@@ -531,6 +534,7 @@ export class GMApp {
     // Flush any unsaved state from the previous map before switching
     await this.state.flushSave();
     this.setStatus(`Loading ${map.name}…`, 'ok');
+    this.mapNameInput.value = map.name;
     this.activeFilterId = ''; // force panel rebuild for new map's saved filter
     const blob = await this.maps.getBlob(map.id);
     if (!blob) { this.setStatus('Map blob not found', 'error'); return; }
@@ -624,6 +628,7 @@ export class GMApp {
       document.querySelector<T>(sel)!;
 
     this.mapSelect                  = q<HTMLSelectElement>('#map-select');
+    this.mapNameInput               = q<HTMLInputElement>('#map-name-input');
     this.transitionSelect           = q<HTMLSelectElement>('#transition-select');
     this.transitionParamsContainer  = q('#transition-params');
     this.filterSelect               = q<HTMLSelectElement>('#filter-select');
@@ -824,6 +829,8 @@ export class GMApp {
   }
 
   private bindUIControls(): void {
+    this.mapAssetModal = new MapAssetModal(this.maps, () => { /* assigned in handler below */ });
+
     // Map selection
     this.mapSelect.addEventListener('change', async () => {
       const id = this.mapSelect.value;
@@ -838,35 +845,66 @@ export class GMApp {
       const id = this.mapSelect.value;
       if (!id) return;
       const name = this.mapSelect.selectedOptions[0]?.text ?? 'this map';
-      if (!confirm(`Delete "${name}"?\nThis cannot be undone.`)) return;
+      const ok = confirm(
+        `Delete the map "${name}"?\n\n` +
+        'This removes the named map and its settings (fog, markers, audio). ' +
+        'The underlying map image asset stays in your library and can be reused.\n\n' +
+        'This cannot be undone.'
+      );
+      if (!ok) return;
       try {
         await this.state.flushSave(); // commit any pending saves before wiping
         await this.maps.delete(id);
         await this.populateMapList();
         const remaining = await this.maps.getAll();
         if (remaining.length === 0) {
-          this.setStatus('No maps — upload one to get started', 'warn');
+          this.setStatus('No maps — add one to get started', 'warn');
         }
       } catch (err) {
         this.setStatus(`Delete failed: ${(err as Error).message}`, 'error');
       }
     });
 
-    // Map upload
-    document.querySelector('#map-upload')?.addEventListener('change', async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
+    // Map clone
+    document.querySelector('#clone-map-btn')?.addEventListener('click', async () => {
+      const id = this.mapSelect.value;
+      if (!id) return;
       try {
-        const stored = await this.maps.importFile(file);
+        await this.state.flushSave(); // ensure the source map's latest state is on disk
+        const newMap = await this.maps.cloneMap(id);
+        if (!newMap) return;
         const opt = document.createElement('option');
-        opt.value = stored.id;
-        opt.textContent = stored.name;
+        opt.value = newMap.id;
+        opt.textContent = newMap.name;
         this.mapSelect.appendChild(opt);
-        this.mapSelect.value = stored.id;
-        await this.loadMap(stored);
+        this.mapSelect.value = newMap.id;
+        await this.loadMap(newMap);
       } catch (err) {
-        this.setStatus((err as Error).message, 'error');
+        this.setStatus(`Clone failed: ${(err as Error).message}`, 'error');
       }
+    });
+
+    // Map rename — live-edit the active map's display name
+    this.mapNameInput.addEventListener('input', async () => {
+      const id = this.mapSelect.value;
+      if (!id) return;
+      const name = this.mapNameInput.value;
+      await this.maps.rename(id, name);
+      // Update the dropdown option in place so the user sees the new label immediately
+      const opt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
+      if (opt) opt.textContent = name || '(unnamed)';
+    });
+
+    // Add Map dialog — Library / Web Links / Upload
+    document.querySelector('#add-map-btn')?.addEventListener('click', () => {
+      this.mapAssetModal.open((map) => {
+        const opt = document.createElement('option');
+        opt.value = map.id;
+        opt.textContent = map.name;
+        this.mapSelect.appendChild(opt);
+        this.mapSelect.value = map.id;
+        void this.loadMap(map);
+      });
     });
 
     // Export all maps + configs

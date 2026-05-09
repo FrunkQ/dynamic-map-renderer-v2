@@ -1,6 +1,6 @@
 import type { StoredMap, MapAsset } from '../types.ts';
 import {
-  saveMap, getAllMaps, deleteMap, getMap,
+  saveMap, getAllMaps, deleteMap, getMap, loadConfig, saveConfig,
 } from '../storage/db.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 
@@ -65,6 +65,64 @@ export class MapManager {
   /** All map instances (what the user sees in the dropdown). */
   async getAll(): Promise<StoredMap[]> {
     return getAllMaps();
+  }
+
+  /** Update just the display name of a map instance. */
+  async rename(id: string, name: string): Promise<void> {
+    const map = await getMap(id);
+    if (!map) return;
+    await saveMap({ ...map, name });
+  }
+
+  /**
+   * Clone a map instance: same MapAsset (asset is shared, not duplicated),
+   * fresh per-map config copied across with regenerated marker + soundboard
+   * slot IDs so the clone is fully independent. Name gets a " - copy" suffix
+   * unless it already ends with one.
+   */
+  async cloneMap(id: string): Promise<StoredMap | null> {
+    const original = await getMap(id);
+    if (!original) return null;
+    const config = await loadConfig(id);
+
+    const newId = generateId();
+    const newName = original.name.endsWith(' - copy') ? original.name : `${original.name} - copy`;
+    const newMap: StoredMap = {
+      id:         newId,
+      name:       newName,
+      mapAssetId: original.mapAssetId,
+      addedAt:    Date.now(),
+    };
+    await saveMap(newMap);
+
+    if (config) {
+      // Deep clone, then regenerate any IDs that should be unique per map instance.
+      const cloned = JSON.parse(JSON.stringify(config)) as typeof config;
+      cloned.markers = cloned.markers.map((m) => ({ ...m, id: generateId() }));
+      if (cloned.audio?.slots) {
+        cloned.audio.slots = cloned.audio.slots.map((s) => ({ ...s, id: generateId() }));
+      }
+      // state.map gets overwritten by loadForMap; no need to fix it here.
+      await saveConfig(newId, cloned);
+    }
+
+    return newMap;
+  }
+
+  /**
+   * Create a fresh named map instance pointing at an existing MapAsset. Used
+   * by the Add Map dialog when the user picks a map from My Library or after
+   * a fresh Upload / Web-Link add. The asset is NOT duplicated.
+   */
+  async createMapFromAsset(assetId: string, name: string): Promise<StoredMap> {
+    const map: StoredMap = {
+      id:         generateId(),
+      name,
+      mapAssetId: assetId,
+      addedAt:    Date.now(),
+    };
+    await saveMap(map);
+    return map;
   }
 
   /**

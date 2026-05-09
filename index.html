@@ -34,11 +34,15 @@
       <button type="button" class="panel-title" aria-expanded="true">Map Selection</button>
       <div class="panel-body">
         <select id="map-select" class="select-full"></select>
-        <label class="upload-label btn btn--ghost">
-          Upload New Map
-          <input type="file" id="map-upload" accept=".png,.jpg,.jpeg,.webp" hidden />
-        </label>
-        <button id="delete-map-btn" class="btn btn--danger btn--sm">Delete Current Map</button>
+        <div class="param-row">
+          <label for="map-name-input">Name</label>
+          <input type="text" id="map-name-input" class="marker-text-input" placeholder="Map name…" />
+        </div>
+        <button id="add-map-btn" class="btn btn--ghost btn--sm btn--full">+ Add New Map</button>
+        <div class="btn-row">
+          <button id="clone-map-btn"  class="btn btn--ghost   btn--sm">Clone Map</button>
+          <button id="delete-map-btn" class="btn btn--danger  btn--sm">Delete Map</button>
+        </div>
         <p class="map-section-label map-section-label--gap">All Map Data</p>
         <div class="btn-row">
           <button id="export-btn" class="btn btn--ghost btn--sm">Save to File</button>
@@ -405,6 +409,55 @@ https://example.com/sound2.wav"></textarea>
             </div>
             <p class="fs-api-hint">Get a free key at <span class="fs-api-link">freesound.org/apiv2/apply</span></p>
             <p class="fs-api-hint">Your API key is saved in this browser only — it is not included in bundle exports.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Map modal -->
+  <div id="map-asset-modal" class="modal-overlay" hidden>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">Add Map</span>
+        <button id="map-modal-close" class="modal-close">×</button>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-map-tab="library">My Library</button>
+        <button class="modal-tab" data-map-tab="weblinks">Web Links</button>
+        <button class="modal-tab" data-map-tab="upload">Upload</button>
+      </div>
+      <div class="modal-body">
+        <div id="map-tab-library" class="tab-content">
+          <div class="modal-search-row">
+            <input type="text" id="map-library-search" class="modal-search-input" placeholder="Filter library…" />
+          </div>
+          <div id="map-library-list" class="sound-list"></div>
+          <p id="map-library-empty" class="sound-list-empty" hidden>No map assets yet. Use Upload or Web Links to add one.</p>
+        </div>
+        <div id="map-tab-weblinks" class="tab-content" hidden>
+          <p class="weblinks-hint">Paste one or more URLs to image files (png, jpg, webp). Each is validated and added to your library tagged <strong>URL</strong> — the file streams from the source at runtime and is <em>not</em> stored locally until you click <strong>Store</strong> in the library.</p>
+          <textarea id="map-weblinks-input" class="weblinks-input" rows="5" placeholder="https://example.com/map1.png
+https://example.com/map2.jpg"></textarea>
+          <div class="upload-actions">
+            <button id="map-weblinks-add-btn" class="btn btn--primary btn--sm">Validate &amp; Add</button>
+            <button id="map-weblinks-clear-btn" class="btn btn--ghost btn--sm">Clear</button>
+          </div>
+          <div id="map-weblinks-results" class="weblinks-results"></div>
+        </div>
+        <div id="map-tab-upload" class="tab-content" hidden>
+          <div id="map-upload-drop-zone" class="upload-drop-zone">
+            <p class="upload-drop-label">Drop a map image here<br>or click to browse</p>
+            <input type="file" id="map-upload-file-input" accept=".png,.jpg,.jpeg,.webp" hidden />
+          </div>
+          <div id="map-upload-file-info" class="upload-file-info" hidden>
+            <div class="modal-search-row">
+              <input type="text" id="map-upload-name-input" class="modal-search-input" placeholder="Map name…" />
+            </div>
+            <div class="upload-actions">
+              <button id="map-upload-add-btn" class="btn btn--primary btn--sm">Add to Library</button>
+              <button id="map-upload-clear-btn" class="btn btn--ghost btn--sm">Clear</button>
+            </div>
           </div>
         </div>
       </div>
