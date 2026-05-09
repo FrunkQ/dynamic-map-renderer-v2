@@ -96,6 +96,8 @@ export interface Marker {
 
   // Motion fields (used when roles.motion is set)
   motionMuted: boolean; // source: tracker ignores it; tracker: scanner is silent
+  /** Per-source: how blobs are drawn when this source is detected. */
+  motionBlobMode: 'single' | 'cluster';
 
   // Interaction lock — side-panel only; dims icon, blocks canvas selection
   locked: boolean;
@@ -120,6 +122,7 @@ export function defaultMarker(id: string, x = 0.5, y = 0.5): Marker {
     audioRandom:      false,
     audioRandomFreq:  10,
     motionMuted:      false,
+    motionBlobMode:   'single',
     locked:           false,
   };
 }
@@ -145,11 +148,6 @@ export interface SoundboardSlot {
 
 export interface AudioState {
   slots: SoundboardSlot[];
-  motionTracker: {
-    enabled:        boolean;
-    sourceMarkerId: string | null;
-    playerMarkerId: string | null;
-  } | null;
 }
 
 /**
@@ -164,12 +162,10 @@ export interface MotionTrackerConfig {
   rate:     number;
   /** Seconds the ring takes to expand from 0 to `range`. */
   speed:    number;
-  /** Whether to draw return blobs when sources are detected. */
-  showBlobs: boolean;
+  /** When true, suppress the visual blobs — audio cues only ("Aliens" mode). */
+  hideBlobs: boolean;
   /** Ring + blob colour (hex). */
   colour:   string;
-  /** Single blob at the source, or a 3-5 cluster within the icon area. */
-  blobMode: 'single' | 'cluster';
   /** Audio asset played when a scan begins. */
   outgoingPingAssetId: string | null;
   /** Audio asset played when a source is detected. */
@@ -181,9 +177,8 @@ export function defaultMotionTrackerConfig(): MotionTrackerConfig {
     range:    0.5,
     rate:     4,
     speed:    3,
-    showBlobs: true,
+    hideBlobs: false,
     colour:   '#f59e0b', // amber, matches the tracker role accent
-    blobMode: 'single',
     outgoingPingAssetId: null,
     returnPingAssetId:   null,
   };
@@ -233,12 +228,12 @@ export interface SessionState {
   view: ViewState;
   filter: FilterState;
   fog: FogState;
-  /** Populated in future; always an empty array in v1 */
   markers: Marker[];
-  /** Populated in future; null values signal "not yet configured" */
   audio: AudioState;
   /** Persisted transition selection and parameters for this map */
   transition?: TransitionConfig;
+  /** Per-map motion tracker config — controls whichever marker holds the tracker role. */
+  motionTracker: MotionTrackerConfig;
 }
 
 export function defaultSessionState(): SessionState {
@@ -251,8 +246,8 @@ export function defaultSessionState(): SessionState {
     markers: [],
     audio: {
       slots: [],
-      motionTracker: null,
     },
+    motionTracker: defaultMotionTrackerConfig(),
   };
 }
 

@@ -1,4 +1,4 @@
-import type { SessionState, MapState, FilterState, FogState, ViewState, Marker, AudioState, TransitionConfig } from '../types.ts';
+import type { SessionState, MapState, FilterState, FogState, ViewState, Marker, AudioState, TransitionConfig, MotionTrackerConfig } from '../types.ts';
 import { defaultSessionState } from '../types.ts';
 import { saveConfig, loadConfig } from '../storage/db.ts';
 import { migrateSessionState } from '../storage/migrations.ts';
@@ -40,10 +40,14 @@ export class StateManager {
     const saved     = await loadConfig(map.id);
     const migrated  = saved ? migrateSessionState(saved) : null;
     const base      = defaultSessionState();
+    // Carry-forward: when arriving on a map with no saved config, inherit the
+    // currently-loaded map's tracker config so a GM doesn't have to reconfigure
+    // their preferred range/rate/colour every time they add a new map.
+    const carriedTracker = this.state.motionTracker;
 
     this.state = migrated
       ? { ...migrated, map }
-      : { ...base, map };
+      : { ...base, map, motionTracker: { ...carriedTracker } };
 
     // Ensure filter defaults are seeded for filters that have no saved params
     this.seedFilterDefaults();
@@ -108,6 +112,11 @@ export class StateManager {
   setTransition(config: TransitionConfig): void {
     this.state = { ...this.state, transition: config };
     this._notify(['transition'], undefined, true);
+  }
+
+  setMotionTracker(config: MotionTrackerConfig): void {
+    this.state = { ...this.state, motionTracker: config };
+    this._notify(['motionTracker'], undefined, true);
   }
 
   // ─── Listeners ────────────────────────────────────────────────────────────

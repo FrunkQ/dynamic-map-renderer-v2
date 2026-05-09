@@ -1,5 +1,5 @@
 import type { SessionState, AudioState } from '../types.ts';
-import { STATE_VERSION, defaultSessionState } from '../types.ts';
+import { STATE_VERSION, defaultSessionState, defaultMotionTrackerConfig } from '../types.ts';
 
 /**
  * Schema migrators — chained version bumps applied to saved SessionState
@@ -38,7 +38,8 @@ function _migrateMarker_v1_v2(m: any): any {
   return {
     ...rest,
     roles,
-    motionMuted: typeof m.motionMuted === 'boolean' ? m.motionMuted : false,
+    motionMuted:    typeof m.motionMuted === 'boolean' ? m.motionMuted : false,
+    motionBlobMode: m.motionBlobMode === 'cluster' ? 'cluster' : 'single',
   };
 }
 
@@ -63,9 +64,12 @@ export function migrateSessionState(saved: any): SessionState | null {
   if (v !== STATE_VERSION) return null;
 
   // Backward-compat normalisation that isn't tied to a specific version bump:
-  // very old saves had {activeAmbientId, volume} for audio without slots[].
+  // very old saves had {activeAmbientId, volume} for audio without slots[];
+  // pre-B3 saves don't have motionTracker at all.
   const base = defaultSessionState();
-  const audio = cur.audio && Array.isArray((cur.audio as AudioState).slots) ? cur.audio : base.audio;
+  const audio: AudioState = cur.audio && Array.isArray(cur.audio.slots)
+    ? { slots: cur.audio.slots }   // strip dead audio.motionTracker stub if present
+    : base.audio;
 
   return {
     ...cur,
@@ -73,5 +77,6 @@ export function migrateSessionState(saved: any): SessionState | null {
     view:    { ...base.view, ...(cur.view ?? {}) },
     markers: Array.isArray(cur.markers) ? cur.markers : base.markers,
     audio,
+    motionTracker: cur.motionTracker ?? defaultMotionTrackerConfig(),
   } as SessionState;
 }

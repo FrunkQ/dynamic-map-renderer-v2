@@ -207,6 +207,48 @@
                 <span class="toggle-slider"></span>
               </label>
             </div>
+
+            <!-- Tracker-only configuration. Hidden unless the marker is the tracker. -->
+            <div id="marker-motion-tracker-controls" hidden>
+              <div class="param-row">
+                <label for="tracker-range">Range</label>
+                <!-- Slider position is 0–1; the actual range is mapped logarithmically (0.05 → 4.0) for finer control at low values. -->
+                <input type="range" id="tracker-range" min="0" max="1" step="0.001" value="0.5" />
+                <span id="tracker-range-val" class="param-value">0.50</span>
+              </div>
+              <div class="param-row">
+                <label for="tracker-rate">Ping rate</label>
+                <input type="range" id="tracker-rate" min="1" max="15" step="0.5" value="4" />
+                <span id="tracker-rate-val" class="param-value">4.0s</span>
+              </div>
+              <div class="param-row">
+                <label for="tracker-speed">Scan speed</label>
+                <input type="range" id="tracker-speed" min="0.5" max="10" step="0.25" value="3" />
+                <span id="tracker-speed-val" class="param-value">3.0s</span>
+              </div>
+              <div class="param-row">
+                <label for="tracker-colour">Colour</label>
+                <input type="color" id="tracker-colour" value="#f59e0b" />
+              </div>
+              <div class="param-row param-row--toggle">
+                <label for="tracker-hide-blobs">Hide visual blobs</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="tracker-hide-blobs" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Source-only configuration. Hidden unless the marker is a Motion Source. -->
+            <div id="marker-motion-source-controls" hidden>
+              <div class="param-row">
+                <label for="source-blob-mode">Tracker view</label>
+                <select id="source-blob-mode" class="select-full">
+                  <option value="single">Single blob</option>
+                  <option value="cluster">Cluster of blobs</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <hr class="panel-sep" />

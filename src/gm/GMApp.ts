@@ -26,6 +26,17 @@ import QRCode from 'qrcode';
 
 const REMOTE_AUDIO_KEY = 'dmr_remote_audio';
 
+// Logarithmic mapping for the tracker range slider — slider 0..1 → range 0.05..4.
+// Gives much finer control at the low end where most useful values live.
+const TRACKER_RANGE_MIN = 0.05;
+const TRACKER_RANGE_MAX = 4.0;
+function sliderToRange(s: number): number {
+  return TRACKER_RANGE_MIN * Math.pow(TRACKER_RANGE_MAX / TRACKER_RANGE_MIN, Math.max(0, Math.min(1, s)));
+}
+function rangeToSlider(r: number): number {
+  return Math.log(r / TRACKER_RANGE_MIN) / Math.log(TRACKER_RANGE_MAX / TRACKER_RANGE_MIN);
+}
+
 
 /**
  * GMApp — top-level orchestrator for the GM interface.
@@ -208,43 +219,66 @@ export class GMApp {
     };
   }
 
+  /** Build the current motion-tracker overlay snapshot (animated bits + static preview). */
+  private _buildMotionOverlay(now: number): MotionOverlay {
+    const scans = this.motionTracker.getActiveScans();
+    const blobs = this.motionTracker.getActiveBlobs();
+    const cfg   = this.motionTracker.getConfig();
+
+    // Static preview ring: only when the selected marker is the tracker
+    let trackerPreview: MotionOverlay['trackerPreview'] = null;
+    if (this.selectedMarkerId) {
+      const sel = this.state.getState().markers.find((m) => m.id === this.selectedMarkerId);
+      if (sel?.roles.motion === 'tracker') {
+        trackerPreview = { centre: sel.position, range: cfg.range, colour: cfg.colour };
+      }
+    }
+
+    return {
+      now,
+      scans: scans.map((s) => ({
+        startTime: s.startTime,
+        centre:    s.centre,
+        range:     s.range,
+        speedSecs: s.speedSecs,
+        colour:    s.colour,
+      })),
+      blobs: !cfg.hideBlobs ? blobs.map((b) => ({
+        startTime: b.startTime,
+        sourceId:  b.sourceId,
+        position:  b.position,
+        fadeMs:    b.fadeMs,
+        mode:      b.mode,
+        colour:    cfg.colour,
+      })) : [],
+      trackerPreview,
+    };
+  }
+
+  /** One-shot overlay refresh — call when selection or tracker config changes. */
+  private _pushMotionOverlay(): void {
+    this.markerEditor.motionOverlay = this._buildMotionOverlay(performance.now());
+    this.markerEditor.redraw();
+  }
+
   /** Drive the motion-tracker overlay redraw loop. Idempotent — safe to call any time. */
   private _kickMotionRaf(): void {
     if (this._motionRafId !== null) return;
     const tick = (now: number) => {
       this.motionTracker.pruneFaded(now);
-      const scan  = this.motionTracker.getActiveScan();
-      const blobs = this.motionTracker.getActiveBlobs();
-      const cfg   = this.motionTracker.getConfig();
-
-      const overlay: MotionOverlay = {
-        now,
-        scan: scan ? {
-          startTime: scan.startTime,
-          centre:    scan.centre,
-          range:     scan.range,
-          speedSecs: scan.speedSecs,
-          colour:    scan.colour,
-        } : null,
-        blobs: cfg.showBlobs ? blobs.map((b) => ({
-          startTime: b.startTime,
-          sourceId:  b.sourceId,
-          position:  b.position,
-          fadeMs:    b.fadeMs,
-          mode:      b.mode,
-          colour:    cfg.colour,
-        })) : [],
-      };
-
+      const overlay = this._buildMotionOverlay(now);
       this.markerEditor.motionOverlay = overlay;
       this.markerEditor.redraw();
 
       // Continue while there's anything to animate
-      if (overlay.scan || overlay.blobs.length > 0) {
+      if (overlay.scans.length > 0 || overlay.blobs.length > 0) {
         this._motionRafId = requestAnimationFrame(tick);
       } else {
         this._motionRafId = null;
-        this.markerEditor.motionOverlay = null;
+        // Leave the static preview in place until selection/config changes
+        if (!overlay.trackerPreview) {
+          this.markerEditor.motionOverlay = null;
+        }
         this.markerEditor.redraw();
       }
     };
@@ -336,6 +370,11 @@ export class GMApp {
     if (changed.includes('audio') && !changed.includes('map')) {
       this.soundboardPanel.update(state.audio.slots);
       this.host.broadcast({ type: 'audio_update', payload: state.audio });
+    }
+
+    if (changed.includes('motionTracker') || changed.includes('map')) {
+      this.motionTracker.setConfig(state.motionTracker);
+      this._pushMotionOverlay();
     }
 
     void this.soundboardPanel.getActiveSlots().then((active) => {
@@ -978,6 +1017,50 @@ export class GMApp {
       this.updateSelectedMarker({ motionMuted: (e.target as HTMLInputElement).checked });
     });
 
+    // Tracker config controls — only meaningful when the selected marker is the tracker
+    const patchTrackerCfg = (patch: Partial<import('../types.ts').MotionTrackerConfig>) => {
+      const cur = this.state.getState().motionTracker;
+      this.state.setMotionTracker({ ...cur, ...patch });
+    };
+
+    const rangeInput = document.querySelector<HTMLInputElement>('#tracker-range');
+    const rangeVal   = document.querySelector<HTMLElement>('#tracker-range-val');
+    rangeInput?.addEventListener('input', () => {
+      const v = sliderToRange(parseFloat(rangeInput.value));
+      if (rangeVal) rangeVal.textContent = v.toFixed(2);
+      patchTrackerCfg({ range: v });
+    });
+
+    const rateInput = document.querySelector<HTMLInputElement>('#tracker-rate');
+    const rateVal   = document.querySelector<HTMLElement>('#tracker-rate-val');
+    rateInput?.addEventListener('input', () => {
+      const v = parseFloat(rateInput.value);
+      if (rateVal) rateVal.textContent = `${v.toFixed(1)}s`;
+      patchTrackerCfg({ rate: v });
+    });
+
+    const speedInput = document.querySelector<HTMLInputElement>('#tracker-speed');
+    const speedVal   = document.querySelector<HTMLElement>('#tracker-speed-val');
+    speedInput?.addEventListener('input', () => {
+      const v = parseFloat(speedInput.value);
+      if (speedVal) speedVal.textContent = `${v.toFixed(1)}s`;
+      patchTrackerCfg({ speed: v });
+    });
+
+    document.querySelector<HTMLInputElement>('#tracker-colour')?.addEventListener('input', (e) => {
+      patchTrackerCfg({ colour: (e.target as HTMLInputElement).value });
+    });
+
+    document.querySelector<HTMLInputElement>('#tracker-hide-blobs')?.addEventListener('change', (e) => {
+      patchTrackerCfg({ hideBlobs: (e.target as HTMLInputElement).checked });
+    });
+
+    // Per-motion-source: blob mode (single / cluster)
+    document.querySelector<HTMLSelectElement>('#source-blob-mode')?.addEventListener('change', (e) => {
+      const v = (e.target as HTMLSelectElement).value;
+      this.updateSelectedMarker({ motionBlobMode: v === 'cluster' ? 'cluster' : 'single' });
+    });
+
     // Sound assignment
     document.querySelector('#marker-sound-btn')?.addEventListener('click', () => {
       this.soundboardPanel.audioModal.open((asset) => {
@@ -1170,6 +1253,34 @@ export class GMApp {
       if (motionControlsEl)  motionControlsEl.hidden  = !sel.roles.motion;
       if (motionMutedToggle) motionMutedToggle.checked = sel.motionMuted;
 
+      // Tracker-only sliders — only show when this marker holds the tracker role
+      const trackerControlsEl = document.querySelector<HTMLElement>('#marker-motion-tracker-controls');
+      if (trackerControlsEl) trackerControlsEl.hidden = sel.roles.motion !== 'tracker';
+      if (sel.roles.motion === 'tracker') {
+        const cfg = this.state.getState().motionTracker;
+        const set = <T extends HTMLInputElement>(id: string, v: string | boolean) => {
+          const el = document.querySelector<T>(id);
+          if (!el) return;
+          if (typeof v === 'boolean') el.checked = v; else el.value = v;
+        };
+        set<HTMLInputElement>('#tracker-range',      String(rangeToSlider(cfg.range)));
+        set<HTMLInputElement>('#tracker-rate',       String(cfg.rate));
+        set<HTMLInputElement>('#tracker-speed',      String(cfg.speed));
+        set<HTMLInputElement>('#tracker-colour',     cfg.colour);
+        set<HTMLInputElement>('#tracker-hide-blobs', cfg.hideBlobs);
+        const rv = document.querySelector<HTMLElement>('#tracker-range-val'); if (rv) rv.textContent = cfg.range.toFixed(2);
+        const ra = document.querySelector<HTMLElement>('#tracker-rate-val');  if (ra) ra.textContent = `${cfg.rate.toFixed(1)}s`;
+        const sp = document.querySelector<HTMLElement>('#tracker-speed-val'); if (sp) sp.textContent = `${cfg.speed.toFixed(1)}s`;
+      }
+
+      // Motion source controls — only when this marker is a Motion Source
+      const motionSourceControlsEl = document.querySelector<HTMLElement>('#marker-motion-source-controls');
+      if (motionSourceControlsEl) motionSourceControlsEl.hidden = sel.roles.motion !== 'source';
+      if (sel.roles.motion === 'source') {
+        const blobModeSel = document.querySelector<HTMLSelectElement>('#source-blob-mode');
+        if (blobModeSel) blobModeSel.value = sel.motionBlobMode;
+      }
+
       if (sel.roles.audio === 'source') {
         const soundRow        = document.querySelector<HTMLElement>('#marker-sound-row');
         const soundBtn        = document.querySelector<HTMLButtonElement>('#marker-sound-btn');
@@ -1215,5 +1326,8 @@ export class GMApp {
         if (maxDistVal)       maxDistVal.textContent    = sel.audioMaxDistance.toFixed(2);
       }
     }
+
+    // Refresh the static tracker-range preview ring (no-op if no tracker selected)
+    this._pushMotionOverlay();
   }
 }

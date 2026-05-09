@@ -30,11 +30,13 @@ describe('defaultSessionState', () => {
     expect(s.filter.filterId).toBe('none');
   });
 
-  it('markers and audio stubs are present', () => {
+  it('markers, audio, and motion tracker defaults are present', () => {
     const s = defaultSessionState();
     expect(Array.isArray(s.markers)).toBe(true);
     expect(s.audio).toBeDefined();
-    expect(s.audio.motionTracker).toBeNull();
+    expect(Array.isArray(s.audio.slots)).toBe(true);
+    expect(s.motionTracker).toBeDefined();
+    expect(typeof s.motionTracker.range).toBe('number');
   });
 });
 

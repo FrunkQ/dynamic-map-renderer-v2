@@ -27,8 +27,35 @@ export interface MotionOverlayBlob {
 export interface MotionOverlay {
   /** performance.now() at the time of this draw call. */
   now:   number;
-  scan:  MotionOverlayScan | null;
+  /** All currently-expanding rings — multiple coexist when rate < speed. */
+  scans: MotionOverlayScan[];
   blobs: MotionOverlayBlob[];
+  /** Static preview circle drawn around the currently-selected tracker marker
+   *  so the GM can see the configured range while sliding the Range slider. */
+  trackerPreview?: {
+    centre: { x: number; y: number };
+    range:  number;
+    colour: string;
+  } | null;
+}
+
+/** Tiny seeded PRNG (mulberry32) — deterministic positions per blob so the
+ *  cluster shape doesn't dance while it fades, but each blob looks different. */
+function _seededRandom(seed: number): () => number {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Mix the source id into the time-based seed so two simultaneous hits look different. */
+function _blobSeed(startTime: number, sourceId: string): number {
+  let h = 0;
+  for (let i = 0; i < sourceId.length; i++) h = (h * 31 + sourceId.charCodeAt(i)) | 0;
+  return (Math.floor(startTime) ^ h) >>> 0;
 }
 
 /** '#rrggbb' + alpha 0–1 → 'rgba(...)'. */
@@ -219,12 +246,20 @@ function _visibilityBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
   }
 }
 
+// Badge colour scheme:
+//   source (emitter)     unmuted = blue,  muted = purple
+//   listener/tracker     unmuted = green, muted = red
+const BADGE_SOURCE_ON    = '#3b82f6'; // blue
+const BADGE_SOURCE_MUTED = '#a855f7'; // purple
+const BADGE_RECV_ON      = '#22c55e'; // green
+const BADGE_RECV_MUTED   = '#dc2626'; // red
+
 function _audioBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
   if (m.roles.audio === 'source') {
-    _badge(ctx, bx, by, m.audioMuted ? '#dc2626' : '#22c55e',
+    _badge(ctx, bx, by, m.audioMuted ? BADGE_SOURCE_MUTED : BADGE_SOURCE_ON,
       m.audioMuted ? _iconSpeakerMuted : _iconSpeaker);
   } else if (m.roles.audio === 'listener') {
-    _badge(ctx, bx, by, m.audioMuted ? '#dc2626' : '#22c55e',
+    _badge(ctx, bx, by, m.audioMuted ? BADGE_RECV_MUTED : BADGE_RECV_ON,
       m.audioMuted ? _iconEarMuted : _iconEar);
   }
   // no audio role: no audio badge
@@ -232,13 +267,14 @@ function _audioBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
 
 function _motionBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
   const muted = m.motionMuted;
-  const colour = muted ? '#dc2626' : '#22c55e';
   if (m.roles.motion === 'source') {
+    const colour = muted ? BADGE_SOURCE_MUTED : BADGE_SOURCE_ON;
     _badge(ctx, bx, by, colour, (c, x, y, r) => {
       _iconMotion(c, x, y, r);
       if (muted) _slash(c, x, y, r);
     });
   } else if (m.roles.motion === 'tracker') {
+    const colour = muted ? BADGE_RECV_MUTED : BADGE_RECV_ON;
     _badge(ctx, bx, by, colour, (c, x, y, r) => {
       _iconRadar(c, x, y, r);
       if (muted) _slash(c, x, y, r);
@@ -422,7 +458,7 @@ export class MarkerLayer {
           ctx.fillStyle    = 'rgba(13, 154, 219, 0.85)';
           ctx.textAlign    = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText('max range', pos.x, pos.y - radiusPx - 2);
+          ctx.fillText('sound limit', pos.x, pos.y - radiusPx - 2);
           ctx.restore();
         }
       }
@@ -444,29 +480,51 @@ export class MarkerLayer {
     const view = this._view;
     const f       = this._frustum(view);
     const yScale  = H / (f.top - f.bottom);
+    void W;
 
-    // Active scan ring — radius animates from 0 → range over speedSecs, alpha fades out
-    if (m.scan) {
-      const elapsedSecs = (m.now - m.scan.startTime) / 1000;
-      const t           = Math.min(1, Math.max(0, elapsedSecs / m.scan.speedSecs));
-      const radiusPx    = t * m.scan.range * yScale;
-      const pos         = this.project(m.scan.centre.x, m.scan.centre.y, view);
-      if (pos && radiusPx > 1) {
-        const alpha = (1 - t) * 0.7;
+    // Static range preview around the selected tracker marker
+    if (m.trackerPreview) {
+      const tp = m.trackerPreview;
+      const pos = this.project(tp.centre.x, tp.centre.y, view);
+      if (pos && tp.range > 0) {
+        const radiusPx = tp.range * yScale;
         ctx.save();
-        ctx.lineWidth   = 2;
-        ctx.strokeStyle = _hexWithAlpha(m.scan.colour, alpha);
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, radiusPx, 0, Math.PI * 2);
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth   = 1.5;
+        ctx.strokeStyle = _hexWithAlpha(tp.colour, 0.6);
         ctx.stroke();
-        // Soft inner glow
-        ctx.lineWidth   = 6;
-        ctx.strokeStyle = _hexWithAlpha(m.scan.colour, alpha * 0.25);
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, radiusPx, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.font         = '10px system-ui,sans-serif';
+        ctx.fillStyle    = _hexWithAlpha(tp.colour, 0.85);
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('tracker range', pos.x, pos.y - radiusPx - 2);
         ctx.restore();
       }
+    }
+
+    // Active scan rings — each radius animates 0 → range over its own speedSecs, alpha fades out
+    for (const scan of m.scans) {
+      const elapsedSecs = (m.now - scan.startTime) / 1000;
+      const t           = Math.min(1, Math.max(0, elapsedSecs / scan.speedSecs));
+      const radiusPx    = t * scan.range * yScale;
+      const pos         = this.project(scan.centre.x, scan.centre.y, view);
+      if (!pos || radiusPx <= 1) continue;
+      const alpha = (1 - t) * 0.7;
+      ctx.save();
+      ctx.lineWidth   = 2;
+      ctx.strokeStyle = _hexWithAlpha(scan.colour, alpha);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, radiusPx, 0, Math.PI * 2);
+      ctx.stroke();
+      // Soft inner glow
+      ctx.lineWidth   = 6;
+      ctx.strokeStyle = _hexWithAlpha(scan.colour, alpha * 0.25);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, radiusPx, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     // Return blobs — fade alpha over fadeMs
@@ -483,13 +541,15 @@ export class MarkerLayer {
       ctx.save();
       ctx.fillStyle = _hexWithAlpha(b.colour, alpha);
       if (b.mode === 'cluster') {
-        // 3-5 blobs jittered inside the icon area; deterministic seed via b.startTime
-        const count = 3 + (Math.floor(b.startTime) % 3);
+        // 3–5 blobs scattered randomly within the icon footprint. Overlap fine.
+        const rng   = _seededRandom(_blobSeed(b.startTime, b.sourceId));
+        const count = 3 + Math.floor(rng() * 3); // 3, 4 or 5
         for (let i = 0; i < count; i++) {
-          const ang = (i / count) * Math.PI * 2 + (b.startTime % 1);
-          const rad = r * 0.55;
+          const ang     = rng() * Math.PI * 2;
+          const dist    = rng() * r * 0.85;            // anywhere from centre to near edge
+          const blobR   = r * (0.28 + rng() * 0.18);   // each blob 28–46% of icon radius
           ctx.beginPath();
-          ctx.arc(pos.x + Math.cos(ang) * rad, pos.y + Math.sin(ang) * rad, r * 0.35, 0, Math.PI * 2);
+          ctx.arc(pos.x + Math.cos(ang) * dist, pos.y + Math.sin(ang) * dist, blobR, 0, Math.PI * 2);
           ctx.fill();
         }
       } else {

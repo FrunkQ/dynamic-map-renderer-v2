@@ -51,11 +51,11 @@ export class MotionTrackerInteraction implements MarkerInteraction {
   /** Map aspect ratio (width/height). X-distances must be scaled by this so the
    *  detection circle matches the visual ring radius on non-square maps. */
   private mapAspect:  number = 1;
-  private active:     ActiveScan | null = null;
+  /** Multiple concurrent scans when rate < speed — each ring expires after speedSecs. */
+  private active:     ActiveScan[] = [];
   private blobs:      ActiveBlob[] = [];
 
   private nextScanTimer:    ReturnType<typeof setTimeout> | null = null;
-  private scanEndTimer:     ReturnType<typeof setTimeout> | null = null;
   private hitTimers:        ReturnType<typeof setTimeout>[]      = [];
 
   /** Fired whenever rendering state changes (scan start/end/source hit). Host wires to a redraw. */
@@ -67,7 +67,8 @@ export class MotionTrackerInteraction implements MarkerInteraction {
 
   // ── Public read-only state for renderers ───────────────────────────────────
 
-  getActiveScan(): ActiveScan | null { return this.active; }
+  /** All currently expanding scan rings. Multiple may overlap when rate < speed. */
+  getActiveScans(): ActiveScan[]     { return this.active; }
   getActiveBlobs(): ActiveBlob[]     { return this.blobs;  }
   getConfig(): MotionTrackerConfig   { return this.config; }
 
@@ -106,6 +107,12 @@ export class MotionTrackerInteraction implements MarkerInteraction {
     // Tracker position may have moved — that takes effect on the *next* scan, not the active one
   }
 
+  /** Map-load entry point — `loadForMap` notifies ['map','view','filter','fog'] without 'markers',
+   *  so onMarkersChanged never fires on a fresh load. We reuse the same logic here. */
+  async onMapLoaded(ctx: InteractionContext): Promise<void> {
+    this.onMarkersChanged(ctx);
+  }
+
   reset(): void {
     this._stopAll();
     this.trackerId = null;
@@ -116,10 +123,9 @@ export class MotionTrackerInteraction implements MarkerInteraction {
 
   private _stopAll(): void {
     if (this.nextScanTimer) { clearTimeout(this.nextScanTimer); this.nextScanTimer = null; }
-    if (this.scanEndTimer)  { clearTimeout(this.scanEndTimer);  this.scanEndTimer  = null; }
     for (const t of this.hitTimers) clearTimeout(t);
     this.hitTimers = [];
-    this.active    = null;
+    this.active    = [];
     this.blobs     = [];
     this.onChange?.();
   }
@@ -135,7 +141,6 @@ export class MotionTrackerInteraction implements MarkerInteraction {
   /** Cancel and re-arm the next-scan timer (used when config.rate changes mid-cycle). */
   private _rescheduleNextScan(rateMs: number): void {
     if (!this.trackerId) return;
-    if (this.active) return; // mid-scan; let it complete
     this._scheduleScan(rateMs);
   }
 
@@ -156,7 +161,7 @@ export class MotionTrackerInteraction implements MarkerInteraction {
       speedSecs: cfg.speed,
       colour:    cfg.colour,
     };
-    this.active = scan;
+    this.active.push(scan);
     this.onScanStart?.(scan);
     this.onChange?.();
 
@@ -173,39 +178,32 @@ export class MotionTrackerInteraction implements MarkerInteraction {
       this.hitTimers.push(handle);
     }
 
-    // End-of-scan + schedule next
-    const speedMs = cfg.speed * 1000;
-    const rateMs  = cfg.rate  * 1000;
-    this.scanEndTimer = setTimeout(() => {
-      this.scanEndTimer = null;
-      this.active = null;
-      // Hit timers may still be pending if speed > rate — let them fire harmlessly
-      this.hitTimers = this.hitTimers.filter((h) => { void h; return false; });
-      this.onChange?.();
-    }, speedMs);
-
-    // Schedule next scan relative to *this* scan's start (rate is start-to-start)
-    const nextDelay = Math.max(0, rateMs);
-    this._scheduleScan(nextDelay);
+    // Schedule next scan relative to *this* scan's start (rate is start-to-start).
+    // When rate < speed the new scan begins while the previous ring is still
+    // expanding — both rings are rendered together until each expires.
+    const rateMs  = cfg.rate * 1000;
+    this._scheduleScan(Math.max(0, rateMs));
   }
 
   private _fireHit(source: Marker): void {
-    if (!this.active) return;
+    if (this.active.length === 0) return;
     this.blobs.push({
       startTime: performance.now(),
       sourceId:  source.id,
       position:  { ...source.position },
       fadeMs:    this.config.rate * 1000,
-      mode:      this.config.blobMode,
+      mode:      source.motionBlobMode,
     });
     this.onSourceHit?.(source);
     this.onChange?.();
   }
 
-  /** Prune fully-faded blobs. Call from the render loop so the array doesn't grow without bound. */
+  /** Prune expired scans + fully-faded blobs. Call from the render loop. */
   pruneFaded(now = performance.now()): void {
-    const before = this.blobs.length;
-    this.blobs = this.blobs.filter((b) => now - b.startTime < b.fadeMs);
-    if (this.blobs.length !== before) this.onChange?.();
+    const beforeScans = this.active.length;
+    const beforeBlobs = this.blobs.length;
+    this.active = this.active.filter((s) => now - s.startTime < s.speedSecs * 1000);
+    this.blobs  = this.blobs.filter((b) => now - b.startTime < b.fadeMs);
+    if (this.active.length !== beforeScans || this.blobs.length !== beforeBlobs) this.onChange?.();
   }
 }
