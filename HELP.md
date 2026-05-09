@@ -104,7 +104,7 @@ Moving either marker updates player audio in real time. Audio Sources can be hid
 
 ## Marker Motion (Tracker)
 
-The Motion Tracker brings _Aliens_-style sonar to your map. One marker is the **tracker**; any number of others are **sources**.
+The Motion Tracker brings sweeping radar / sonar to your map — _Aliens_-style motion sensors, submarine ASDIC / sonar pings, magical scrying, sci-fi sensor sweeps, anything where a position emits "I'm here" pulses on a periodic scan. One marker is the **tracker**; any number of others are **sources**.
 
 **Motion Source** — A marker that the tracker can detect. Pick a **Tracker view** (Single blob / Multi-blob few / Multi-blob many) for how it shows up when picked up. Hidden Motion Sources still register on the tracker — useful for things the players can't see.
 
