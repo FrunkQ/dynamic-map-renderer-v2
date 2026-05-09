@@ -152,6 +152,43 @@ export interface AudioState {
   } | null;
 }
 
+/**
+ * Motion-tracker config — one per map; settings follow whichever marker
+ * currently holds the 'tracker' role. New maps inherit defaults from the
+ * previously-active map's tracker config.
+ */
+export interface MotionTrackerConfig {
+  /** Detection radius in normalised Y-axis map units. Can extend off-map. */
+  range:    number;
+  /** Seconds between scan starts. */
+  rate:     number;
+  /** Seconds the ring takes to expand from 0 to `range`. */
+  speed:    number;
+  /** Whether to draw return blobs when sources are detected. */
+  showBlobs: boolean;
+  /** Ring + blob colour (hex). */
+  colour:   string;
+  /** Single blob at the source, or a 3-5 cluster within the icon area. */
+  blobMode: 'single' | 'cluster';
+  /** Audio asset played when a scan begins. */
+  outgoingPingAssetId: string | null;
+  /** Audio asset played when a source is detected. */
+  returnPingAssetId:   string | null;
+}
+
+export function defaultMotionTrackerConfig(): MotionTrackerConfig {
+  return {
+    range:    0.5,
+    rate:     4,
+    speed:    3,
+    showBlobs: true,
+    colour:   '#f59e0b', // amber, matches the tracker role accent
+    blobMode: 'single',
+    outgoingPingAssetId: null,
+    returnPingAssetId:   null,
+  };
+}
+
 /** Global audio asset (lives in audioAssets IDB store — not per-map). */
 export interface AudioAsset {
   id:                  string;

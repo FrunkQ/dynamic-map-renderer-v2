@@ -7,6 +7,40 @@ interface Frustum { left: number; right: number; top: number; bottom: number; }
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
+// ── Motion-tracker overlay state ─────────────────────────────────────────────
+
+export interface MotionOverlayScan {
+  startTime: number;
+  centre:    { x: number; y: number };
+  range:     number;
+  speedSecs: number;
+  colour:    string;
+}
+export interface MotionOverlayBlob {
+  startTime: number;
+  sourceId:  string;
+  position:  { x: number; y: number };
+  fadeMs:    number;
+  mode:      'single' | 'cluster';
+  colour:    string;
+}
+export interface MotionOverlay {
+  /** performance.now() at the time of this draw call. */
+  now:   number;
+  scan:  MotionOverlayScan | null;
+  blobs: MotionOverlayBlob[];
+}
+
+/** '#rrggbb' + alpha 0–1 → 'rgba(...)'. */
+function _hexWithAlpha(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
+  if (!m) return `rgba(248, 158, 11, ${alpha})`;
+  const r = parseInt(m[1]!, 16);
+  const g = parseInt(m[2]!, 16);
+  const b = parseInt(m[3]!, 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // ── Badge background circle ───────────────────────────────────────────────────
 
 function _badge(ctx: Ctx2D, bx: number, by: number, bg: string, drawIcon: (ctx: Ctx2D, cx: number, cy: number, r: number) => void): void {
@@ -316,6 +350,7 @@ export class MarkerLayer {
   private _selectedId: string | null   = null;
   private _isGM:       boolean         = false;
   private _iconCache:  Map<string, ImageBitmap> | undefined;
+  private _motion:     MotionOverlay | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -343,6 +378,7 @@ export class MarkerLayer {
     selectedId: string | null = null,
     isGM        = false,
     iconCache?: Map<string, ImageBitmap>,
+    motion?:    MotionOverlay | null,
   ): void {
     const w = this.canvas.clientWidth  || 1;
     const h = this.canvas.clientHeight || 1;
@@ -355,6 +391,7 @@ export class MarkerLayer {
     this._selectedId = selectedId;
     this._isGM       = isGM;
     this._iconCache  = iconCache;
+    this._motion     = motion ?? null;
     this._draw();
   }
 
@@ -397,6 +434,70 @@ export class MarkerLayer {
       if (!pos) continue;
       const baseR = Math.min(W, H) * 0.025 * m.size;
       this._drawMarker(ctx, m, pos.x, pos.y, baseR, m.id === sel, isGM, iconCache);
+    }
+
+    // Motion-tracker overlay sits on top of markers
+    if (this._motion) this._drawMotionOverlay(ctx, this._motion, W, H);
+  }
+
+  private _drawMotionOverlay(ctx: CanvasRenderingContext2D, m: MotionOverlay, W: number, H: number): void {
+    const view = this._view;
+    const f       = this._frustum(view);
+    const yScale  = H / (f.top - f.bottom);
+
+    // Active scan ring — radius animates from 0 → range over speedSecs, alpha fades out
+    if (m.scan) {
+      const elapsedSecs = (m.now - m.scan.startTime) / 1000;
+      const t           = Math.min(1, Math.max(0, elapsedSecs / m.scan.speedSecs));
+      const radiusPx    = t * m.scan.range * yScale;
+      const pos         = this.project(m.scan.centre.x, m.scan.centre.y, view);
+      if (pos && radiusPx > 1) {
+        const alpha = (1 - t) * 0.7;
+        ctx.save();
+        ctx.lineWidth   = 2;
+        ctx.strokeStyle = _hexWithAlpha(m.scan.colour, alpha);
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, radiusPx, 0, Math.PI * 2);
+        ctx.stroke();
+        // Soft inner glow
+        ctx.lineWidth   = 6;
+        ctx.strokeStyle = _hexWithAlpha(m.scan.colour, alpha * 0.25);
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, radiusPx, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Return blobs — fade alpha over fadeMs
+    for (const b of m.blobs) {
+      const elapsed = m.now - b.startTime;
+      const alpha   = Math.max(0, 1 - elapsed / b.fadeMs) * 0.85;
+      if (alpha <= 0) continue;
+      const pos = this.project(b.position.x, b.position.y, view);
+      if (!pos) continue;
+
+      const marker = this._markers.find((mm) => mm.id === b.sourceId);
+      // Blob occupies the area normally taken by the source marker's icon
+      const r = Math.min(W, H) * 0.025 * (marker?.size ?? 1);
+      ctx.save();
+      ctx.fillStyle = _hexWithAlpha(b.colour, alpha);
+      if (b.mode === 'cluster') {
+        // 3-5 blobs jittered inside the icon area; deterministic seed via b.startTime
+        const count = 3 + (Math.floor(b.startTime) % 3);
+        for (let i = 0; i < count; i++) {
+          const ang = (i / count) * Math.PI * 2 + (b.startTime % 1);
+          const rad = r * 0.55;
+          ctx.beginPath();
+          ctx.arc(pos.x + Math.cos(ang) * rad, pos.y + Math.sin(ang) * rad, r * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
   }
 

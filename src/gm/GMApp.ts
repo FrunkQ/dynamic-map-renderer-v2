@@ -19,6 +19,8 @@ import { exportBundle, importBundle } from '../storage/bundleIO.ts';
 import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
 import { MarkerInteractionRegistry, type InteractionContext } from './markerInteractions/MarkerInteraction.ts';
 import { PositionalAudioInteraction } from './markerInteractions/PositionalAudioInteraction.ts';
+import { MotionTrackerInteraction } from './markerInteractions/MotionTrackerInteraction.ts';
+import type { MotionOverlay } from '../rendering/MarkerLayer.ts';
 import type { SessionState, StoredMap, TransitionConfig, Marker, MarkerIconData, AudioAsset, AudioRole, MotionRole } from '../types.ts';
 import QRCode from 'qrcode';
 
@@ -45,8 +47,10 @@ export class GMApp {
   private soundboardEngine!: SoundboardEngine;
   private soundboardPanel!:  SoundboardPanel;
 
-  private interactions = new MarkerInteractionRegistry();
-  private audio        = this.interactions.register(new PositionalAudioInteraction());
+  private interactions   = new MarkerInteractionRegistry();
+  private audio          = this.interactions.register(new PositionalAudioInteraction());
+  private motionTracker  = this.interactions.register(new MotionTrackerInteraction());
+  private _motionRafId:    number | null = null;
   private selectedMarkerId: string | null = null;
   private mapAspectRatio = 1;
   private remoteAudioEnabled = localStorage.getItem(REMOTE_AUDIO_KEY) !== 'false';
@@ -109,6 +113,10 @@ export class GMApp {
     document.addEventListener('click',      resumePA);
     document.addEventListener('keydown',    resumePA);
     document.addEventListener('touchstart', resumePA, { passive: true });
+
+    // Motion-tracker rendering: redraw the GM marker layer every frame while
+    // a scan ring is expanding or any return blob is still fading.
+    this.motionTracker.onChange = () => this._kickMotionRaf();
 
     // Register the state listener BEFORE loading maps so that the initial
     // populateMapList() → loadMap() → state.loadForMap() → _notify() chain
@@ -198,6 +206,49 @@ export class GMApp {
       markers:   this.state.getState().markers,
       broadcast: (msg) => this.host.broadcast(msg),
     };
+  }
+
+  /** Drive the motion-tracker overlay redraw loop. Idempotent — safe to call any time. */
+  private _kickMotionRaf(): void {
+    if (this._motionRafId !== null) return;
+    const tick = (now: number) => {
+      this.motionTracker.pruneFaded(now);
+      const scan  = this.motionTracker.getActiveScan();
+      const blobs = this.motionTracker.getActiveBlobs();
+      const cfg   = this.motionTracker.getConfig();
+
+      const overlay: MotionOverlay = {
+        now,
+        scan: scan ? {
+          startTime: scan.startTime,
+          centre:    scan.centre,
+          range:     scan.range,
+          speedSecs: scan.speedSecs,
+          colour:    scan.colour,
+        } : null,
+        blobs: cfg.showBlobs ? blobs.map((b) => ({
+          startTime: b.startTime,
+          sourceId:  b.sourceId,
+          position:  b.position,
+          fadeMs:    b.fadeMs,
+          mode:      b.mode,
+          colour:    cfg.colour,
+        })) : [],
+      };
+
+      this.markerEditor.motionOverlay = overlay;
+      this.markerEditor.redraw();
+
+      // Continue while there's anything to animate
+      if (overlay.scan || overlay.blobs.length > 0) {
+        this._motionRafId = requestAnimationFrame(tick);
+      } else {
+        this._motionRafId = null;
+        this.markerEditor.motionOverlay = null;
+        this.markerEditor.redraw();
+      }
+    };
+    this._motionRafId = requestAnimationFrame(tick);
   }
 
   private onStateChange(state: SessionState, changed: (keyof SessionState)[]): void {
@@ -360,6 +411,7 @@ export class GMApp {
       this.fogEditor.setMapAspect(aspect);
       this.viewportEditor.setMapAspect(aspect);
       this.markerEditor.update(this.state.getState().markers, aspect);
+      this.motionTracker.setMapAspect(aspect);
       this.updateMarkerPanel();
     };
 

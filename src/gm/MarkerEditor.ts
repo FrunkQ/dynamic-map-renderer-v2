@@ -234,8 +234,14 @@ export class MarkerEditor {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
+  /** Optional motion-tracker overlay state pushed in by GMApp; redraw uses it on each frame. */
+  motionOverlay: import('../rendering/MarkerLayer.ts').MotionOverlay | null = null;
+
+  /** Force a redraw — call from a RAF loop while a scan/blobs are animating. */
+  redraw(): void { this._redraw(); }
+
   private _redraw(): void {
-    this.layer.render(this.markers, null, this.selectedId, true, this._getIconCache());
+    this.layer.render(this.markers, null, this.selectedId, true, this._getIconCache(), this.motionOverlay);
   }
 
   /** Convert a PointerEvent's client coords to canvas-buffer pixel coords. */
