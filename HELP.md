@@ -92,13 +92,34 @@ Place icons on the map to represent characters, objects, or points of interest.
 
 ## Marker Roles & Positional Audio
 
-Each marker can be given a **role** using the role buttons in its properties panel.
+Each marker can be given a **role** using the role buttons in its properties panel. A single marker can hold both an audio role and a motion role at the same time.
 
 **Audio Source** — This marker plays a sound. Assign a sound from your library, set volume, playback mode (Once / Loop / Random), and the maximum distance at which it can be heard.
 
 **Listener** — Represents where the players are standing. Audio Sources get louder or quieter as the Listener marker moves closer or further away. Only one Listener is active at a time.
 
 Moving either marker updates player audio in real time. Audio Sources can be hidden from players — they'll still hear the sound without seeing the marker.
+
+---
+
+## Marker Motion (Tracker)
+
+The Motion Tracker brings _Aliens_-style sonar to your map. One marker is the **tracker**; any number of others are **sources**.
+
+**Motion Source** — A marker that the tracker can detect. Pick a **Tracker view** (Single blob / Multi-blob few / Multi-blob many) for how it shows up when picked up. Hidden Motion Sources still register on the tracker — useful for things the players can't see.
+
+**Motion Tracker** — One per map. When this marker is set up:
+
+- **Range** — how far the tracker can detect (logarithmic slider — fine control at the low end, can extend well beyond the map).
+- **Ping rate** — how often the scan repeats (0.25 s for tense, fast pulsing; up to 15 s for occasional sweeps). When rate is shorter than scan speed, multiple rings expand on screen at once.
+- **Scan speed** — how long the ring takes to expand from the tracker out to its full range.
+- **Colour** — the ring and blob colour. The tracker marker also shows a dotted "tracker range" preview ring in this colour while you're configuring it.
+- **Audio return only (no blobs)** — silences the visual contacts but keeps the audio pings. For when you want the players to *hear* something out there without knowing where.
+- **Outgoing ping** & **Return ping** — sounds played at scan start and at each contact, with independent volume sliders. Two CC0 sounds are bundled by default so it works out of the box.
+
+The **Muted** toggle on either tracker or source temporarily switches it off.
+
+The visuals and audio are mirrored to connected players, with the rings and blobs passing through any active visual filter — so a sonar pulse on a Parchment-filtered map looks hand-drawn.
 
 ---
 

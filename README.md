@@ -54,13 +54,15 @@ Players connect via a peer-to-peer link; no server infrastructure is required be
   - **Clone** — **Clone Marker** duplicates the selected marker (offset slightly, label gets " - copy"), useful for quickly placing groups of identical tokens.
   - **Show Name** — per-marker toggle to display the label on the player map (off by default — players see the icon only unless enabled).
   - **Visibility** — toggle **Hide from players** to ghost the marker on the GM canvas while hiding it from players entirely.
-  - **GM badges** — each marker on the GM canvas shows clickable mini-badges for visibility and role (audio source / listener).
+  - **GM badges** — each marker on the GM canvas shows clickable mini-badges for visibility, audio role (source/listener), and motion role (source/tracker). Sources are blue, listener/tracker are green, muted versions are red/purple respectively.
   - **Filter passthrough** — player markers live inside the Three.js scene, so all active GLSL filters (parchment, retro sci-fi, watercolour, etc.) apply to them exactly as to the map.
   - **Persistence** — markers are saved per-map in IndexedDB and restored on reload.
+  - **Multi-role markers** — the same marker can simultaneously hold an audio role *and* a motion role (e.g. an alien that emits an ambient howl AND ticks the motion tracker).
   - **Marker audio (positional)** — assign an audio role to any marker:
     - **Audio Source** — plays a sound (loop, random, or one-shot) whose volume attenuates with distance to the Listener. Assign a sound from your library, set volume, max-distance radius, and playback mode. Multiple sources are supported.
     - **Listener** — represents the players' ears. Move the listener marker to change what the players hear from each source in real time.
     - All positional audio is broadcast to connected players via P2P.
+  - **Motion Tracker** — Aliens-style sonar. Pick one marker as **Motion Tracker** and one or more as **Motion Source**. Every few seconds the tracker fires an outgoing ping; an expanding ring sweeps from the tracker, and as it crosses each source it fires a return blob + return ping at that exact moment. Configure range (logarithmic slider, 0.05–4.0 of map height), ping rate (0.25–15 s), scan speed, colour, and per-source blob style (single / multi-few / multi-many). Two CC0 ping sounds are bundled by default. Works through visual filters on the player view.
 
 - **Player view control** — interactive on-map viewport editor: an orange rectangle on the GM's canvas always shows what players see. Click **Edit Player View** to drag-move or freely corner-resize it. One-click **Reset to Full Map**. The player's screen is strictly clipped to the rectangle; background colour fills any bars caused by aspect-ratio differences.
 - **Background colour** — set the letterbox colour; auto-sampled from the map on first load.
@@ -208,6 +210,17 @@ See [CHANGELOG.md](./CHANGELOG.md) for release history.
 Source: https://www.reddit.com/r/mothershiprpg/comments/18c71ep/8bit_map_nostromo_alien_inspired_map/#lightbox
 
 **"Map-Griffinholm"** by Elven Tower Cartography, released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+### Bundled Sounds
+
+The two motion-tracker ping sounds bundled in `src/assets/` are edited from CC0 samples by **Balcoran** on Freesound:
+
+| Sound | Source |
+|---|---|
+| `MT-ping.mp3` (outgoing) | [motion tracker blip.wav](https://freesound.org/s/478187/) |
+| `MT-return.mp3` (return) | [motion tracker beep.wav](https://freesound.org/s/478186/) |
+
+Both released under [CC0 1.0 Universal (Public Domain)](https://creativecommons.org/publicdomain/zero/1.0/).
 
 ### Visual Filters
 
