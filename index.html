@@ -354,7 +354,10 @@
           <div id="library-list" class="sound-list"></div>
           <p id="library-empty" class="sound-list-empty" hidden>No sounds in library yet. Use Freesound Search to add some, or upload your own.</p>
           <div id="library-footer" class="library-footer">
-            <button id="library-store-all-btn" class="btn btn--ghost btn--sm btn--full" title="Download every non-stored asset and persist it locally — useful for going offline" hidden>Store All <span id="library-store-all-count"></span></button>
+            <div class="library-store-row">
+              <button id="library-store-used-btn" class="btn btn--ghost btn--sm" title="Download only the non-stored assets actually referenced somewhere — skips the unused ones" hidden>Store All Used <span id="library-store-used-count"></span></button>
+              <button id="library-store-all-btn"  class="btn btn--ghost btn--sm" title="Download every non-stored asset and persist it locally — useful for going offline" hidden>Store All <span id="library-store-all-count"></span></button>
+            </div>
             <p id="library-store-all-status" class="library-store-status"></p>
             <button id="library-attributions-btn" class="btn btn--ghost btn--xs btn--full">ℹ Attributions &amp; Licences</button>
           </div>

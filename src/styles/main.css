@@ -923,6 +923,25 @@ body.player-view #renderer-canvas {
 .icon-picker-upload--danger:hover { border-color: var(--danger); color: var(--danger); }
 .icon-picker-btn--danger { border-color: var(--danger) !important; opacity: 0.8; }
 .icon-picker-btn--danger:hover { opacity: 1; background: rgba(220,50,50,0.15) !important; }
+/* Unused custom icons in delete mode get an orange dot top-right. */
+.icon-picker-btn--unused { position: relative; }
+.icon-picker-btn--unused::after {
+  content: '!';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #f59e0b;
+  color: #1a1a1a;
+  font-size: 9px;
+  font-weight: 700;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
 
 /* ── Soundboard panel ───────────────────────────────────────────────────── */
 .sb-mute-row   { margin-bottom: 2px; }
@@ -1328,6 +1347,16 @@ body.player-view #renderer-canvas {
 .sound-tag--url       { color: #3b82f6; border-color: rgba(59, 130, 246, 0.4); }
 .sound-tag--local     { color: #94a3b8; border-color: rgba(148, 163, 184, 0.4); }
 
+/* Unused-asset chip — shown next to library rows / icons that aren't referenced anywhere. */
+.sound-unused {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #f59e0b;
+  margin-right: 4px;
+  cursor: help;
+}
+
 .library-footer {
   margin-top: var(--space-sm);
   padding-top: var(--space-sm);
@@ -1343,6 +1372,8 @@ body.player-view #renderer-canvas {
   text-align: center;
   min-height: 1em;
 }
+.library-store-row { display: flex; gap: var(--space-xs); }
+.library-store-row > .btn { flex: 1; }
 
 /* Library asset edit panel — inline editor for licence + attribution + link. */
 .sound-row-wrap {

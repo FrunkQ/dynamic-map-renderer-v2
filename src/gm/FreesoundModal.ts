@@ -3,6 +3,7 @@ import { FreesoundClient } from '../audio/FreesoundClient.ts';
 import { freesoundConnector } from '../audio/connectors/FreesoundConnector.ts';
 import type { AssetSourceConnector, AssetSearchPage } from '../audio/connectors/AssetSourceConnector.ts';
 import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
+import { getUsedAudioAssetIds } from '../storage/assetUsage.ts';
 
 // Duration filter options shown in the dropdown
 const DURATION_OPTIONS: Array<{ label: string; value: number | null }> = [
@@ -107,7 +108,9 @@ export class FreesoundModal {
     this.el.querySelector('#library-search')?.addEventListener('input', () => this._renderLibrary());
 
     // Library 'Store All' — fetch + persist every non-stored Freesound / URL asset
-    this.el.querySelector('#library-store-all-btn')?.addEventListener('click', () => void this._storeAllInLibrary());
+    this.el.querySelector('#library-store-all-btn')?.addEventListener('click', () => void this._storeAllInLibrary(false));
+    // Library 'Store All Used' — same but only the assets actually referenced somewhere
+    this.el.querySelector('#library-store-used-btn')?.addEventListener('click', () => void this._storeAllInLibrary(true));
 
     // Library 'Attributions' — opens the global attributions modal
     this.el.querySelector('#library-attributions-btn')?.addEventListener('click', () => void this._showAttributions());
@@ -177,61 +180,79 @@ export class FreesoundModal {
     const emptyEl = this.el.querySelector<HTMLElement>('#library-empty')!;
     const filter  = (this.el.querySelector<HTMLInputElement>('#library-search')?.value ?? '').toLowerCase();
 
-    const all = await AudioAssetStore.getAll();
+    const [all, usedIds] = await Promise.all([
+      AudioAssetStore.getAll(),
+      getUsedAudioAssetIds(),
+    ]);
     const filtered = filter ? all.filter((a) => a.name.toLowerCase().includes(filter)) : all;
 
     emptyEl.hidden = filtered.length > 0;
     listEl.innerHTML = '';
 
     for (const asset of filtered) {
-      listEl.appendChild(this._libraryRow(asset));
+      listEl.appendChild(this._libraryRow(asset, usedIds));
     }
 
-    // 'Store All' visible only when there are non-stored assets to fetch.
-    // The Attributions button beside it is always visible.
-    const storeAllBtn = this.el.querySelector<HTMLButtonElement>('#library-store-all-btn');
-    const countEl     = this.el.querySelector<HTMLElement>('#library-store-all-count');
-    const status      = this.el.querySelector<HTMLElement>('#library-store-all-status');
-    const nonStored   = all.filter((a) => !a.locallyStored && (a.source === 'freesound' || a.source === 'web-link'));
-    if (storeAllBtn) storeAllBtn.hidden = nonStored.length === 0;
-    if (countEl)     countEl.textContent = nonStored.length > 0 ? `(${nonStored.length})` : '';
-    if (status)      status.textContent = '';
+    // Store-All / Store-All-Used visible only when there's work to do.
+    const storeAllBtn  = this.el.querySelector<HTMLButtonElement>('#library-store-all-btn');
+    const storeUsedBtn = this.el.querySelector<HTMLButtonElement>('#library-store-used-btn');
+    const allCountEl   = this.el.querySelector<HTMLElement>('#library-store-all-count');
+    const usedCountEl  = this.el.querySelector<HTMLElement>('#library-store-used-count');
+    const status       = this.el.querySelector<HTMLElement>('#library-store-all-status');
+    const nonStored    = all.filter((a) => !a.locallyStored && (a.source === 'freesound' || a.source === 'web-link'));
+    const nonStoredUsed = nonStored.filter((a) => usedIds.has(a.id));
+    if (storeAllBtn)  storeAllBtn.hidden  = nonStored.length === 0;
+    if (storeUsedBtn) storeUsedBtn.hidden = nonStoredUsed.length === 0;
+    if (allCountEl)   allCountEl.textContent  = nonStored.length     > 0 ? `(${nonStored.length})`     : '';
+    if (usedCountEl)  usedCountEl.textContent = nonStoredUsed.length > 0 ? `(${nonStoredUsed.length})` : '';
+    if (status)       status.textContent = '';
   }
 
-  private async _storeAllInLibrary(): Promise<void> {
-    const btn    = this.el.querySelector<HTMLButtonElement>('#library-store-all-btn');
+  private async _storeAllInLibrary(onlyUsed: boolean): Promise<void> {
     const status = this.el.querySelector<HTMLElement>('#library-store-all-status');
-    if (!btn || !status) return;
+    if (!status) return;
 
-    const all       = await AudioAssetStore.getAll();
-    const nonStored = all.filter((a) => !a.locallyStored && (a.source === 'freesound' || a.source === 'web-link'));
-    if (nonStored.length === 0) return;
+    const [all, usedIds] = await Promise.all([
+      AudioAssetStore.getAll(),
+      onlyUsed ? getUsedAudioAssetIds() : Promise.resolve(new Set<string>()),
+    ]);
+    const candidates = all.filter((a) =>
+      !a.locallyStored
+      && (a.source === 'freesound' || a.source === 'web-link')
+      && (!onlyUsed || usedIds.has(a.id))
+    );
+    if (candidates.length === 0) return;
 
-    btn.disabled = true;
+    const allBtn  = this.el.querySelector<HTMLButtonElement>('#library-store-all-btn');
+    const usedBtn = this.el.querySelector<HTMLButtonElement>('#library-store-used-btn');
+    if (allBtn)  allBtn.disabled  = true;
+    if (usedBtn) usedBtn.disabled = true;
+
     let ok = 0;
     let fail = 0;
-    for (let i = 0; i < nonStored.length; i++) {
-      const asset = nonStored[i]!;
-      status.textContent = `Storing ${i + 1} of ${nonStored.length}: ${asset.name}…`;
+    for (let i = 0; i < candidates.length; i++) {
+      const asset = candidates[i]!;
+      status.textContent = `Storing ${i + 1} of ${candidates.length}: ${asset.name}…`;
       const success = await AudioAssetStore.store(asset);
       if (success) ok++; else fail++;
     }
-    btn.disabled = false;
 
-    if (fail === 0) status.textContent = `Stored ${ok} asset${ok !== 1 ? 's' : ''}.`;
-    else            status.textContent = `Stored ${ok}; ${fail} failed (likely missing API key or broken URL).`;
+    const msg = fail === 0
+      ? `Stored ${ok} asset${ok !== 1 ? 's' : ''}.`
+      : `Stored ${ok}; ${fail} failed (likely missing API key or broken URL).`;
 
     await this._renderLibrary();
-    // Re-render clears the status — keep it for a few seconds so the user sees the result
-    if (status) {
-      const msg = fail === 0
-        ? `Stored ${ok} asset${ok !== 1 ? 's' : ''}.`
-        : `Stored ${ok}; ${fail} failed (likely missing API key or broken URL).`;
-      status.textContent = msg;
-    }
+    // _renderLibrary clears the status — re-set it after so the result is visible.
+    if (status) status.textContent = msg;
+    if (allBtn)  allBtn.disabled  = false;
+    if (usedBtn) usedBtn.disabled = false;
   }
 
-  private _libraryRow(asset: AudioAsset): HTMLElement {
+  private _libraryRow(asset: AudioAsset, usedIds: Set<string> = new Set()): HTMLElement {
+    const isUnused = !usedIds.has(asset.id);
+    const unusedChip = isUnused
+      ? `<span class="sound-unused" title="Not referenced by any map — safe to delete">[!]</span>`
+      : '';
     const tags: string[] = [];
     if (asset.source === 'freesound') tags.push('<span class="sound-tag sound-tag--freesound">Freesound</span>');
     if (asset.source === 'web-link')  tags.push('<span class="sound-tag sound-tag--url">URL</span>');
@@ -261,7 +282,7 @@ export class FreesoundModal {
     row.innerHTML = `
       <div class="sound-row">
         <div class="sound-row-info">
-          <span class="sound-name">${tagsHtml}${this._esc(asset.name)}</span>
+          <span class="sound-name">${tagsHtml}${unusedChip}${this._esc(asset.name)}</span>
           <span class="sound-meta-row">
             <span class="sound-meta">${this._esc(asset.license ?? asset.source)}</span>
             ${editIconHtml}

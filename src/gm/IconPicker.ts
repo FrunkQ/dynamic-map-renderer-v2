@@ -1,4 +1,5 @@
 import { saveAsset, getAllAssets, deleteAsset } from '../storage/db.ts';
+import { getUsedIconKeys } from '../storage/assetUsage.ts';
 
 const PRESET_ICONS = [
   '◆','◇','●','○','■','□','▲','△','▼','▽',
@@ -118,7 +119,8 @@ export class IconPicker {
     this._el.appendChild(presetGrid);
 
     // ── Custom icons section ─────────────────────────────────────────────────
-    const assets = await getAllAssets('icon');
+    const assets   = await getAllAssets('icon');
+    const usedKeys = this._deleteMode ? await getUsedIconKeys() : new Set<string>();
     if (assets.length > 0) {
       const sep = document.createElement('div');
       sep.className = 'icon-picker-sep';
@@ -134,11 +136,14 @@ export class IconPicker {
       customGrid.className = 'icon-picker-grid';
       for (const asset of assets) {
         const assetKey = 'asset:' + asset.id;
+        const isUnused = this._deleteMode && !usedKeys.has(assetKey);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'icon-picker-btn'
           + (current === assetKey ? ' icon-picker-btn--active' : '')
-          + (this._deleteMode ? ' icon-picker-btn--danger' : '');
+          + (this._deleteMode ? ' icon-picker-btn--danger' : '')
+          + (isUnused ? ' icon-picker-btn--unused' : '');
+        if (isUnused) btn.title = 'Unused — safe to delete';
 
         const img = document.createElement('img');
         img.src = URL.createObjectURL(asset.blob);

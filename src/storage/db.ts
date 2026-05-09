@@ -90,6 +90,13 @@ export async function loadConfig(mapId: string): Promise<SessionState | undefine
   return record?.state;
 }
 
+/** All saved per-map configs across the library — used by trash-tracking helpers. */
+export async function getAllConfigs(): Promise<SessionState[]> {
+  const db = await getDB();
+  const records = await db.getAll('configs');
+  return records.map((r) => r.state);
+}
+
 // ─── Session (peer ID persistence for resumption) ────────────────────────────
 
 export async function saveSession(session: StoredSession): Promise<void> {
