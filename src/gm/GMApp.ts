@@ -13,7 +13,7 @@ import { TransitionPanel } from '../transitions/TransitionPanel.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode } from '../p2p/roomCode.ts';
-import { saveSession, loadSession, getAllMaps, deleteMap } from '../storage/db.ts';
+import { saveSession, loadSession, getAllMaps, deleteMap, clearAssetLibraries } from '../storage/db.ts';
 import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { exportBundle, importBundle } from '../storage/bundleIO.ts';
 import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
@@ -674,17 +674,19 @@ export class GMApp {
       if (!file) return;
       (e.target as HTMLInputElement).value = ''; // reset early so same file can be re-selected
       const ok = confirm(
-        'Load Maps File\n\nThis will delete ALL current maps and replace them with the contents of the selected file.\n\nMake sure you have saved a backup first.\n\nContinue?'
+        'Load Maps File\n\nThis will delete ALL current maps, sounds, and custom icons, and replace them with the contents of the selected file.\n\nMake sure you have saved a backup first.\n\nContinue?'
       );
       if (!ok) return;
       try {
         this.setStatus('Replacing maps…', 'ok');
-        // Flush any unsaved state before wiping, then delete every existing map
+        // Flush any unsaved state, then wipe the entire workspace before importing
         await this.state.flushSave();
         const existing = await getAllMaps();
         for (const m of existing) await deleteMap(m.id);
+        await clearAssetLibraries(); // wipe audio + icon libraries
         const { added } = await importBundle(file);
         this.state.resetForImport();
+        await this.iconPicker.reload();
         await this.populateMapList();
         this.setStatus(`Loaded — ${added} map${added !== 1 ? 's' : ''} imported`, 'ok');
       } catch (err) {

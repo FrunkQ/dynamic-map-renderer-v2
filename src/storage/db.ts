@@ -148,3 +148,12 @@ export async function deleteAudioAsset(id: string): Promise<void> {
   await db.delete('audioAssets', id);
   await db.delete('assets', id); // also remove the blob
 }
+
+/** Wipe every asset-library store. Used by bundle import to replace the workspace. */
+export async function clearAssetLibraries(): Promise<void> {
+  const db = await getDB();
+  await Promise.all([
+    db.clear('audioAssets'),
+    db.clear('assets'),
+  ]);
+}

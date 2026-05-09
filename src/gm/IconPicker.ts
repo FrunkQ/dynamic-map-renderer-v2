@@ -59,6 +59,13 @@ export class IconPicker {
     }));
   }
 
+  /** Drop the in-memory cache and reload from IDB — call after the asset library is wiped. */
+  async reload(): Promise<void> {
+    this.iconCache.clear();
+    this.iconDataUrls.clear();
+    await this.load();
+  }
+
   private static _blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
