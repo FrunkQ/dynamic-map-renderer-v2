@@ -7,7 +7,6 @@ import { IconPicker } from './IconPicker.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
-import { ProjectorCalibrationModal } from './ProjectorCalibrationModal.ts';
 import { getAllSetups, setActiveSetupId } from '../projector/calibrationStorage.ts';
 import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts';
 import { SoundboardEngine } from '../audio/SoundboardEngine.ts';
@@ -798,6 +797,14 @@ export class GMApp {
     const projectorSelect = document.getElementById('projection-projector-select') as HTMLSelectElement | null;
     projectorSelect?.addEventListener('change', () => this._onProjectorSelectChange(projectorSelect));
     this.refreshProjectorSetupSelect();
+    // Calibration completes in its own window — pick up the new setup the
+    // moment localStorage changes (storage events fire on OTHER tabs/windows
+    // for the same origin, which is exactly the calibration popup → GM case).
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'dmr_projector_setups' || e.key === 'dmr_projector_active') {
+        this.refreshProjectorSetupSelect();
+      }
+    });
 
     // Open Projector Monitor — visible only after a primary is connected.
     document.getElementById('projection-monitor-btn')?.addEventListener('click', () => {
@@ -827,15 +834,12 @@ export class GMApp {
       return;
     }
     if (v === 'add') {
-      // Open the calibration modal in the GM context. After it closes,
-      // re-read setups so the new one appears in the dropdown.
-      const cal = new ProjectorCalibrationModal();
-      void cal.open().then(() => {
-        this.refreshProjectorSetupSelect();
-        // Reset to "No Projection" so the user can deliberately pick the new
-        // calibration to launch — calibrating ≠ launching.
-        sel.value = 'off';
-      });
+      // Calibration needs to physically run on the projector display — the
+      // user drags the window there and full-sizes it before rulering the
+      // live grid. Open as its own popup; the storage listener picks up
+      // the saved setup and refreshes the dropdown.
+      window.open('/calibrate.html', '_blank', 'noopener,popup,width=1280,height=800');
+      sel.value = 'off';
       return;
     }
     // setupId — make active, then open primary.

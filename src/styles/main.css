@@ -1774,6 +1774,18 @@ body.player-view #renderer-canvas {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
+/* Drag-this-window-to-projector hint — shown only in the standalone
+   (own-window) launch flow from the GM. */
+.pcal-standalone-banner {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #ffd29a;
+  background: rgba(255, 140, 0, 0.12);
+  border: 1px solid rgba(255, 140, 0, 0.5);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  max-width: 60ch;
+}
 .pcal-step-instruction {
   margin: 0;
   font-size: 0.95rem;

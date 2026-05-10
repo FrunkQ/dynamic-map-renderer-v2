@@ -80,6 +80,7 @@ export default defineConfig(({ command }) => ({
         main:      'index.html',
         player:    'player.html',
         projector: 'projector.html',
+        calibrate: 'calibrate.html',
       },
     },
     target: 'es2023',

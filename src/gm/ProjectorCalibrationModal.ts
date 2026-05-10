@@ -36,11 +36,15 @@ export class ProjectorCalibrationModal {
 
   private draft: ProjectorSetup = this._blankDraft();
   private step: Step = 'intro';
+  /** True when the modal is the only thing on the page (own window, launched
+   *  by the GM with the recommendation to drag onto the projector display). */
+  private standalone = false;
 
   private _resizeHandler = () => this._renderAll();
   private _fullscreenUnsub: (() => void) | null = null;
 
-  open(): Promise<void> {
+  open(opts?: { standalone?: boolean }): Promise<void> {
+    this.standalone = !!opts?.standalone;
     this.overlay = this._buildUI();
     document.body.appendChild(this.overlay);
     window.addEventListener('resize', this._resizeHandler);
@@ -88,6 +92,9 @@ export class ProjectorCalibrationModal {
 
         <!-- Step 1 — Intro / pick method -->
         <section class="pcal-step pcal-step-intro" hidden>
+          <div class="pcal-standalone-banner" hidden>
+            <strong>Drag this window onto your projector or under-table screen</strong>, then toggle Fullscreen (top right). The grid you&rsquo;ll see in the next step needs to be physically projected at scale before you can ruler it.
+          </div>
           <p class="pcal-intro-text">
             We need to know how many of this device&rsquo;s pixels equal one inch on the surface you&rsquo;re projecting onto. Pick the kind of display you&rsquo;re calibrating, then we&rsquo;ll walk through it. Calibration is saved on this device only.
           </p>
@@ -246,6 +253,10 @@ export class ProjectorCalibrationModal {
     ov.querySelector<HTMLElement>('.pcal-step-intro')!.hidden  = this.step !== 'intro';
     ov.querySelector<HTMLElement>('.pcal-step-inputs')!.hidden = this.step !== 'inputs';
     ov.querySelector<HTMLElement>('.pcal-step-name')!.hidden   = this.step !== 'name';
+
+    // Standalone banner — only when launched as own window from the GM.
+    const banner = ov.querySelector<HTMLElement>('.pcal-standalone-banner');
+    if (banner) banner.hidden = !this.standalone;
 
     // Per-step blurb at the top.
     const blurbEl = ov.querySelector<HTMLElement>('.pcal-step-blurb')!;
