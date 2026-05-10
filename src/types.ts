@@ -280,8 +280,9 @@ export interface ProjectorViewport {
   /** CSS hex colour for the grid lines. */
   gridColor: string;
   /** When true, the projector applies the GM's active visual filter to its
-   *  output. Off by default — table projection usually wants the unfiltered
-   *  image regardless of what mood filter the GM is showing players. */
+   *  output. On by default — projector mirrors what players see; the GM can
+   *  opt out via the "Disable Filters" toggle when projecting battlemaps that
+   *  should stay unfiltered regardless of mood filter. */
   filterEnabled: boolean;
 }
 
@@ -289,7 +290,7 @@ export function defaultProjectorViewport(): ProjectorViewport {
   return {
     centerX: 0.5, centerY: 0.5, rotation: 0, mode: 'scaled',
     gridEnabled: false, gridColor: '#ffffff',
-    filterEnabled: false,
+    filterEnabled: true,
   };
 }
 

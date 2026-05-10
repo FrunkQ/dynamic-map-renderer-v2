@@ -7,6 +7,7 @@ import { IconPicker } from './IconPicker.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
+import { ProjectorCalibrationModal } from './ProjectorCalibrationModal.ts';
 import { getAllSetups, getActiveSetupId, setActiveSetupId } from '../projector/calibrationStorage.ts';
 import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts';
 import { SoundboardEngine } from '../audio/SoundboardEngine.ts';
@@ -774,7 +775,9 @@ export class GMApp {
     };
     gridToggle?.addEventListener  ('change', () => broadcastVp({ gridEnabled:   gridToggle.checked   }));
     gridColour?.addEventListener  ('input',  () => broadcastVp({ gridColor:     gridColour.value     }));
-    filterToggle?.addEventListener('change', () => broadcastVp({ filterEnabled: filterToggle.checked }));
+    // "Disable Filters" — checked = filters disabled = filterEnabled false.
+    filterToggle?.addEventListener('change', () => broadcastVp({ filterEnabled: !filterToggle.checked }));
+    this._refreshProjectionPanelMode();
 
     // Recalibrate this Map — opens the calibration modal for the active map's asset.
     document.getElementById('projection-recal-map-btn')?.addEventListener('click', async () => {
@@ -788,22 +791,16 @@ export class GMApp {
       void this.refreshProjectorMapInfo();
     });
 
-    // Calibration setup picker — when GM and projector are on the same device
-    // they share localStorage, so the GM can list all known setups and let
-    // the user pick which one the next projector window should boot with.
-    // Selecting a setup just updates the localStorage active id; the projector
-    // reads getActiveSetup() on load. Refresh the dropdown whenever a peer
-    // connects (a calibration may have just been saved on another tab) and
-    // when the panel is opened.
-    const setupSelect = document.getElementById('projection-setup-select') as HTMLSelectElement | null;
-    setupSelect?.addEventListener('change', () => {
-      setActiveSetupId(setupSelect.value || null);
-    });
+    // Unified Projector dropdown. Acts as launcher, off-switch, and setup
+    // picker rolled into one. Options: "🚫 No Projection" / each saved
+    // setup / "+ Calibrate New Projector…". GM and projector share
+    // localStorage on the same device, so the list is read fresh.
+    const projectorSelect = document.getElementById('projection-projector-select') as HTMLSelectElement | null;
+    projectorSelect?.addEventListener('change', () => this._onProjectorSelectChange(projectorSelect));
     this.refreshProjectorSetupSelect();
 
-    // Open Projector Screen — popup; the projector reads getActiveSetup() on
-    // load. The picker above governs which setup is active.
-    document.getElementById('projector-launch-btn')?.addEventListener('click', () => {
+    // Open Projector Monitor — visible only after a primary is connected.
+    document.getElementById('projection-monitor-btn')?.addEventListener('click', () => {
       const room = this.host.roomCode;
       if (!room) { this.setStatus('Waiting for P2P… try again in a moment.', 'warn'); return; }
       window.open(`/projector.html#${room}`, '_blank', 'noopener,popup,width=1280,height=800');
@@ -811,32 +808,96 @@ export class GMApp {
   }
 
   /**
-   * Populate the setup picker from localStorage. The list is read fresh each
-   * call so a calibration saved on another tab shows up immediately when
-   * the user re-opens the Projection View panel or a projector reconnects.
+   * Handle a change on the unified Projector dropdown:
+   *   - 'off'     → close all connected projectors
+   *   - 'add'     → open calibration modal in GM, refresh list after
+   *   - <id>      → set active setup, open primary projector window
    */
-  private refreshProjectorSetupSelect(): void {
-    const sel = document.getElementById('projection-setup-select') as HTMLSelectElement | null;
-    if (!sel) return;
-    const setups   = getAllSetups();
-    const activeId = getActiveSetupId();
-    sel.innerHTML = '';
-    if (setups.length === 0) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = 'No setups — projector will prompt to calibrate';
-      sel.appendChild(opt);
-      sel.disabled = true;
+  private _onProjectorSelectChange(sel: HTMLSelectElement): void {
+    const v = sel.value;
+    if (v === 'off') {
+      // Tear down every connected projector via shutdown messages.
+      for (const conn of this.projectorConnections.values()) {
+        this.host.broadcast({ type: 'projector_shutdown', targetId: conn.clientId });
+      }
+      this.projectorConnections.clear();
+      this.projectorEditor?.setConnection(null);
+      this.refreshProjectorStatus();
+      this._refreshProjectionPanelMode();
       return;
     }
-    sel.disabled = false;
+    if (v === 'add') {
+      // Open the calibration modal in the GM context. After it closes,
+      // re-read setups so the new one appears in the dropdown.
+      const cal = new ProjectorCalibrationModal();
+      void cal.open().then(() => {
+        this.refreshProjectorSetupSelect();
+        // Reset to "No Projection" so the user can deliberately pick the new
+        // calibration to launch — calibrating ≠ launching.
+        sel.value = 'off';
+      });
+      return;
+    }
+    // setupId — make active, then open primary.
+    const room = this.host.roomCode;
+    if (!room) { this.setStatus('Waiting for P2P… try again in a moment.', 'warn'); return; }
+    setActiveSetupId(v);
+    window.open(`/projector.html#${room}`, '_blank', 'noopener,popup,width=1280,height=800');
+  }
+
+  /**
+   * Populate the unified Projector dropdown from localStorage:
+   *     🚫 No Projection
+   *     <each saved setup>
+   *     + Calibrate New Projector…
+   * Selection reflects the current connection — if a primary is live, its
+   * setup is shown selected; otherwise "off". Read fresh so a calibration
+   * saved on another tab appears immediately.
+   */
+  private refreshProjectorSetupSelect(): void {
+    const sel = document.getElementById('projection-projector-select') as HTMLSelectElement | null;
+    if (!sel) return;
+    const setups       = getAllSetups();
+    const primary      = this._primaryProjector();
+    const activeSetup  = getActiveSetupId();
+    const liveSetupId  = primary
+      ? setups.find((s) => s.name === primary.setupName)?.id ?? null
+      : null;
+    sel.innerHTML = '';
+
+    const off = document.createElement('option');
+    off.value = 'off';
+    off.textContent = '🚫 No Projection';
+    sel.appendChild(off);
+
     for (const s of setups) {
       const opt = document.createElement('option');
       opt.value = s.id;
       opt.textContent = `${s.name} · ${s.pixelsPerSquare.toFixed(1)} px/sq`;
-      if (s.id === activeId) opt.selected = true;
       sel.appendChild(opt);
     }
+
+    const add = document.createElement('option');
+    add.value = 'add';
+    add.textContent = '+ Calibrate New Projector…';
+    sel.appendChild(add);
+
+    sel.value = liveSetupId ?? activeSetup ?? 'off';
+    if (sel.value !== 'off' && !setups.some((s) => s.id === sel.value)) {
+      sel.value = 'off';
+    }
+  }
+
+  /**
+   * Show the intro paragraph when nothing's connected; show the active-control
+   * block when at least one primary projector is live.
+   */
+  private _refreshProjectionPanelMode(): void {
+    const intro  = document.getElementById('projection-intro');
+    const active = document.getElementById('projection-active-controls');
+    const live = this.projectorConnections.size > 0;
+    if (intro)  intro.hidden  =  live;
+    if (active) active.hidden = !live;
   }
 
   private refreshRotationButtons(): void {
@@ -878,6 +939,8 @@ export class GMApp {
       }
       this.projectorEditor?.setConnection(this._primaryProjector() ?? null);
       this.refreshProjectorStatus();
+      this._refreshProjectionPanelMode();
+      this.refreshProjectorSetupSelect();
       return;
     }
     if (msg.type === 'projector_hello') {
@@ -898,6 +961,7 @@ export class GMApp {
       // A new projector might have just calibrated — re-read the setup list
       // so the picker reflects what's now in localStorage.
       this.refreshProjectorSetupSelect();
+      this._refreshProjectionPanelMode();
 
       // If the active map has no projectorViewport yet, seed a default one.
       if (!this.state.snapshot().projectorViewport) {
@@ -1349,7 +1413,8 @@ export class GMApp {
     const filterToggle = document.getElementById('projection-filter-toggle') as HTMLInputElement | null;
     if (gridToggle)   gridToggle.checked   = vp.gridEnabled;
     if (gridColour)   gridColour.value     = vp.gridColor;
-    if (filterToggle) filterToggle.checked = vp.filterEnabled;
+    // UI toggle is "Disable Filters" — checked when filters are NOT applied.
+    if (filterToggle) filterToggle.checked = !vp.filterEnabled;
   }
 
   /**

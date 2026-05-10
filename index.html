@@ -311,58 +311,65 @@
     <section class="panel" id="projection-panel">
       <button type="button" class="panel-title" aria-expanded="false">Projection View</button>
       <div class="panel-body" hidden>
-        <p class="view-hint">The orange &amp; green outline on the map shows what the projector renders. Calibrate this map first to enable.</p>
 
-        <p id="projection-map-cal-warning" class="view-warn" hidden>⚠ Active map is not calibrated — projection won&rsquo;t be at table scale.</p>
-
+        <!-- Always-visible projector picker. Off / setup / + add new. -->
         <div class="param-row">
-          <label for="projection-setup-select">Calibration setup</label>
-          <select id="projection-setup-select" class="select-full" title="Pick which calibration the new projector window should use"></select>
+          <label for="projection-projector-select">Projector</label>
+          <select id="projection-projector-select" class="select-full" title="Pick a calibrated projector, or add a new one"></select>
         </div>
-        <button id="projector-launch-btn" class="btn btn--primary btn--full">Open Projector Screen…</button>
 
-        <div id="projection-default-actions" class="viewport-actions">
-          <button id="edit-projection-btn"     class="btn btn--primary btn--full">Move Projection View</button>
-          <div class="btn-row">
-            <button id="projection-blackout-btn" class="btn btn--ghost btn--sm" title="Black out the projector display">Black Out</button>
-            <button id="projection-fullmap-btn"  class="btn btn--ghost btn--sm" title="Show the entire map fit-to-window on the projector, ignoring calibration">Full Map</button>
+        <!-- Default-state intro: shown when no projector is connected. -->
+        <p id="projection-intro" class="view-hint view-hint--gap">
+          Projector view is for on-table battlemaps using an under-table screen or down projector. It scales calibrated maps to 1&Prime;/25&nbsp;mm squares so miniatures occupy real inches on the surface. Pick a calibrated projector above to begin, or add a new one.
+        </p>
+
+        <!-- Active controls — shown only when a primary projector is connected. -->
+        <div id="projection-active-controls" hidden>
+
+          <p id="projection-map-cal-warning" class="view-warn" hidden>⚠ Active map is not calibrated — projection won&rsquo;t be at table scale.</p>
+
+          <div id="projection-default-actions" class="viewport-actions">
+            <button id="edit-projection-btn"     class="btn btn--primary btn--full">Move Projection View</button>
+            <div class="btn-row">
+              <button id="projection-blackout-btn" class="btn btn--ghost btn--sm" title="Black out the projector display">Black Out</button>
+              <button id="projection-fullmap-btn"  class="btn btn--ghost btn--sm" title="Show the entire map fit-to-window on the projector, ignoring calibration">Full Map</button>
+            </div>
+            <div class="param-row">
+              <label for="projection-filter-toggle" title="When ticked, the GM&rsquo;s visual filter does NOT apply to the projector — useful when projecting battlemaps that should stay unfiltered.">Disable Filters</label>
+              <input type="checkbox" id="projection-filter-toggle" />
+            </div>
           </div>
-        </div>
-        <div id="edit-projection-actions" class="viewport-actions" hidden>
-          <p class="view-hint view-hint--editing">Drag the rectangle to pan · Size is locked to projector calibration</p>
-          <div class="btn-row">
-            <button id="projection-ok-btn"     class="btn btn--primary btn--sm">OK</button>
-            <button id="projection-cancel-btn" class="btn btn--ghost   btn--sm">Cancel</button>
+          <div id="edit-projection-actions" class="viewport-actions" hidden>
+            <p class="view-hint view-hint--editing">Drag the rectangle to pan · Size is locked to projector calibration</p>
+            <div class="btn-row">
+              <button id="projection-ok-btn"     class="btn btn--primary btn--sm">OK</button>
+              <button id="projection-cancel-btn" class="btn btn--ghost   btn--sm">Cancel</button>
+            </div>
           </div>
-        </div>
 
-        <p class="view-hint view-hint--gap">Rotation</p>
-        <div class="btn-row" id="projection-rotation-row">
-          <button class="btn btn--ghost btn--sm" data-rotation="0">0&deg;</button>
-          <button class="btn btn--ghost btn--sm" data-rotation="90">90&deg;</button>
-          <button class="btn btn--ghost btn--sm" data-rotation="180">180&deg;</button>
-          <button class="btn btn--ghost btn--sm" data-rotation="270">270&deg;</button>
-        </div>
+          <p class="view-hint view-hint--gap">Rotation</p>
+          <div class="btn-row" id="projection-rotation-row">
+            <button class="btn btn--ghost btn--sm" data-rotation="0">0&deg;</button>
+            <button class="btn btn--ghost btn--sm" data-rotation="90">90&deg;</button>
+            <button class="btn btn--ghost btn--sm" data-rotation="180">180&deg;</button>
+            <button class="btn btn--ghost btn--sm" data-rotation="270">270&deg;</button>
+          </div>
 
-        <p class="view-hint view-hint--gap">1&Prime; Grid Overlay</p>
-        <div class="param-row">
-          <label for="projection-grid-toggle">Show grid</label>
-          <input type="checkbox" id="projection-grid-toggle" />
-        </div>
-        <div class="param-row">
-          <label for="projection-grid-colour">Colour</label>
-          <input type="color" id="projection-grid-colour" value="#ffffff" title="Grid line colour" />
-        </div>
+          <p class="view-hint view-hint--gap">1&Prime; Grid Overlay</p>
+          <div class="param-row">
+            <label for="projection-grid-toggle">Show grid</label>
+            <input type="checkbox" id="projection-grid-toggle" />
+          </div>
+          <div class="param-row">
+            <label for="projection-grid-colour">Colour</label>
+            <input type="color" id="projection-grid-colour" value="#ffffff" title="Grid line colour" />
+          </div>
 
-        <p class="view-hint view-hint--gap">Visual Filter</p>
-        <div class="param-row">
-          <label for="projection-filter-toggle" title="Apply the GM's active visual filter to the projection">Apply to projector</label>
-          <input type="checkbox" id="projection-filter-toggle" />
+          <button id="projection-monitor-btn"   class="btn btn--ghost btn--sm btn--full view-hint--gap">+ Open Projector Monitor&hellip;</button>
+          <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full">Recalibrate this Map&hellip;</button>
+
+          <p id="projector-status" class="projector-status">No projector connected.</p>
         </div>
-
-        <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full">Recalibrate this Map&hellip;</button>
-
-        <p id="projector-status" class="projector-status">No projector connected.</p>
       </div>
     </section>
 
