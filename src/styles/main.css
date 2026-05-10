@@ -214,6 +214,35 @@ body.player-view #renderer-canvas {
   font-size: var(--font-size-base);
 }
 
+.connect-byline {
+  color: var(--text-dim);
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: none;
+}
+
+/* GM sidebar brand block — top of the sidebar, project name + byline. */
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  line-height: 1;
+}
+.brand-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+.brand-byline {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
 .connect-row {
   display: flex;
   gap: var(--space-sm);

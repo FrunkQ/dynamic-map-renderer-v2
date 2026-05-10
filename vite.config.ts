@@ -29,9 +29,9 @@ export default defineConfig(({ command }) => ({
         // Required for the browser install prompt to fire.
         start_url:        '/?source=pwa',
         scope:            '/',
-        name:             'Dynamic Map Renderer',
-        short_name:       'MapRenderer',
-        description:      'Free, serverless, browser-based virtual tabletop for in-person and online TTRPG play.',
+        name:             'Mappadux — VTT@Home',
+        short_name:       'Mappadux',
+        description:      'Mappadux — VTT@Home. Free, serverless, browser-based virtual tabletop for in-person and online TTRPG play.',
         theme_color:      '#0a0e1a',
         background_color: '#0a0e1a',
         display:          'standalone',
