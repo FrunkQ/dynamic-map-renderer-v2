@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.10.1 — 2026-05-10
+
+Hotfix on the v2.10.0 rollout:
+
+- **Removed the wildcard `vercel.json` redirect** that 301-ed every
+  path from `dynamic-map-renderer-v2.vercel.app` to `www.mappadux.com`.
+  Subresource requests (.js / .css / manifest) were getting cross-
+  origin-redirected, and CORS blocked them — assets failed to load on
+  the legacy origin. Domain redirect is now configured at the Vercel
+  dashboard level, which scopes it to top-level HTML navigation and
+  leaves subresource requests untouched.
+- **Bundle: `lastMapId`** added. The map the creator was viewing when
+  they saved now travels in the pack and is restored on import — gated
+  to map ids actually present in the bundle so stale references fall
+  through to the first-map default rather than stranding the recipient.
+
 ## v2.10.0 — 2026-05-10
 
 ### Customisation, distribution, and a clean home for app-level actions

@@ -119,6 +119,11 @@ export interface DMRBundle {
   /** Optional UI theme — light/dark mode + custom accent. Applies to chrome
    *  only. Travels with the bundle so packs ship a branded look. */
   theme?:         ThemeConfig;
+  /** ID of the map the creator had open when they saved. Restored on import
+   *  so recipients land where the creator left off, useful for guided packs
+   *  ("start on the city overview"). Falls through silently if the saved
+   *  map id doesn't exist in the bundle (populateMapList defaults to first). */
+  lastMapId?:     string;
   /** Legacy combined map+asset+config records. Always written for back-compat
    *  with older importers; new importers prefer `mapInstances` + `*MapAssets`. */
   maps:           LegacyMapEntry[];
@@ -300,12 +305,13 @@ export async function exportBundle(opts?: { password?: string }): Promise<Export
     }
   }
 
-  // Pull workspace-level metadata (pack name, splash, theme) so they travel
-  // in the bundle.
-  const session  = await loadSession();
-  const packName = session?.packName?.trim() ?? '';
-  const splash   = session?.splash;
-  const theme    = session?.theme;
+  // Pull workspace-level metadata (pack name, splash, theme, lastMapId) so
+  // they travel in the bundle.
+  const session   = await loadSession();
+  const packName  = session?.packName?.trim() ?? '';
+  const splash    = session?.splash;
+  const theme     = session?.theme;
+  const lastMapId = session?.lastMapId ?? null;
 
   const bundle: DMRBundle = {
     version:       BUNDLE_VERSION,
@@ -314,6 +320,7 @@ export async function exportBundle(opts?: { password?: string }): Promise<Export
     ...(packName.length > 0        ? { packName } : {}),
     ...(splash                     ? { splash } : {}),
     ...(theme                      ? { theme } : {}),
+    ...(lastMapId                  ? { lastMapId } : {}),
     maps:          entries,
     mapInstances,
     ...(storedMapAssets.length > 0 ? { storedMapAssets } : {}),
@@ -554,6 +561,15 @@ export async function importBundleText(
     if (bundle.theme) {
       next.theme = bundle.theme;
       dirty = true;
+    }
+    if (typeof bundle.lastMapId === 'string' && bundle.lastMapId.length > 0) {
+      // Only honour if the bundle actually included this map — otherwise
+      // populateMapList falls through to maps[0] which is the safer default.
+      const importedIds = new Set((bundle.mapInstances ?? []).map((m) => m.id));
+      if (importedIds.has(bundle.lastMapId)) {
+        next.lastMapId = bundle.lastMapId;
+        dirty = true;
+      }
     }
     if (dirty) await saveSession(next);
   }
