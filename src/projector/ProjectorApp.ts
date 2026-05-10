@@ -350,6 +350,15 @@ export class ProjectorApp {
         this._applyFilter();
         break;
       }
+      case 'map_meta_update': {
+        // Map calibration / intrinsic dims changed (typically a Recalibrate
+        // this Map run while the map is live). Re-crop at the new scale.
+        if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
+        if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
+        if (msg.mapImageHeight     !== undefined) this.mapImageHeight     = msg.mapImageHeight;
+        this._applyView();
+        break;
+      }
       case 'projector_role': {
         if (msg.targetId !== this.clientId) break; // not for us
         this.role         = msg.role;

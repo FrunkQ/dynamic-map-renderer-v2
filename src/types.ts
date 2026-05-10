@@ -592,6 +592,22 @@ export interface MsgProjectorViewportUpdate {
   payload: ProjectorViewport;
 }
 
+/**
+ * GM → all clients: the active map's calibration / intrinsic dimensions
+ * changed (typically a "Recalibrate this Map…" run while the map is live).
+ * The primary projector uses these to re-compute its viewNW/viewNH crop;
+ * monitors get refreshed view fractions via projector_role separately.
+ *
+ * Plain players ignore this — their player view doesn't depend on map
+ * calibration; their viewport is the GM's own view rectangle.
+ */
+export interface MsgMapMetaUpdate {
+  type: 'map_meta_update';
+  mapPixelsPerSquare?: number;
+  mapImageWidth?:      number;
+  mapImageHeight?:     number;
+}
+
 export type GMMessage =
   | MsgFullState
   | MsgViewUpdate
@@ -614,7 +630,8 @@ export type GMMessage =
   | MsgProjectorBye
   | MsgProjectorRole
   | MsgProjectorShutdown
-  | MsgProjectorViewportUpdate;
+  | MsgProjectorViewportUpdate
+  | MsgMapMetaUpdate;
 
 // ─── Storage types ───────────────────────────────────────────────────────────
 

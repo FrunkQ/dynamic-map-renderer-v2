@@ -1486,6 +1486,15 @@ export class GMApp {
       : null;
     // Active-map calibration warning — visible when the map has no pps.
     if (warnEl) warnEl.hidden = !!asset.pixelsPerSquare;
+    // Push fresh map metadata to the live primary projector so it re-crops at
+    // the new scale. Monitors get their refreshed view fraction below via
+    // projector_role.
+    this.host.broadcast({
+      type: 'map_meta_update',
+      ...(asset.pixelsPerSquare !== undefined ? { mapPixelsPerSquare: asset.pixelsPerSquare } : {}),
+      ...(asset.imageWidth      !== undefined ? { mapImageWidth:      asset.imageWidth      } : {}),
+      ...(asset.imageHeight     !== undefined ? { mapImageHeight:     asset.imageHeight     } : {}),
+    });
     // Monitors care about the primary's resulting view fraction — push it so they re-crop.
     this._broadcastRoles(false);
   }
