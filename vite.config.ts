@@ -20,7 +20,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/*.png', 'icons/*.svg'],
+      includeAssets: ['icons/*.png', 'favicon.png', 'favicon-*.png', 'apple-touch-icon.png'],
       manifest: {
         // Stable identifier — Chrome uses this to decide whether two manifest
         // versions refer to the same installed app. Without it, install state

@@ -1,5 +1,145 @@
 # Changelog
 
+## v2.10.0 — 2026-05-10
+
+### Customisation, distribution, and a clean home for app-level actions
+
+v2.10 is the "make this feel like a real product you'd share" release. The
+hamburger menu becomes the home for everything pack-level; map packs gain
+encryption, gzip compression, custom branding, theming, and URL-based
+sharing; and the asset libraries finally let you pull individual assets
+back out.
+
+#### Hamburger menu
+
+- New ☰ button in the GM sidebar brand block, hosts all pack-level
+  actions. Click-outside / Escape closes. Items can flag themselves as
+  `danger` (red) for destructive entries.
+- Entries (in order): **Save Map Pack…**, **Save Encrypted Pack…**,
+  **Load Map Pack**, **Customise pack…**, **New Map Pack…** (red),
+  **Settings…**, **About…** (footer).
+- Old in-panel **Save to File** / **Load Maps File** buttons removed —
+  the bundle flows live here now.
+
+#### Map Pack format
+
+- Saved bundles use a branded **`.mappadux`** extension. Load dialog
+  accepts both `.mappadux` and legacy `.json`.
+- File is **gzipped** before write (CompressionStream); typical pack size
+  drops ~10–25%. Bigger relative win on the encrypted path where base64
+  inflation used to dominate.
+- Save fires the native OS save picker (`window.showSaveFilePicker`
+  where supported, anchor fallback elsewhere). Custom
+  `application/x-mappadux-pack` MIME so the picker doesn't pad the filter
+  with `.exe` / `.com` / `.bin` like generic octet-stream does.
+- New pack-level `packName` field, edited in the Map Selection panel
+  ("Map Pack" input) and pre-filled into save filenames as a slug. Default
+  bundle seeds the name as **"Getting Started"**.
+
+#### Optional password encryption
+
+- New hamburger entry **Save Encrypted Pack…**. Web Crypto AES-GCM with
+  a PBKDF2-derived key (200k iterations, SHA-256). Per-file random
+  salt + IV.
+- Wrong password on load surfaces a generic "Wrong password or corrupt
+  file" — no leakage about which it was. AES-GCM tag does the integrity
+  check, no separate HMAC.
+- Bundle JSON gets gzipped *before* encryption so encrypted files are
+  smaller too.
+- Decryption is checked BEFORE wiping the workspace, so cancelling at
+  the password prompt leaves your current pack intact.
+
+#### Customisable splash + About
+
+- New **About…** dialog (auto-opens on first run / on every Load Map
+  Pack). Display mode shows the creator's title / banner image / rich
+  description body / links, then a fixed Mappadux footer (Discord,
+  Ko-fi, GitHub, mappadux.com, MIT licence).
+- New **Customise pack…** dialog (edit mode) lets creators set per-pack:
+  - Title, banner image with **drag-to-pan crop picker** for off-aspect
+    images, rich body text.
+  - Rich-text toolbar: **B / I / U**, align left/centre/right, bullets,
+    numbered list, font (System/Serif/Mono/Display), colour picker.
+  - Up to N creator links (Patreon, socials, Kickstarter, etc.).
+- Output sanitised via a strict allow-list (`p, br, b/strong, i/em, u, ul,
+  ol, li, span, font, div` + filtered `style`) so loading a community
+  pack can't inject script or load remote resources.
+- New default body is a friendly origin-story intro that emphasises the
+  built-in attribution flow.
+
+#### Theme
+
+- Per-pack **Theme** section in Customise mode: Dark/Light segmented
+  toggle + custom accent colour picker with hex echo and Reset.
+- CSS-variable driven; hover/dim shades derive automatically from the
+  live `--accent` via `color-mix()`. Map render area unaffected — chrome
+  only.
+- Edits apply **live** during the dialog so you see the result; Cancel
+  reverts to whatever was active when the dialog opened.
+
+#### New Map Pack + Settings
+
+- **New Map Pack…** (red) clears the workspace and starts an empty pack
+  with a name you choose — no Getting Started re-seed.
+- **Settings…** dialog with three sections:
+  - **Storage** — live IndexedDB usage / quota readout, persistence
+    status, "Request persistent storage" button.
+  - **API Keys (this browser only)** — lists stored credentials (Freesound)
+    with redacted previews; bulk delete; messaging that keys never travel
+    in pack exports.
+  - **Danger Zone** — **Delete DB** (wipe IDB, keep API keys + calibration,
+    reload) and **Delete All Data** (wipe IDB + every `dmr_*` localStorage
+    entry, reload). Reloads instead of in-place reset so state guarantees
+    are simple.
+
+#### Per-asset download
+
+- ⬇ button on every locally-stored row in **Map Library** and **Sound
+  Library** — pulls the original blob back out as a file download with a
+  sensible filename. Routes through the same `showSaveFilePicker` path
+  as Save Map Pack so you can pick where the asset lands.
+
+#### Bundle URL load
+
+- `?bundle=<URL>` startup parameter loads a pack from a URL instead of
+  default-seeding. If your IDB already has content, you get a three-way
+  prompt: **Save current, then load** / **Discard and load** / **Cancel**.
+  Param is stripped from the URL after handling so a reload doesn't
+  re-trigger.
+
+#### Bundle data audit + fixes
+
+- `MapAsset.pixelsPerSquare` and `calibrationLine` were being **dropped**
+  on bundle export for locally-stored map assets — calibration didn't
+  survive save/load. Fixed: both fields now travel in the bundle and
+  round-trip correctly.
+- Stored audio: `attributionLink` was being dropped on export. Fixed.
+- Custom icons: `addedAt` was being dropped. Fixed (with sensible
+  fallback for older bundles).
+
+#### Session panel tighten-up
+
+- Old visible **Room Code** row removed. Code is shown on hover (QR
+  tooltip).
+- **Copy Player URL** is now a small white bar to the left of the QR;
+  the QR itself is also clickable to copy.
+- "Players connected" count below the QR; pluralisation handled
+  automatically. Disconnect path was missing a notify call when
+  `conn.on('error')` fired — fixed; count now updates on any disconnect.
+
+#### Vercel routing
+
+- `vercel.json` now redirects `dynamic-map-renderer-v2.vercel.app` →
+  `https://www.mappadux.com/` (301). Deep links preserved.
+
+#### Misc
+
+- Map Selection, Marker, and Projector dropdowns unified on a single
+  **+ Add New X** sentinel pattern (bold-green action option at the
+  bottom). Standalone Add buttons removed.
+- LFD calibration step now tells the user to switch to the Projector
+  path if their screen / resolution isn't listed.
+
 ## v2.9.0 — 2026-05-10
 
 ### Mappadux brand + Projector / Battlemap mode

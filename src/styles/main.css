@@ -17,8 +17,10 @@
   --text-dim:      #4a6a80;
 
   --accent:        #0d9adb;
-  --accent-hover:  #1ab5ff;
-  --accent-dim:    #0d4a6e;
+  /* Hover/dim derive from the live --accent so a creator-picked accent
+     cascades automatically. color-mix is in 2023+ Chromium / Firefox / Safari. */
+  --accent-hover:  color-mix(in srgb, var(--accent), white 20%);
+  --accent-dim:    color-mix(in srgb, var(--accent), black 50%);
   --danger:        #e03e3e;
   --danger-hover:  #ff5555;
   --warn:          #d09020;
@@ -54,6 +56,25 @@
   --text:         var(--text-primary);
   --bg-elevated:  var(--bg-panel);
   --surface-2:    var(--bg-hover);
+}
+
+/* ── Light theme — opt-in via [data-theme="light"] on <html>. Only the
+   chrome surfaces and text tones flip; the accent (custom or default)
+   inherits unchanged so creator branding stays consistent across modes. */
+:root[data-theme="light"] {
+  --bg-base:       #f4f6fa;
+  --bg-panel:      #ffffff;
+  --bg-input:      #f0f3f8;
+  --bg-hover:      #e6ecf3;
+  --border:        #d4dce6;
+  --border-focus:  #98b8db;
+
+  --text-primary:  #1a2940;
+  --text-secondary:#4a6080;
+  --text-dim:      #8395a8;
+
+  --code-bg:       #eef2f7;
+  --code-text:     #1976a4;
 }
 
 /* ── Reset ─────────────────────────────────────────────────────────────── */
@@ -221,13 +242,103 @@ body.player-view #renderer-canvas {
   text-transform: none;
 }
 
-/* GM sidebar brand block — top of the sidebar, project name + byline. */
+/* GM sidebar brand block — top of the sidebar, icon + project name + byline. */
 .brand {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  line-height: 1;
+}
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  display: block;
+}
+.brand-text {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: var(--space-md) var(--space-md) var(--space-sm);
+}
+.brand-menu-btn {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 18px;
   line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.brand-menu-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.brand-menu-btn[aria-expanded="true"] {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+/* Hamburger dropdown — anchored bottom-right of the brand block (under the
+   menu button), hovers over the panel below it (Session). */
+.gm-menu {
+  position: absolute;
+  top: 100%;
+  right: var(--space-md);
+  z-index: 50;
+  min-width: 180px;
+  padding: 4px 0;
+  margin-top: 4px;
+  background: var(--bg-panel, #161a26);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+.gm-menu[hidden] { display: none; }
+.gm-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.gm-menu-item:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+.gm-menu-item--disabled,
+.gm-menu-item:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.gm-menu-item--danger { color: var(--danger); }
+.gm-menu-item--danger:hover:not(:disabled) {
+  background: rgba(224, 62, 62, 0.12);
+  color: var(--danger-hover);
+}
+.gm-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
 }
 .brand-name {
   font-size: 1.25rem;
@@ -314,33 +425,49 @@ body.player-view #renderer-canvas {
 }
 
 /* ── Session panel ─────────────────────────────────────────────────────── */
-.room-code-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.room-code {
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  color: var(--code-text);
-  background: var(--code-bg);
-  padding: 2px var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--accent-dim);
-  flex: 1;
-  text-align: center;
-  letter-spacing: 0.05em;
-}
-
+/* QR + copy bar — a horizontal pair: tall white "Copy" bar on the left,
+   QR canvas on the right. Clicking either copies the player URL. */
 #qr-container {
   display: flex;
+  flex-direction: row;
   justify-content: center;
+  align-items: stretch;
+  gap: 6px;
   padding: var(--space-xs);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+#qr-container:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-dim);
 }
 
 #qr-container canvas {
   border-radius: var(--radius-sm);
+  pointer-events: none; /* clicks bubble up to #qr-container */
+}
+
+/* Copy-URL bar — a vertical white slab to the left of the QR canvas.
+   Full QR height, narrow, with the copy glyph centred. Clearly an
+   action surface; brightens on hover. */
+.qr-copy-btn {
+  align-self: stretch;
+  width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: #f0f3f8;
+  border: 1px solid #f0f3f8;
+  border-radius: var(--radius-sm);
+  color: #0a0e1a;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.qr-copy-btn:hover {
+  background: #ffffff;
+  border-color: var(--accent, #ffffff);
+  color: var(--accent, #0a0e1a);
 }
 
 .session-actions {
@@ -446,6 +573,14 @@ body.player-view #renderer-canvas {
 }
 
 .select-full:focus { border-color: var(--border-focus); }
+
+/* Action option inside a <select> dropdown — e.g. "+ Add New Map".
+   Native <option> styling support is patchy across browsers, but modern
+   Chromium and Firefox honour `color` and `font-weight` here. */
+option.select-option--add {
+  color: #4ade80;
+  font-weight: 600;
+}
 
 /* ── Transition params ──────────────────────────────────────────────────── */
 .transition-params-container {
@@ -1190,6 +1325,390 @@ body.player-view #renderer-canvas {
   overflow: hidden;
 }
 .modal-dialog--sm { width: 480px; }
+
+/* ── About / Splash dialog ─────────────────────────────────────────────── */
+.about-dialog { width: 600px; }
+
+.about-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+}
+
+.about-display { display: flex; flex-direction: column; gap: var(--space-md); }
+.about-edit    { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.about-image {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
+/* Edit-mode crop frame — fixed banner aspect, drag-to-pan target. */
+.about-image-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.about-image-frame--dragging { cursor: grabbing; }
+.about-image-frame .about-image {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  pointer-events: none;
+}
+.about-image-hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ── Rich-text editor (splash body) ───────────────────────────────────── */
+.rte {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.rte-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  padding: 4px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.rte-btn {
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.rte-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border); }
+.rte-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.rte-select {
+  height: 24px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  padding: 0 4px;
+}
+.rte-color {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+.rte-editor {
+  width: 100%;
+  min-height: 140px;
+  padding: var(--space-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: none;
+  border-radius: 0;
+  outline: none;
+  overflow-y: auto;
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+.rte-editor:focus { outline: none; border-color: transparent; }
+.rte-editor p { margin: 0 0 0.6em 0; }
+.rte-editor p:last-child { margin-bottom: 0; }
+.rte-editor ul, .rte-editor ol { margin: 0 0 0.6em 1.4em; padding: 0; }
+.rte-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* ── About: theme editor section ──────────────────────────────────────── */
+.about-theme {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+.about-theme-heading {
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.about-theme-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.about-theme-row-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Segmented Dark / Light toggle */
+.about-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  align-self: start;
+}
+.about-seg-btn {
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  padding: 4px 14px;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.about-seg-btn:hover:not(.about-seg-btn--active) { background: var(--bg-hover); color: var(--text-primary); }
+.about-seg-btn--active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* Accent picker row */
+.about-accent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.about-accent-swatch {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+}
+.about-accent-hex {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* ── Settings dialog ──────────────────────────────────────────────────── */
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+.settings-section-heading {
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.settings-section-intro {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.settings-stat {
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+.settings-stat-sub {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+.settings-btn-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+.settings-key-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-key-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px var(--space-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+.settings-key-preview {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+.settings-danger { border-color: rgba(224, 62, 62, 0.4); }
+.settings-danger-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--border);
+}
+.settings-danger-row:first-of-type { border-top: 0; }
+
+.about-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+
+/* About body content — typographic styles for the rich-text we render via
+   innerHTML. The global `* { margin: 0; padding: 0 }` reset wipes the
+   browser defaults, so we restore them inside .about-text only. */
+.about-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.about-text p {
+  margin: 0 0 0.85em;
+}
+.about-text p:last-child { margin-bottom: 0; }
+.about-text ul,
+.about-text ol {
+  margin: 0.2em 0 0.95em;
+  padding-left: 1.5em;   /* room for bullet markers, killed by the * reset */
+}
+.about-text li {
+  margin-bottom: 0.4em;
+  padding-left: 4px;
+}
+.about-text li::marker { color: var(--accent); }
+.about-text li:last-child { margin-bottom: 0; }
+.about-text strong,
+.about-text b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.about-text em,
+.about-text i {
+  color: var(--text-primary);
+  font-style: italic;
+}
+.about-text code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 1px 6px;
+  background: var(--code-bg);
+  color: var(--code-text);
+  border-radius: var(--radius-sm);
+}
+.about-text a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.about-text a:hover { text-decoration: underline; }
+
+.about-links-heading {
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.about-links-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.about-links-list a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.about-links-list a:hover { text-decoration: underline; }
+
+.about-edit-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+/* Edit-mode action row — Cancel / Save at the bottom-right. */
+.about-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+/* Mappadux footer — always rendered, never editable. */
+.about-footer {
+  border-top: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(0, 0, 0, 0.15);
+}
+.about-mpx-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+}
+.about-mpx-version { color: var(--text-secondary); font-weight: 500; }
+.about-mpx-links { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.about-mpx-links a { color: var(--accent); text-decoration: none; }
+.about-mpx-links a:hover { text-decoration: underline; }
+.about-mpx-sep { color: var(--text-dim); }
+.about-mpx-licence { font-size: 0.75rem; }
 
 .modal-header {
   display: flex;

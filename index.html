@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0a0e1a" />
   <title>Mappadux — GM</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="stylesheet" href="/src/styles/main.css" />
 </head>
 <body class="gm-view">
@@ -13,24 +16,42 @@
   <aside id="sidebar">
 
     <div class="brand">
-      <span class="brand-name">Mappadux</span>
-      <span class="brand-byline">VTT@Home</span>
+      <img class="brand-icon" src="/icons/icon-192.png" alt="" />
+      <div class="brand-text">
+        <span class="brand-name">Mappadux</span>
+        <span class="brand-byline">VTT@Home</span>
+      </div>
+      <button type="button" class="brand-menu-btn" id="gm-menu-btn"
+              aria-haspopup="true" aria-expanded="false" aria-controls="gm-menu"
+              title="Menu">☰</button>
+      <div class="gm-menu" id="gm-menu" role="menu" hidden></div>
     </div>
 
     <section class="panel" id="session-panel">
       <button type="button" class="panel-title" aria-expanded="true">Session</button>
       <div class="panel-body">
-        <div class="room-code-row">
-          <span class="label">Room Code</span>
-          <code id="room-code" class="room-code">…</code>
+        <!-- Hidden source-of-truth for the room code; rendered as a tooltip on the QR. -->
+        <span id="room-code" hidden>…</span>
+
+        <div id="qr-container" role="button" tabindex="0" title="Click to copy player URL">
+          <button id="copy-url-btn" class="qr-copy-btn" type="button"
+                  title="Copy player URL" aria-label="Copy player URL">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+              <rect x="4.25" y="4.25" width="8.5" height="9.5" rx="1.5"
+                    fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M2.75 11V3.75A1.5 1.5 0 0 1 4.25 2.25H10"
+                    fill="none" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </button>
+          <canvas></canvas>
         </div>
-        <div id="qr-container"><canvas></canvas></div>
+
+        <div class="session-meta">
+          <strong id="player-count">0</strong> player<span id="player-count-plural">s</span> connected
+        </div>
+
         <div class="session-actions">
           <button id="open-player-btn" class="btn btn--primary">Open Player Window</button>
-          <button id="copy-url-btn"    class="btn btn--ghost">Copy Player URL</button>
-        </div>
-        <div class="session-meta">
-          <span>Players: <strong id="player-count">0</strong></span>
         </div>
       </div>
     </section>
@@ -38,26 +59,21 @@
     <section class="panel" id="map-panel">
       <button type="button" class="panel-title" aria-expanded="true">Map Selection</button>
       <div class="panel-body">
+        <div class="param-row">
+          <label for="pack-name-input">Map Pack</label>
+          <input type="text" id="pack-name-input" class="marker-text-input" placeholder="Untitled pack" />
+        </div>
         <select id="map-select" class="select-full"></select>
         <div class="param-row">
           <label for="map-name-input">Name</label>
           <input type="text" id="map-name-input" class="marker-text-input" placeholder="Map name…" />
         </div>
         <button id="fix-missing-map-btn" class="btn btn--danger btn--sm btn--full" hidden>⚠ Fix Missing Map</button>
-        <button id="add-map-btn" class="btn btn--ghost btn--sm btn--full">+ Add New Map</button>
         <div class="btn-row">
           <button id="clone-map-btn"  class="btn btn--ghost   btn--sm">Clone Map</button>
           <button id="delete-map-btn" class="btn btn--danger  btn--sm">Delete Map</button>
         </div>
 
-        <p class="map-section-label map-section-label--gap">All Map Data</p>
-        <div class="btn-row">
-          <button id="export-btn" class="btn btn--ghost btn--sm">Save to File</button>
-          <label class="btn btn--ghost btn--sm">
-            Load Maps File
-            <input type="file" id="bundle-import" accept=".json" hidden />
-          </label>
-        </div>
       </div>
     </section>
 
@@ -285,8 +301,6 @@
           </div>
         </div>
 
-        <hr class="panel-sep" />
-        <button id="add-marker-btn" class="btn btn--primary btn--sm btn--full">+ Add Marker</button>
       </div>
     </section>
 
@@ -572,6 +586,10 @@ https://example.com/map2.jpg"></textarea>
       </div>
     </div>
   </div>
+
+  <!-- Hidden file picker for "Load Map Pack" — triggered from the hamburger.
+       Accepts both the new .mappadux extension and legacy .json exports. -->
+  <input type="file" id="bundle-import" accept=".mappadux,.json" hidden />
 
   <script type="module" src="/src/main.ts"></script>
 </body>

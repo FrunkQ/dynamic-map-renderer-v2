@@ -5,6 +5,7 @@ import type { AssetSourceConnector, AssetSearchPage } from '../audio/connectors/
 import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { getUsedAudioAssetIds } from '../storage/assetUsage.ts';
+import { downloadAsset } from '../utils/downloadAsset.ts';
 
 // Duration filter options shown in the dropdown
 const DURATION_OPTIONS: Array<{ label: string; value: number | null }> = [
@@ -303,6 +304,10 @@ export class FreesoundModal {
     const storeBtnHtml = asset.locallyStored
       ? ''
       : `<button class="btn btn--ghost btn--xs sound-store-btn" title="Download and keep a local copy">Store</button>`;
+    // Download button — only meaningful when we already have the blob locally.
+    const downloadBtnHtml = asset.locallyStored
+      ? `<button class="btn btn--ghost btn--xs sound-download-btn" title="Download this sound">⬇</button>`
+      : '';
 
     // Freesound attributions are locked (the API supplies them); Upload + Web Link
     // rows are editable so users can record where the audio came from. Edit
@@ -326,6 +331,7 @@ export class FreesoundModal {
         <div class="sound-row-actions">
           <button class="btn btn--ghost btn--xs sound-preview-btn" data-url="">▶ Preview</button>
           ${storeBtnHtml}
+          ${downloadBtnHtml}
           <button class="btn btn--primary btn--xs sound-use-btn">Use</button>
           <button class="btn btn--danger btn--xs sound-del-btn" title="Remove from library">✕</button>
         </div>
@@ -390,6 +396,20 @@ export class FreesoundModal {
       if (!confirm(`Remove "${asset.name}" from your library?`)) return;
       await AudioAssetStore.delete(asset.id);
       await this._renderLibrary();
+    });
+
+    row.querySelector<HTMLButtonElement>('.sound-download-btn')?.addEventListener('click', async () => {
+      const blob = await AudioAssetStore.getBlob(asset);
+      if (!blob) return;
+      // Best-effort filename: append a sensible extension based on mime.
+      const ext = blob.type.includes('mpeg') ? '.mp3'
+                : blob.type.includes('wav')  ? '.wav'
+                : blob.type.includes('ogg')  ? '.ogg'
+                : blob.type.includes('webm') ? '.webm'
+                : '';
+      const baseName = asset.name.replace(/[\\/:*?"<>|]+/g, '_');
+      const filename = baseName.toLowerCase().endsWith(ext) ? baseName : `${baseName}${ext}`;
+      await downloadAsset(filename, blob);
     });
 
     editBtn?.addEventListener('click', () => {

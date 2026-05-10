@@ -1,5 +1,6 @@
 import type { MapAsset, StoredMap } from '../types.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
+import { downloadAsset } from '../utils/downloadAsset.ts';
 import { MapManager } from './MapManager.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { getUsedMapAssetIds } from '../storage/assetUsage.ts';
@@ -255,6 +256,9 @@ export class MapAssetModal {
     const storeBtnHtml = asset.locallyStored
       ? ''
       : `<button class="btn btn--ghost btn--xs map-store-btn" title="Download and keep a local copy">Store</button>`;
+    const downloadBtnHtml = asset.locallyStored
+      ? `<button class="btn btn--ghost btn--xs map-download-btn" title="Download this map image">⬇</button>`
+      : '';
     const scaleBtnHtml = asset.pixelsPerSquare
       ? ''
       : `<button class="btn btn--ghost btn--xs map-scale-btn" title="Calibrate map scale (pixels per 5' square)">Scale</button>`;
@@ -279,6 +283,7 @@ export class MapAssetModal {
         <div class="sound-row-actions">
           ${scaleBtnHtml}
           ${storeBtnHtml}
+          ${downloadBtnHtml}
           <button class="btn btn--primary btn--xs map-use-btn">Use</button>
           <button class="btn btn--danger btn--xs map-del-btn" title="Remove from library">✕</button>
         </div>
@@ -324,6 +329,12 @@ export class MapAssetModal {
       const ok = await MapAssetStore.store(asset);
       if (ok) await this._renderLibrary();
       else { btn.disabled = false; btn.textContent = '⚠ Failed'; setTimeout(() => { btn.textContent = 'Store'; }, 2000); }
+    });
+
+    row.querySelector<HTMLButtonElement>('.map-download-btn')?.addEventListener('click', async () => {
+      const blob = await MapAssetStore.getBlob(asset);
+      if (!blob) return;
+      await downloadAsset(asset.filename, blob);
     });
 
     row.querySelector<HTMLButtonElement>('.map-del-btn')?.addEventListener('click', async () => {

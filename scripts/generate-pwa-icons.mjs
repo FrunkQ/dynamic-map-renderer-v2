@@ -1,10 +1,15 @@
 /**
- * Rasterise public/favicon.svg → PNG icons for the PWA manifest.
+ * Rasterise src/assets/Mappadux-Icon.png → favicon + PWA icon set.
  * Run with: node scripts/generate-pwa-icons.mjs
  *
- * The SVG is 48×46 (slightly non-square). We pad it onto a square transparent
- * canvas centred, then rasterise at 192×192 and 512×512 — those are the sizes
- * Chrome / Edge require for installability. Output goes to public/icons/.
+ * Outputs:
+ *   public/favicon.png            32×32  (default browser tab fallback)
+ *   public/favicon-16.png         16×16
+ *   public/favicon-32.png         32×32
+ *   public/favicon-48.png         48×48
+ *   public/apple-touch-icon.png   180×180
+ *   public/icons/icon-192.png     192×192  (PWA manifest)
+ *   public/icons/icon-512.png     512×512  (PWA manifest, also maskable)
  */
 import sharp from 'sharp';
 import { readFileSync, mkdirSync } from 'node:fs';
@@ -13,20 +18,26 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
-const svgPath = resolve(root, 'public', 'favicon.svg');
-const outDir  = resolve(root, 'public', 'icons');
-mkdirSync(outDir, { recursive: true });
+const srcPath = resolve(root, 'src', 'assets', 'Mappadux-Icon.png');
+const publicDir = resolve(root, 'public');
+const iconsDir = resolve(publicDir, 'icons');
+mkdirSync(iconsDir, { recursive: true });
 
-const svg = readFileSync(svgPath);
+const src = readFileSync(srcPath);
 
-const sizes = [192, 512];
-for (const size of sizes) {
-  // Padded resize: contain inside a square with transparent background, then
-  // serialise to PNG. Density bump renders the SVG at a higher rasterisation
-  // resolution so blur filters look crisp at large output sizes.
-  const out = resolve(outDir, `icon-${size}.png`);
-  await sharp(svg, { density: 384 })
-    .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+const targets = [
+  { out: resolve(publicDir, 'favicon.png'),         size: 32  },
+  { out: resolve(publicDir, 'favicon-16.png'),      size: 16  },
+  { out: resolve(publicDir, 'favicon-32.png'),      size: 32  },
+  { out: resolve(publicDir, 'favicon-48.png'),      size: 48  },
+  { out: resolve(publicDir, 'apple-touch-icon.png'), size: 180 },
+  { out: resolve(iconsDir,  'icon-192.png'),        size: 192 },
+  { out: resolve(iconsDir,  'icon-512.png'),        size: 512 },
+];
+
+for (const { out, size } of targets) {
+  await sharp(src)
+    .resize(size, size, { fit: 'cover', position: 'centre' })
     .png()
     .toFile(out);
   console.log(`wrote ${out}`);

@@ -117,7 +117,7 @@ export class ProjectorCalibrationModal {
               <label>Resolution</label>
               <select class="pcal-lfd-res"></select>
             </div>
-            <p class="pcal-lfd-note">If the result drifts in real-world tests, you can always re-calibrate using the Projector path.</p>
+            <p class="pcal-lfd-note">If your screen size or resolution isn&rsquo;t listed, switch to the <strong>Projector</strong> option above and use the live ruler-on-screen calibration instead. You can also fall back to it any time the LFD result drifts in real-world tests.</p>
           </div>
 
           <div class="pcal-proj-pane" hidden>

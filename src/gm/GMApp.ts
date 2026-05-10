@@ -7,6 +7,8 @@ import { IconPicker } from './IconPicker.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
+import { HamburgerMenu } from './HamburgerMenu.ts';
+import { SELECT_ADD_SENTINEL, appendAddOption } from './selectAdd.ts';
 import { getAllSetups, setActiveSetupId } from '../projector/calibrationStorage.ts';
 import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts';
 import { SoundboardEngine } from '../audio/SoundboardEngine.ts';
@@ -17,11 +19,22 @@ import { TransitionPanel } from '../transitions/TransitionPanel.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode } from '../p2p/roomCode.ts';
-import { saveSession, loadSession, getAllMaps, deleteMap, clearAssetLibraries } from '../storage/db.ts';
+import { saveSession, loadSession, getAllMaps, deleteMap, clearAssetLibraries, clearEverything } from '../storage/db.ts';
+import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY } from '../storage/localSettings.ts';
 import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
-import { exportBundle, importBundle } from '../storage/bundleIO.ts';
+import { exportBundle, importBundleText } from '../storage/bundleIO.ts';
+import { isEncryptedBundleEnvelope } from '../storage/bundleCrypto.ts';
+import { gunzipToString, startsWithGzipMagic } from '../storage/bundleCompression.ts';
+import { EncryptSaveDialog } from './EncryptSaveDialog.ts';
+import { PasswordPromptDialog } from './PasswordPromptDialog.ts';
+import { AboutDialog } from './AboutDialog.ts';
+import { NewPackDialog } from './NewPackDialog.ts';
+import { SettingsDialog } from './SettingsDialog.ts';
+import { BundleUrlPromptDialog } from './BundleUrlPromptDialog.ts';
+import { saveBlob } from '../utils/saveBlob.ts';
+import { applyTheme } from '../utils/applyTheme.ts';
 import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
 import { MarkerInteractionRegistry, type InteractionContext } from './markerInteractions/MarkerInteraction.ts';
 import { PositionalAudioInteraction } from './markerInteractions/PositionalAudioInteraction.ts';
@@ -75,6 +88,10 @@ export class GMApp {
 
   private iconPicker!:       IconPicker;
   private mapAssetModal!:    MapAssetModal;
+  /** Last real (non-sentinel) value selected in #map-select — used to revert
+   *  when the user picks the "+ Add" sentinel and we need to keep the dropdown
+   *  showing the actual current map. */
+  private _lastMapSelectValue = '';
   private soundboardEngine!: SoundboardEngine;
   private soundboardPanel!:  SoundboardPanel;
 
@@ -95,6 +112,9 @@ export class GMApp {
   // DOM references (assigned in init)
   private mapSelect!:               HTMLSelectElement;
   private mapNameInput!:            HTMLInputElement;
+  private packNameInput!:           HTMLInputElement;
+  /** Debounce timer for the in-panel pack-name input. */
+  private _packNameSaveTimer: number | null = null;
   private transitionSelect!:        HTMLSelectElement;
   private transitionParamsContainer!: HTMLElement;
   private filterSelect!:            HTMLSelectElement;
@@ -125,6 +145,13 @@ export class GMApp {
   /** Per-transition saved params — persisted in-memory for the session */
   private allTransitionParams: Record<string, Record<string, number | string>> = {};
   private playerOrigin   = location.origin; // replaced with LAN IP when on localhost
+  private hamburger!: HamburgerMenu;
+  /** Pack name suggested by `seedDefaultMaps()` on first run. Consumed by
+   *  `onHostReady` once the session record actually exists. */
+  private _seededPackName: string | null = null;
+  /** True iff `seedDefaultMaps` actually imported anything on this run.
+   *  Triggers the post-host-ready About auto-open (first-time intro). */
+  private _didSeedDefault = false;
 
   constructor() {
     this.host = new Host({
@@ -147,6 +174,7 @@ export class GMApp {
     this.bindUIControls();
     this.bindMarkerEditor();
     this.bindSoundboardPanel();
+    this.bindHamburgerMenu();
 
     // Resume positional audio context on first user gesture (autoplay policy)
     const resumePA = () => this.audio.tryResume();
@@ -213,9 +241,28 @@ export class GMApp {
 
     await seedAudioAssets();
     await migrateLegacyMaps();
-    await seedDefaultMaps();
+    // Check for ?bundle=<URL> startup load. If the user came in via a
+    // shared link, we load that pack instead of seeding the default.
+    const handledByUrl = await this._maybeLoadBundleFromUrl();
+
+    if (handledByUrl) {
+      // URL-load already populated IDB and applied theme; skip default seed.
+      this._seededPackName = null;
+    } else if (localStorage.getItem(SUPPRESS_DEFAULT_SEED_KEY) === '1') {
+      // One-shot "skip default seed" flag from Settings → Delete DB.
+      localStorage.removeItem(SUPPRESS_DEFAULT_SEED_KEY);
+      this._seededPackName = null;
+    } else {
+      this._seededPackName = await seedDefaultMaps();
+    }
+    this._didSeedDefault = this._seededPackName !== null;
     await this.populateMapList();
     await this.startHost();
+
+    // Apply any persisted theme so the GM lands on the customised look from
+    // the moment the UI is interactive.
+    const initialSession = await loadSession();
+    applyTheme(initialSession?.theme);
 
     this.renderer.start();
     this.setStatus('Ready', 'ok');
@@ -242,6 +289,7 @@ export class GMApp {
     }
 
     const playerUrl = `${this.playerOrigin}/player#${roomCode}`;
+    this.qrContainer.title = `Click to copy player URL — Room code: ${roomCode}`;
     try {
       await QRCode.toCanvas(
         this.qrContainer.querySelector('canvas') as HTMLCanvasElement,
@@ -251,19 +299,42 @@ export class GMApp {
     } catch { /* QR non-critical */ }
 
     const existing = await loadSession();
-    await saveSession({ key: 'current', peerId: roomCode, lastMapId: existing?.lastMapId ?? null });
+    // Pack name precedence: existing session > bundle-seeded default > none.
+    const packName = existing?.packName ?? this._seededPackName ?? '';
+    this._seededPackName = null; // consume
+    await saveSession({
+      key:       'current',
+      peerId:    roomCode,
+      lastMapId: existing?.lastMapId ?? null,
+      ...(packName ? { packName } : {}),
+    });
+    void this._refreshPackNameInput();
+
+    // First-run intro: if the default bundle was just seeded, pop the About
+    // dialog so a new user sees what they've landed on.
+    if (this._didSeedDefault) {
+      this._didSeedDefault = false;
+      void this.openAboutDialog({});
+    }
   }
 
   private onPeerConnected(id: string): void {
-    this.playerCountEl.textContent = String(this.host.connectedCount);
+    this._updatePlayerCount();
     this.setStatus(`Player connected (${id.slice(0, 8)}…)`, 'ok');
     // Host.handleConnection already sends full_state directly to the new peer.
     // No broadcast here — that would redundantly re-send to all existing players.
   }
 
   private onPeerDisconnected(id: string): void {
-    this.playerCountEl.textContent = String(this.host.connectedCount);
+    this._updatePlayerCount();
     this.setStatus(`Player disconnected (${id.slice(0, 8)}…)`, 'warn');
+  }
+
+  private _updatePlayerCount(): void {
+    const n = this.host.connectedCount;
+    this.playerCountEl.textContent = String(n);
+    const plural = document.querySelector('#player-count-plural');
+    if (plural) plural.textContent = n === 1 ? '' : 's';
   }
 
   // ─── State change → propagate to renderer + P2P ───────────────────────────
@@ -539,10 +610,18 @@ export class GMApp {
       opt.textContent = m.name;
       this.mapSelect.appendChild(opt);
     }
+
+    // Trailing "+ Add New Map" sentinel — picking it opens the add-map modal
+    // (handled in the change listener).
+    appendAddOption(this.mapSelect, '+ Add New Map…');
+
     if (maps.length > 0) {
       const last = session?.lastMapId ? (maps.find((m) => m.id === session.lastMapId) ?? maps[0]!) : maps[0]!;
       this.mapSelect.value = last.id;
+      this._lastMapSelectValue = last.id;
       await this.loadMap(last);
+    } else {
+      this._lastMapSelectValue = '';
     }
   }
 
@@ -660,6 +739,7 @@ export class GMApp {
 
     this.mapSelect                  = q<HTMLSelectElement>('#map-select');
     this.mapNameInput               = q<HTMLInputElement>('#map-name-input');
+    this.packNameInput              = q<HTMLInputElement>('#pack-name-input');
     this.transitionSelect           = q<HTMLSelectElement>('#transition-select');
     this.transitionParamsContainer  = q('#transition-params');
     this.filterSelect               = q<HTMLSelectElement>('#filter-select');
@@ -831,7 +911,7 @@ export class GMApp {
   /**
    * Handle a change on the unified Projector dropdown:
    *   - 'off'     → close all connected projectors
-   *   - 'add'     → open calibration modal in GM, refresh list after
+   *   - SELECT_ADD_SENTINEL → open the calibrate window
    *   - <id>      → set active setup, open primary projector window
    */
   private _onProjectorSelectChange(sel: HTMLSelectElement): void {
@@ -847,7 +927,7 @@ export class GMApp {
       this._refreshProjectionPanelMode();
       return;
     }
-    if (v === 'add') {
+    if (v === SELECT_ADD_SENTINEL) {
       // Calibration needs to physically run on the projector display — the
       // user drags the window there and full-sizes it before rulering the
       // live grid. Open as its own popup; the storage listener picks up
@@ -867,6 +947,7 @@ export class GMApp {
    * Populate the unified Projector dropdown from localStorage:
    *     No Projection
    *     <each saved setup>
+   *     ──────────
    *     + Calibrate New Projector…
    * Selection reflects the current connection — if a primary is live, its
    * setup is shown selected; otherwise "off". Read fresh so a calibration
@@ -894,10 +975,7 @@ export class GMApp {
       sel.appendChild(opt);
     }
 
-    const add = document.createElement('option');
-    add.value = 'add';
-    add.textContent = '+ Calibrate New Projector…';
-    sel.appendChild(add);
+    appendAddOption(sel, '+ Calibrate New Projector…');
 
     // Selected option reflects the LIVE state only — when nothing's running,
     // default to "No Projection" so picking the previously-active setup
@@ -1257,13 +1335,26 @@ export class GMApp {
   private bindUIControls(): void {
     this.mapAssetModal = new MapAssetModal(this.maps, () => { /* assigned in handler below */ });
 
-    // Map selection
+    // Map selection — also handles the "+ Add New Map" sentinel that lives
+    // at the bottom of the dropdown.
     this.mapSelect.addEventListener('change', async () => {
       const id = this.mapSelect.value;
+
+      if (id === SELECT_ADD_SENTINEL) {
+        // Revert visually before opening the modal so the dropdown doesn't
+        // sit on the action item if the user cancels out.
+        this.mapSelect.value = this._lastMapSelectValue;
+        this.openAddMapDialog();
+        return;
+      }
+
       if (!id) return;
       const all = await this.maps.getAll();
       const map = all.find((m) => m.id === id);
-      if (map) await this.loadMap(map);
+      if (map) {
+        this._lastMapSelectValue = id;
+        await this.loadMap(map);
+      }
     });
 
     // Map delete
@@ -1323,6 +1414,16 @@ export class GMApp {
       }
     });
 
+    // Pack rename — live-edit the workspace pack name. Debounced so we
+    // don't hammer IDB on every keystroke; the value is the single source of
+    // truth used by Save Map Pack, the splash/About fallback title, etc.
+    this.packNameInput.addEventListener('input', () => {
+      this._schedulePackNameSave(this.packNameInput.value);
+    });
+    this.packNameInput.addEventListener('blur', () => {
+      this._schedulePackNameSave(this.packNameInput.value, /* immediate */ true);
+    });
+
     // Map rename — live-edit the active map's display name
     this.mapNameInput.addEventListener('input', async () => {
       const id = this.mapSelect.value;
@@ -1334,55 +1435,15 @@ export class GMApp {
       if (opt) opt.textContent = name || '(unnamed)';
     });
 
-    // Add Map dialog — Library / Web Links / Upload
-    document.querySelector('#add-map-btn')?.addEventListener('click', () => {
-      this.mapAssetModal.open((map) => {
-        const opt = document.createElement('option');
-        opt.value = map.id;
-        opt.textContent = map.name;
-        this.mapSelect.appendChild(opt);
-        this.mapSelect.value = map.id;
-        void this.loadMap(map);
-      });
-    });
 
-    // Export all maps + configs
-    document.querySelector('#export-btn')?.addEventListener('click', async () => {
-      try {
-        this.setStatus('Exporting…', 'ok');
-        await this.state.flushSave(); // write in-memory state before reading IDB
-        await exportBundle();
-        this.setStatus('Maps exported', 'ok');
-      } catch (err) {
-        this.setStatus(`Export failed: ${(err as Error).message}`, 'error');
-      }
-    });
-
-    // Load maps file — replaces all current maps after confirmation
+    // Bundle import — file picker change handler. Picker is triggered from the
+    // hamburger ("Load Mappadux Pack") which calls `.click()` on the input.
     document.querySelector<HTMLInputElement>('#bundle-import')?.addEventListener('change', async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
+      const input = e.target as HTMLInputElement;
+      const file = input.files?.[0];
+      input.value = ''; // reset so the same file can be re-selected
       if (!file) return;
-      (e.target as HTMLInputElement).value = ''; // reset early so same file can be re-selected
-      const ok = confirm(
-        'Load Maps File\n\nThis will delete ALL current maps, sounds, and custom icons, and replace them with the contents of the selected file.\n\nMake sure you have saved a backup first.\n\nContinue?'
-      );
-      if (!ok) return;
-      try {
-        this.setStatus('Replacing maps…', 'ok');
-        // Flush any unsaved state, then wipe the entire workspace before importing
-        await this.state.flushSave();
-        const existing = await getAllMaps();
-        for (const m of existing) await deleteMap(m.id);
-        await clearAssetLibraries(); // wipe audio + icon libraries
-        const { added } = await importBundle(file);
-        await seedAudioAssets(); // re-seed built-in tracker pings (CC0)
-        this.state.resetForImport();
-        await this.iconPicker.reload();
-        await this.populateMapList();
-        this.setStatus(`Loaded — ${added} map${added !== 1 ? 's' : ''} imported`, 'ok');
-      } catch (err) {
-        this.setStatus(`Load failed: ${(err as Error).message}`, 'error');
-      }
+      await this.loadBundleFromFile(file);
     });
 
     // Background colour (still a direct colour picker — not part of viewport editor)
@@ -1405,11 +1466,24 @@ export class GMApp {
       );
     });
 
-    // Copy player URL
-    document.querySelector('#copy-url-btn')?.addEventListener('click', () => {
+    // Copy player URL — both the icon button (top-left of QR) and clicking
+    // the QR itself trigger the copy.
+    const copyPlayerUrl = () => {
       const code = this.roomCodeEl.textContent?.trim() ?? '';
+      if (!code) return;
       void navigator.clipboard.writeText(`${this.playerOrigin}/player#${code}`);
       this.setStatus('Player URL copied!', 'ok');
+    };
+    document.querySelector('#copy-url-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation(); // prevent the QR container click from also firing
+      copyPlayerUrl();
+    });
+    this.qrContainer.addEventListener('click', copyPlayerUrl);
+    this.qrContainer.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        copyPlayerUrl();
+      }
     });
 
     // Collapsible panel sections
@@ -1534,10 +1608,6 @@ export class GMApp {
 
     this.markerEditor.setFogSelectCallback((pos) => this.fogEditor.trySelectAt(pos));
 
-    document.querySelector('#add-marker-btn')?.addEventListener('click', () => {
-      this.markerEditor.addMarker(0.5, 0.5);
-    });
-
     document.querySelector('#ctx-add-marker')?.addEventListener('click', () => {
       const { x, y } = this.markerEditor.ctxPos;
       this.markerEditor.addMarker(x, y);
@@ -1573,7 +1643,15 @@ export class GMApp {
 
 
     this.markerSelect.addEventListener('change', () => {
-      const id = this.markerSelect.value || null;
+      const v = this.markerSelect.value;
+      if (v === SELECT_ADD_SENTINEL) {
+        // Revert visually; updateMarkerPanel rebuilds the dropdown after the
+        // new marker lands and selects it, so the sentinel never sticks.
+        this.markerSelect.value = this.selectedMarkerId ?? '';
+        this.markerEditor.addMarker(0.5, 0.5);
+        return;
+      }
+      const id = v || null;
       this.selectedMarkerId = id;
       this.markerEditor.selectById(id);
       this.updateMarkerPanel();
@@ -1858,6 +1936,396 @@ export class GMApp {
     }
   }
 
+  private bindHamburgerMenu(): void {
+    const btn  = document.querySelector<HTMLButtonElement>('#gm-menu-btn');
+    const menu = document.querySelector<HTMLElement>('#gm-menu');
+    if (!btn || !menu) return;
+
+    this.hamburger = new HamburgerMenu(btn, menu);
+
+    // Pack save / load — moved here from the Map panel.
+    this.hamburger.addItem({
+      label: 'Save Map Pack…',
+      onSelect: () => { void this.saveBundle(); },
+    });
+    this.hamburger.addItem({
+      label: 'Save Encrypted Pack…',
+      onSelect: () => { void this.saveBundleEncrypted(); },
+    });
+    this.hamburger.addItem({
+      label: 'Load Map Pack',
+      onSelect: () => {
+        const input = document.querySelector<HTMLInputElement>('#bundle-import');
+        input?.click();
+      },
+    });
+
+    // Customise pack… — opens the About dialog directly in edit mode so
+    // creators can immediately edit branding without first viewing the
+    // current About.
+    this.hamburger.addItem({
+      label: 'Customise pack…',
+      onSelect: () => { void this.openAboutDialog({ startInEdit: true }); },
+    });
+
+    // Destructive / system entries
+    this.hamburger.addItem({
+      label: 'New Map Pack…',
+      danger: true,
+      onSelect: () => { void this.newMapPack(); },
+    });
+    this.hamburger.addItem({
+      label: 'Settings…',
+      onSelect: () => { void this.openSettings(); },
+    });
+
+    // About sits at the bottom of the menu. Opens the customisable splash
+    // dialog in display mode; the always-on Mappadux footer (Discord, Ko-fi,
+    // GitHub, mappadux.com, licence) is rendered regardless of creator
+    // branding above.
+    this.hamburger.addItem({
+      label: 'About…',
+      footer: true,
+      onSelect: () => { void this.openAboutDialog({}); },
+    });
+  }
+
+  /** Open the Add Map dialog (Library / Web Links / Upload). On a successful
+   *  pick the new map is inserted into #map-select before the trailing
+   *  separator / "+ Add New Map" so the action stays at the bottom. */
+  private openAddMapDialog(): void {
+    this.mapAssetModal.open((map) => {
+      const opt = document.createElement('option');
+      opt.value = map.id;
+      opt.textContent = map.name;
+      const addSentinel = this.mapSelect.querySelector<HTMLOptionElement>(
+        `option[value="${SELECT_ADD_SENTINEL}"]`,
+      );
+      // The disabled separator sits immediately before the add sentinel — anchor
+      // the insert against the separator so the new option lands above both.
+      const insertBefore = addSentinel?.previousElementSibling ?? addSentinel ?? null;
+      this.mapSelect.insertBefore(opt, insertBefore);
+      this.mapSelect.value = map.id;
+      this._lastMapSelectValue = map.id;
+      void this.loadMap(map);
+    });
+  }
+
+  /** Persist the pack-name input value to session, debounced. Pass
+   *  `immediate=true` to bypass the debounce (e.g. on blur). */
+  private _schedulePackNameSave(value: string, immediate = false): void {
+    if (this._packNameSaveTimer !== null) {
+      clearTimeout(this._packNameSaveTimer);
+      this._packNameSaveTimer = null;
+    }
+    const flush = async () => {
+      this._packNameSaveTimer = null;
+      const session = await loadSession();
+      if (!session) return;
+      const trimmed = value.trim();
+      if ((session.packName ?? '') === trimmed) return;
+      if (trimmed) {
+        await saveSession({ ...session, packName: trimmed });
+      } else {
+        // Empty input → drop the field rather than persist an empty string.
+        const { packName: _drop, ...rest } = session;
+        void _drop;
+        await saveSession(rest);
+      }
+    };
+    if (immediate) void flush();
+    else this._packNameSaveTimer = window.setTimeout(() => { void flush(); }, 400);
+  }
+
+  /** Read packName from session and reflect into the panel input. Called
+   *  whenever an external flow may have changed it (host-ready first-run
+   *  seed, save dialog edits, bundle import). */
+  private async _refreshPackNameInput(): Promise<void> {
+    const session = await loadSession();
+    if (!this.packNameInput) return;
+    this.packNameInput.value = session?.packName ?? '';
+  }
+
+  /**
+   * Handle a `?bundle=<URL>` startup load. Returns true iff the URL was
+   * processed (either loaded successfully or the user cancelled the
+   * destructive prompt). Returns false when there's no `?bundle=` param
+   * at all, so the caller can fall through to default seeding.
+   *
+   * Flow:
+   *   • No `?bundle=` → return false.
+   *   • IDB empty → fetch + import directly.
+   *   • IDB has content → prompt: save first / discard / cancel.
+   *   • Strip the param from the URL after handling so a reload behaves
+   *     like a normal session start.
+   */
+  private async _maybeLoadBundleFromUrl(): Promise<boolean> {
+    const params    = new URLSearchParams(location.search);
+    const bundleUrl = params.get('bundle');
+    if (!bundleUrl) return false;
+
+    // Strip the param so reload / share-from-here doesn't keep re-loading.
+    params.delete('bundle');
+    const newSearch = params.toString();
+    const newUrl = location.pathname + (newSearch ? '?' + newSearch : '') + location.hash;
+    history.replaceState(null, '', newUrl);
+
+    // If the user already has content, ask before nuking it.
+    const existing = await getAllMaps();
+    if (existing.length > 0) {
+      const choice = await new BundleUrlPromptDialog().open(bundleUrl);
+      if (choice === 'cancel') return false; // fall back to normal init
+      if (choice === 'save-then-load') {
+        // Save current pack first, then proceed with URL load. If the save
+        // is cancelled the user is back in the dialog flow conceptually —
+        // we still proceed to load (they had their chance to back out).
+        await this.saveBundle();
+      }
+    }
+
+    try {
+      this.setStatus('Loading pack from URL…', 'ok');
+      const res = await fetch(bundleUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status} fetching pack`);
+      const blob = await res.blob();
+      const filenameGuess = bundleUrl.split(/[\\/?#]/).filter(Boolean).pop() ?? 'bundle.mappadux';
+      const file = new File([blob], filenameGuess, { type: blob.type });
+      // skipConfirm because the URL-load prompt already gathered consent.
+      // For a fresh-IDB user no prompt was shown, but they did open a URL
+      // with the bundle param themselves, which is itself the consent.
+      await this.loadBundleFromFile(file, { skipConfirm: true });
+      return true;
+    } catch (err) {
+      this.setStatus(`URL load failed: ${(err as Error).message}`, 'error');
+      return true; // we DID handle the URL — don't fall through to seeding
+    }
+  }
+
+  /** Wipe the current workspace and start a fresh, empty pack with the
+   *  user-supplied name. Default-bundle re-seed is NOT triggered — pack
+   *  starts truly empty. */
+  private async newMapPack(): Promise<void> {
+    const choice = await new NewPackDialog().open();
+    if (!choice) return;
+    try {
+      this.setStatus('Starting new pack…', 'warn');
+      // Tear down any live projector connections so they don't keep
+      // referring to maps that are about to vanish.
+      for (const conn of this.projectorConnections.values()) {
+        this.host.broadcast({ type: 'projector_shutdown', targetId: conn.clientId });
+      }
+      this.projectorConnections.clear();
+      this.projectorEditor?.setConnection(null);
+
+      const existing = await loadSession();
+      await this.state.flushSave();
+      const allMaps = await getAllMaps();
+      for (const m of allMaps) await deleteMap(m.id);
+      await clearAssetLibraries();
+      // Preserve peerId (and lastMapId=null) but drop packName/splash/theme
+      // unless the user typed a new pack name.
+      const peerId    = existing?.peerId ?? '';
+      const packName  = choice.packName.trim();
+      await saveSession({
+        key:       'current',
+        peerId,
+        lastMapId: null,
+        ...(packName ? { packName } : {}),
+      });
+      await seedAudioAssets(); // re-seed built-in tracker pings (CC0)
+      this.state.resetForImport();
+      await this.iconPicker.reload();
+      await this.populateMapList();
+      void this._refreshPackNameInput();
+      applyTheme(undefined); // back to default theme
+      this.setStatus('New pack ready — empty workspace', 'ok');
+    } catch (err) {
+      this.setStatus(`New pack failed: ${(err as Error).message}`, 'error');
+    }
+  }
+
+  /** Open the Settings dialog. Handles the Delete DB / Delete All Data
+   *  destructive actions itself (full page reload afterwards). */
+  private async openSettings(): Promise<void> {
+    await new SettingsDialog().open({
+      onDeleteDb: async () => {
+        // Wipe IDB but keep API keys + projector calibration. Set a flag
+        // so the upcoming reload doesn't re-seed Getting Started over the
+        // empty workspace.
+        localStorage.setItem(SUPPRESS_DEFAULT_SEED_KEY, '1');
+        await clearEverything();
+        location.reload();
+      },
+      onDeleteAllData: async () => {
+        // Nuke everything: IDB + ALL local settings (including API keys,
+        // projector setups, and the suppress-seed flag). On reload init
+        // runs as if fresh-installed, so Getting Started re-seeds.
+        await clearEverything();
+        clearAllLocalSettings();
+        location.reload();
+      },
+    });
+  }
+
+  /** Open the About / splash dialog. Reads pack name + splash + theme from
+   *  session, renders, and on Save persists the edited splash and theme
+   *  back. Theme is also live-applied during edit so the user previews. */
+  private async openAboutDialog(opts: { startInEdit?: boolean }): Promise<void> {
+    const session = await loadSession();
+    const result = await new AboutDialog().open({
+      packName:    session?.packName ?? '',
+      splash:      session?.splash,
+      theme:       session?.theme,
+      ...(opts.startInEdit ? { startInEdit: true } : {}),
+    });
+    if (!result || !session) return;
+    const hasTheme = !!result.theme.mode || !!result.theme.accent;
+    const next = { ...session, splash: result.splash };
+    if (hasTheme) next.theme = result.theme;
+    else delete next.theme;
+    await saveSession(next);
+    applyTheme(hasTheme ? result.theme : undefined);
+  }
+
+  /** Save the current workspace as a plain (unencrypted) `.mappadux` pack.
+   *  Skips any internal dialog and goes straight to the OS save picker —
+   *  the user can hand-edit the filename there. The default filename
+   *  derives from the current pack name. */
+  private async saveBundle(): Promise<void> {
+    await this._saveBundleAndPrompt({ encrypt: false });
+  }
+
+  /** Save the current workspace as an AES-GCM-encrypted `.mappadux` pack.
+   *  Opens a small password dialog first; on confirm, builds the encrypted
+   *  bundle and hands off to the OS save picker. */
+  private async saveBundleEncrypted(): Promise<void> {
+    const choice = await new EncryptSaveDialog().open();
+    if (!choice) return;
+    await this._saveBundleAndPrompt({ encrypt: true, password: choice.password });
+  }
+
+  private async _saveBundleAndPrompt(opts:
+    | { encrypt: false }
+    | { encrypt: true; password: string },
+  ): Promise<void> {
+    try {
+      this.setStatus(opts.encrypt ? 'Encrypting pack…' : 'Building pack…', 'ok');
+      await this.state.flushSave(); // write in-memory state before reading IDB
+      const { blob } = await exportBundle(
+        opts.encrypt ? { password: opts.password } : undefined,
+      );
+      const suggestedName = await this._suggestedSaveFilename(opts.encrypt);
+      const result = await saveBlob({
+        blob,
+        suggestedName,
+        description: 'Mappadux Map Pack',
+        // Custom MIME so Chrome's save picker doesn't expand the filter to
+        // generic binary extensions (.exe/.com/.bin) — those leak in when
+        // you use application/octet-stream.
+        accept: { 'application/x-mappadux-pack': ['.mappadux'] },
+      });
+      this.setStatus(
+        result === 'cancelled' ? 'Save cancelled' : 'Pack saved',
+        result === 'cancelled' ? 'warn' : 'ok',
+      );
+    } catch (err) {
+      this.setStatus(`Save failed: ${(err as Error).message}`, 'error');
+    }
+  }
+
+  /** Build a default save filename from the current pack name + today's
+   *  date stamp. Slugs the pack name down to a filesystem-safe segment. */
+  private async _suggestedSaveFilename(encrypted: boolean): Promise<string> {
+    const datestamp = new Date().toISOString().slice(0, 10);
+    const session   = await loadSession();
+    const packName  = session?.packName?.trim() ?? '';
+    const slug = packName
+      .toLowerCase()
+      .replace(/['"]+/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+    const base = slug.length > 0 ? slug : 'mappadux-pack';
+    return encrypted
+      ? `${base}-encrypted-${datestamp}.mappadux`
+      : `${base}-${datestamp}.mappadux`;
+  }
+
+  /** Replace all current maps/sounds/icons with the contents of `file`. If
+   *  the file is an encrypted bundle, prompt for a password and decrypt
+   *  BEFORE wiping the workspace, so a wrong-password cancel leaves the
+   *  current pack intact.
+   *
+   *  Pass `opts.skipConfirm` when the caller has already gotten user
+   *  consent (e.g. the URL-load prompt). */
+  private async loadBundleFromFile(file: File, opts?: { skipConfirm?: boolean }): Promise<void> {
+    if (!opts?.skipConfirm) {
+      const ok = confirm(
+        'Load Map Pack\n\nThis will delete ALL current maps, sounds, and custom icons, and replace them with the contents of the selected file.\n\nMake sure you have saved a backup first.\n\nContinue?',
+      );
+      if (!ok) return;
+    }
+
+    // Pre-flight: read the file and (if encrypted) decrypt before any
+    // destruction. Handles three formats: gzipped JSON (current plain saves),
+    // raw JSON envelope (encrypted), and legacy raw JSON. A bad password /
+    // cancel here aborts cleanly without touching the workspace.
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let plainJson: string;
+    try {
+      if (startsWithGzipMagic(bytes)) {
+        // Gzipped plain bundle — decompress and we're done.
+        plainJson = await gunzipToString(bytes);
+      } else {
+        const text = new TextDecoder().decode(bytes);
+        const parsed: unknown = JSON.parse(text);
+        if (isEncryptedBundleEnvelope(parsed)) {
+          this.setStatus('Encrypted pack — password required', 'warn');
+          const decryptedBytes = await new PasswordPromptDialog().open(parsed);
+          if (decryptedBytes === null) {
+            this.setStatus('Load cancelled', 'warn');
+            return;
+          }
+          plainJson = parsed.compressed
+            ? await gunzipToString(decryptedBytes)
+            : new TextDecoder().decode(decryptedBytes);
+        } else {
+          // Legacy raw-JSON bundle (pre-compression / pre-rebrand).
+          plainJson = text;
+        }
+      }
+    } catch {
+      this.setStatus('Load failed: not a valid map pack file', 'error');
+      return;
+    }
+
+    // Decrypted (or plain) JSON in hand — now safe to wipe and import.
+    try {
+      this.setStatus('Loading pack…', 'ok');
+      await this.state.flushSave();
+      const existing = await getAllMaps();
+      for (const m of existing) await deleteMap(m.id);
+      await clearAssetLibraries();
+      const { added } = await importBundleText(plainJson);
+      await seedAudioAssets(); // re-seed built-in tracker pings (CC0)
+      this.state.resetForImport();
+      await this.iconPicker.reload();
+      await this.populateMapList();
+      void this._refreshPackNameInput();
+      // Re-apply theme so any creator-supplied look from the bundle takes effect.
+      const importedSession = await loadSession();
+      applyTheme(importedSession?.theme);
+      this.setStatus(`Loaded — ${added} map${added !== 1 ? 's' : ''} imported`, 'ok');
+
+      // Auto-open the About dialog so the user immediately sees the splash
+      // for the pack they just loaded — whether it's creator-branded or just
+      // the default content.
+      void this.openAboutDialog({});
+    } catch (err) {
+      this.setStatus(`Load failed: ${(err as Error).message}`, 'error');
+    }
+  }
+
   private updateMarkerPanel(): void {
     const markers = this.state.getState().markers;
     const sel     = markers.find((m) => m.id === this.selectedMarkerId) ?? null;
@@ -1870,6 +2338,7 @@ export class GMApp {
       opt.textContent = m.label || '(unnamed)';
       this.markerSelect.appendChild(opt);
     }
+    appendAddOption(this.markerSelect, '+ Add Marker');
     if (sel) this.markerSelect.value = sel.id;
 
     const controlsEl = document.querySelector<HTMLElement>('#marker-controls');

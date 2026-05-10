@@ -235,14 +235,23 @@ export class Host {
     });
 
     conn.on('close', () => {
-      this.connections.delete(conn.peer);
-      this.events.onPeerDisconnected(conn.peer);
+      this.removeConnection(conn.peer);
     });
 
     conn.on('error', (err) => {
       this.events.onError(err as Error);
-      this.connections.delete(conn.peer);
+      // Some browsers fire 'error' but not 'close' when the player tab is
+      // closed mid-session — treat this as a disconnect so the count drops.
+      this.removeConnection(conn.peer);
     });
+  }
+
+  /** Idempotent connection teardown: drop from the map and notify exactly once
+   *  even if both 'close' and 'error' fire for the same DataConnection. */
+  private removeConnection(peerId: string): void {
+    if (!this.connections.has(peerId)) return;
+    this.connections.delete(peerId);
+    this.events.onPeerDisconnected(peerId);
   }
 
   private sendTo(conn: DataConnection, msg: GMMessage): void {

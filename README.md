@@ -1,20 +1,33 @@
-# Mappadux — VTT@Home
+<h1 align="center">
+  <img src="src/assets/Mappadux-Icon.png" alt="" height="48" align="middle" />
+  &nbsp;Mappadux — VTT@Home
+</h1>
 
 > Latin _mappa_ (cloth / signal banner / map) + _dux_ (leader / guide). Map guide. Also a duck on a map.
 
 ## Try It Now
 
-**[https://dynamic-map-renderer-v2.vercel.app/](https://dynamic-map-renderer-v2.vercel.app/)** &nbsp;(custom domain `mappadux.com` coming online soon)
+**[https://www.mappadux.com/](https://www.mappadux.com/)**
 
 No account needed. No server. Everything stays on your device — maps you upload are stored in your browser's local storage and never sent anywhere. Just open the link and go.
 
-## Description
+## Why Mappadux
 
-Mappadux is a free, browser-based tool that brings the tools people love about online VTTs into in-person tabletop play. **VTT@Home** in spirit: all the dynamic map, fog, lighting, marker, audio, and projection capabilities you'd use in Roll20 or Foundry, but designed to sit beside the table — on a laptop, second screen, or projected onto the gaming surface as a true 1″ / 25 mm battlemap — without dragging the GM out of the moment.
+**Hi, I'm Alex.** I wanted VTT features for the table I actually game at — players around real wood, a screen showing the map. I kept cobbling together half a dozen tools, and prep was eating most of my evening before anyone arrived. I wanted *one* thing: fast to set up, easy to use without breaking the flow of play. That's Mappadux.
 
-The design principles are **immersive, lightweight, and simple**. Setup takes minutes. Using it during a session is non-invasive: you're not navigating menus while your players wait, you're flicking a switch and turning back to the table. It is also designed as a **free community distribution platform** — map creators can package an entire session (maps, fog, markers, audio, transitions) into a single bundle file and share it with their group, their Patreon backers, or the wider community.
+What it does:
 
-Players connect via a peer-to-peer link; no server infrastructure is required beyond static file hosting. Everything stays on your device — maps you upload are stored in your browser's local storage and never sent anywhere.
+- **Sets up in minutes, not hours.** Add a map, set a scale, drop a few markers — you're ready.
+- **Shows maps on a second screen** for players, or **projects at true 1″ / 25 mm scale** onto an under-table screen for in-person play.
+- **Fog of war, markers, motion trackers, atmospheric audio, and visual filters** — without hunting through menus mid-scene.
+
+It tries to feel **immersive** too: parchment / hand-drawn / CRT-phosphor filters, smooth map transitions, positional and motion-tracker audio.
+
+And it's built to **share**. Whole packs — maps, audio, splash, theme — travel in a single `.mappadux` file (optionally encrypted), so a session you built can reach your players, your Patreon, or the wider community as easily as forwarding an email.
+
+**Credit the creators.** Every map and sound in Mappadux carries its licence, source, and creator. The asset library has a *Copy attributions* action that produces a ready-to-paste credits block — please use it. The community that supplies free, high-quality assets only keeps going if we keep crediting it.
+
+Players connect over peer-to-peer (PeerJS); no server infrastructure beyond static file hosting. Everything stays on your device.
 
 ![Mappadux — GM interface showing filter panel](./screenshot.png)
 

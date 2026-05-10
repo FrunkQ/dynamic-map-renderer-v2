@@ -704,4 +704,55 @@ export interface StoredSession {
   peerId: string;
   /** ID of the last active map */
   lastMapId: string | null;
+  /** Optional human-friendly pack name (set in the customisation area).
+   *  Used as the default save filename and travels with the bundle. */
+  packName?: string;
+  /** Optional creator-customisable splash / About content for this pack.
+   *  Travels with the bundle so packs can be branded. The Mappadux footer
+   *  (Discord / Ko-fi / licence / repo) is appended at render time and
+   *  cannot be customised. */
+  splash?: SplashConfig;
+  /** Optional UI theme for this pack — light/dark + custom accent colour.
+   *  Applies to chrome only (sidebar, panels, modals, controls); the map
+   *  render area is unaffected. Travels with the bundle so creators can
+   *  ship a branded look. */
+  theme?: ThemeConfig;
+}
+
+/** Per-pack UI theme. Both fields optional — unset = Mappadux defaults
+ *  (dark mode, cyan accent). */
+export interface ThemeConfig {
+  mode?:   'dark' | 'light';
+  /** CSS color string (`#rrggbb` or named). Used as `--accent`. */
+  accent?: string;
+}
+
+/** A single labelled link shown in the splash/About dialog (Patreon,
+ *  creator social, Kickstarter, etc.). */
+export interface SplashLink {
+  label: string;
+  url:   string;
+}
+
+/** Per-pack splash/About content. All fields optional — when none are set,
+ *  the About dialog falls back to a generic "what is Mappadux" view. */
+export interface SplashConfig {
+  /** Creator's title for the pack. Defaults to the pack name. */
+  title?:        string;
+  /** Legacy plain-text description, line breaks preserved. Older bundles
+   *  use this; newer ones write `bodyHtml` from the rich editor. Display
+   *  prefers `bodyHtml` when both are present. */
+  body?:         string;
+  /** Rich-text description (a sanitised subset of HTML — bold, italic,
+   *  underline, alignment, bullets, colour, a small font allow-list). */
+  bodyHtml?:     string;
+  /** Optional banner image as a data URL (base64-encoded). Kept inline so
+   *  the splash is fully self-contained inside the bundle. */
+  imageDataUrl?: string;
+  /** CSS `object-position` value for the banner image (e.g. "50% 30%").
+   *  Lets the creator pick which slice of an off-aspect image is visible
+   *  in the banner crop. Defaults to "50% 50%" (centre) when unset. */
+  imagePosition?: string;
+  /** Creator-supplied links shown above the always-on Mappadux footer. */
+  links?:        SplashLink[];
 }

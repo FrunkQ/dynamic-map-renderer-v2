@@ -236,3 +236,18 @@ export async function clearAssetLibraries(): Promise<void> {
     db.clear('mapAssets'),
   ]);
 }
+
+/** Wipe every single store — maps, configs, assets, audio metadata, map
+ *  assets, session record. Used by Settings → Delete DB and the New Map
+ *  Pack flow. Returns once all stores are empty. */
+export async function clearEverything(): Promise<void> {
+  const db = await getDB();
+  await Promise.all([
+    db.clear('audioAssets'),
+    db.clear('assets'),
+    db.clear('mapAssets'),
+    db.clear('maps'),
+    db.clear('configs'),
+    db.clear('session'),
+  ]);
+}

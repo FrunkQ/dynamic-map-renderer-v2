@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "dynamic-map-renderer-v2.vercel.app" }],
+      "destination": "https://www.mappadux.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/player", "destination": "/player.html" }
   ],

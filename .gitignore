@@ -15,6 +15,11 @@ dist-ssr
 # Local shader development scratch folder
 _shadertoy_dump
 
+# Working roadmap — personal scratch, kept out of GitHub. Untrack with
+#   git rm --cached DMR-2-Roadmap.txt
+# if it's still in the index from before this rule.
+DMR-2-Roadmap.txt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
