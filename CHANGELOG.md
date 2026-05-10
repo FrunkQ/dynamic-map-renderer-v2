@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.10.2 — 2026-05-10
+
+Docs:
+- **ACKNOWLEDGEMENTS.md** rewritten as the Mappadux attribution system's
+  own output for the default *Getting Started* pack — 15 audio sources
+  (Freesound, mix of CC0 / CC-BY / CC-BY-NC) and 3 map sources, all
+  with creator / licence / source-URL. Practising what we preach.
+- **README.md** — removed the stale "Future Plans" section (the lone
+  Lighting bullet); release history reference kept.
+
 ## v2.10.1 — 2026-05-10
 
 Hotfix on the v2.10.0 rollout:

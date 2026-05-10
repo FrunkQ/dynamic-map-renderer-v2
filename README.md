@@ -218,10 +218,6 @@ calibrate.html  Standalone projector-calibration window
 - **PeerJS relay** — connections go through the public PeerJS broker by default. On restricted networks a self-hosted PeerJS server may be needed.
 - **Single GM** — the session model assumes one GM and any number of read-only players.
 
-## Future Plans
-
-1. **Lighting** — dynamic light radius effects around tokens.
-
 See [CHANGELOG.md](./CHANGELOG.md) for release history.
 
 ---
