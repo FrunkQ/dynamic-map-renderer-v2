@@ -1526,6 +1526,13 @@ body.player-view #renderer-canvas {
 .projector-view { background: #000; color: var(--text); margin: 0; overflow: hidden; }
 .projector-view #renderer-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
 
+/* 1" grid overlay — sits above the WebGL canvas but below the black-out. */
+.projector-grid {
+  position: fixed; inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
 /* Black-out overlay — covers everything when state.projectorViewport.mode === 'black'. */
 .projector-blackout {
   position: fixed; inset: 0;

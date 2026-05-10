@@ -274,10 +274,18 @@ export interface ProjectorViewport {
   rotation: 0 | 90 | 180 | 270;
   /** Render mode — see ProjectorMode docs. */
   mode: ProjectorMode;
+  /** When true, the projector overlays a 1" grid (anchored to projector
+   *  calibration only — independent of map scale). */
+  gridEnabled: boolean;
+  /** CSS hex colour for the grid lines. */
+  gridColor: string;
 }
 
 export function defaultProjectorViewport(): ProjectorViewport {
-  return { centerX: 0.5, centerY: 0.5, rotation: 0, mode: 'scaled' };
+  return {
+    centerX: 0.5, centerY: 0.5, rotation: 0, mode: 'scaled',
+    gridEnabled: false, gridColor: '#ffffff',
+  };
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { ProjectorConnection, ProjectorViewport } from '../types.ts';
+import { defaultProjectorViewport } from '../types.ts';
 
 type ChangeCallback = (vp: ProjectorViewport) => void;
 
@@ -41,7 +42,7 @@ export class ProjectorViewportEditor {
   private mapPixelsPerSquare: number | null = null;
 
   private connection: ProjectorConnection | null = null;
-  private viewport:   ProjectorViewport = { centerX: 0.5, centerY: 0.5, rotation: 0, mode: 'scaled' };
+  private viewport:   ProjectorViewport = defaultProjectorViewport();
 
   private drawW = 1;
   private drawH = 1;

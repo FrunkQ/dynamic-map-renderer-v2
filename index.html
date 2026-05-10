@@ -333,7 +333,17 @@
           <button class="btn btn--ghost btn--sm" data-rotation="270">270&deg;</button>
         </div>
 
-        <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full">Recalibrate this Map…</button>
+        <p class="view-hint view-hint--gap">1&Prime; Grid Overlay</p>
+        <div class="param-row">
+          <label for="projection-grid-toggle">Show grid</label>
+          <input type="checkbox" id="projection-grid-toggle" />
+        </div>
+        <div class="param-row">
+          <label for="projection-grid-colour">Colour</label>
+          <input type="color" id="projection-grid-colour" value="#ffffff" title="Grid line colour" />
+        </div>
+
+        <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full">Recalibrate this Map&hellip;</button>
 
         <p id="projector-status" class="projector-status">No projector connected.</p>
       </div>

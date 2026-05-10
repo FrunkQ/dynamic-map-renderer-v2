@@ -40,6 +40,7 @@ export class ProjectorApp {
   private controlsEl!:      HTMLElement;
   private setupLabelEl!:    HTMLElement;
   private blackoutEl!:      HTMLElement;
+  private gridCanvas!:      HTMLCanvasElement;
   private rendererCanvas!:  HTMLCanvasElement;
 
   // Cached pieces of state needed to compute our viewport.
@@ -60,6 +61,11 @@ export class ProjectorApp {
     this.controlsEl      = document.getElementById('projector-controls')!;
     this.setupLabelEl    = this.controlsEl.querySelector<HTMLElement>('.projector-setup-label')!;
     this.rendererCanvas  = document.getElementById('renderer-canvas') as HTMLCanvasElement;
+
+    // 1" grid overlay — sits above the renderer, below the black-out.
+    this.gridCanvas = document.createElement('canvas');
+    this.gridCanvas.className = 'projector-grid';
+    document.body.appendChild(this.gridCanvas);
 
     // Black-out overlay — covers the full window when projectorViewport.mode === 'black'.
     this.blackoutEl = document.createElement('div');
@@ -282,6 +288,7 @@ export class ProjectorApp {
   private _applyView(): void {
     const mode = this.projectorViewport.mode;
     this.blackoutEl.hidden = mode !== 'black';
+    this._drawGrid();
     if (mode === 'black') return;
     const view = this._computeViewState();
     this.renderer.setView(view);
@@ -289,6 +296,62 @@ export class ProjectorApp {
     this.markerTexture.setViewHeight(1);
     this.markerTexture.render(this.currentMarkers, this.playerIconCache);
     this.renderer.markMarkersDirty();
+  }
+
+  /**
+   * Draw the 1" grid overlay. The grid is anchored to the projector's
+   * calibration only — it knows nothing about the map. Lines are spaced at
+   * setup.pixelsPerSquare CSS pixels, centred on the window so the middle
+   * of the projection always sits on a grid intersection.
+   * Hidden when grid is disabled, no calibration, or projector is blacked out.
+   */
+  private _drawGrid(): void {
+    const cv = this.gridCanvas;
+    const w  = window.innerWidth;
+    const h  = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width  = Math.round(w * dpr);
+    cv.height = Math.round(h * dpr);
+    cv.style.width  = `${w}px`;
+    cv.style.height = `${h}px`;
+
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    if (!this.projectorViewport.gridEnabled) return;
+    if (this.projectorViewport.mode === 'black') return;
+    if (!this.setup) return;
+
+    const spacing = this.setup.pixelsPerSquare;
+    if (spacing < 2) return; // sanity
+
+    ctx.strokeStyle = this.projectorViewport.gridColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+
+    const cx = w / 2;
+    const cy = h / 2;
+    // Vertical lines, walking out from the centre in both directions.
+    for (let x = cx; x <= w + spacing; x += spacing) {
+      ctx.moveTo(Math.round(x) + 0.5, 0);
+      ctx.lineTo(Math.round(x) + 0.5, h);
+    }
+    for (let x = cx - spacing; x >= -spacing; x -= spacing) {
+      ctx.moveTo(Math.round(x) + 0.5, 0);
+      ctx.lineTo(Math.round(x) + 0.5, h);
+    }
+    // Horizontal lines.
+    for (let y = cy; y <= h + spacing; y += spacing) {
+      ctx.moveTo(0, Math.round(y) + 0.5);
+      ctx.lineTo(w, Math.round(y) + 0.5);
+    }
+    for (let y = cy - spacing; y >= -spacing; y -= spacing) {
+      ctx.moveTo(0, Math.round(y) + 0.5);
+      ctx.lineTo(w, Math.round(y) + 0.5);
+    }
+    ctx.stroke();
   }
 
   private _showStatus(text: string, visible: boolean = true): void {
