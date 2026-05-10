@@ -3,7 +3,25 @@ To improve maintainability and simplify the code I propose you as we add new fea
 Here is a detailed design roadmap for the next drops:
 
 
-DMR v2.7 - Motion Tracker - Aliens and submarines!
+==============================================================================
+STATUS as of 2026-05-10:
+  v2.7 - Motion Tracker         — DONE (shipped)
+  v2.8 - Asset Management       — DONE (shipped)
+  v2.9 - Scaled Maps + Projector — DONE (released as Mappadux v2.9.0; not yet pushed)
+
+  v2.10 - Rebrand              — PARTIAL (rebranded to Mappadux during v2.9; hamburger
+                                  menu / splash / theming / ?bundle= URL still pending)
+  v2.11 onwards                — pending
+
+  Active backlog (slot into a future minor):
+   - .md / "text maps" as themed handouts (calligraphic parchment, line printer, green-screen terminal)
+   - Animated fog of war (drifting volumetric look; preserves polygon system)
+   - GM canvas zoom/pan + workspace overlay model (precursor to map mosaicing)
+   - Optional password encryption on saved bundle files (Web Crypto AES-GCM + PBKDF2)
+==============================================================================
+
+
+DMR v2.7 - Motion Tracker - Aliens and submarines!     [DONE]
 
 Under Marker we have a Marker Sounds option with 3 options None, Sound Source, Listener (These correspond to the top right icons on the marker)
 We want to duplicate this UI setup for motion:
@@ -25,7 +43,7 @@ When the tracker is enabled it plays the "outgoing ping" sound and a fuzzy/parti
 
 
 
-DMR v2.8 - Asset Management Refresh
+DMR v2.8 - Asset Management Refresh     [DONE]
 
 Okay I wanna switch things up a bit for saving, loading and storing assets to allow for easier offline play and onboarding.
 Being able to only use FreeSound with an API key makes things awkward. 
@@ -69,7 +87,12 @@ Any unknown attributions can be edited: a standard licence drop down box (2 bott
 At the bottom of teh attribution screen is a copyall button which copies all the acknowledgemenets into the clipboard fopr teh suer to paste into their dopcuemntation.. So it will have "Audio assets used in map pack:" and a "Map assets used in map pack:" 
 
 
-DMR 2.9 - Scaled Maps, Projector Scaling & Player Projection View
+DMR 2.9 - Scaled Maps, Projector Scaling & Player Projection View     [DONE — shipped as Mappadux v2.9.0]
+   Differs from below in flight: framed as "Projection View" (not "Player Projection View"),
+   driven from a single Projector dropdown rather than 4 separate buttons.
+   Multi-projector primary/monitor mode, 1" grid overlay, rotation, auto-fade chrome,
+   live recalibration sync, and the standalone /calibrate.html window were added beyond
+   the original spec. Original design preserved below for reference.
 New section called "Player Projection View" that looks and works like "Player View" it has a switch to "Enable Player View" at the top which turns on and off this capability entirely. 
 
 Then underneath it has 4 buttons and a switch:
@@ -87,8 +110,10 @@ Edit Player Projection View now works in exactly the same way as "Player View" e
 
 
 
-DMR 2.10 - Rebrand & Customisation
+DMR 2.10 - Rebrand & Customisation     [PARTIAL — rebrand done; rest pending]
 Rebrand - dynamic-map-renderer-v2 is a mouthful and not entirely right any more. Plan to rename it to something else. Open to suggestions!?!?
+   --- DONE: name is now Mappadux ("VTT@Home"), domain mappadux.com purchased.
+       Folder/repo/Vercel slug rename + about-screen branding still TODO. ---
 Introduce a hamburger menu on the GM screen for rarely accessed features & customisation options.
 One aim for this app is for map creators to distribute their maps using it. So it would be good if we introduced a splash screen on startup that can be customised. The default one will be about ME, have links to resources and describe what the program does and include an image (i.e. what I setup and save to default-bundle.json). We can have a way to someone. This is saved in a maps file and when loaded will open the splash screen. So map builders can link to their Patreon and brand it to them. (of course I will keep a line at the bottom with my copyright info and links to the app/Discord)
 It makes sense to be able to let the user select dark/light mode and have custom UI colours - the map side can stay "as-is but all the controls can have colour customisation that is saved in the map file too.
@@ -119,8 +144,35 @@ For Audio (Syrinscape)... maybe maps (work with map makers??)?
 
 
 
+==============================================================================
+Backlog (added during v2.9 development — slot into a future minor):
+
+  - .md / "text maps" as themed handouts
+    Alternate map type that's just markdown text rendered as a handout — same
+    asset slot as a bitmap map but with a non-bitmap render path. Three style
+    presets to start: calligraphic parchment, line-printer dot-matrix,
+    green-screen terminal. Useful for letters, signs, decrypted messages,
+    NPC notes, system readouts.
+
+  - Animated fog of war
+    Replace the flat alpha overlay with an actual drifting volumetric look
+    (probably a shader pass over the FogCompositor texture). Keep the
+    polygon system / reveal logic — purely visual change.
+
+  - GM canvas zoom/pan + workspace overlay model
+    Lets the GM zoom into part of a large map without affecting what players
+    see. Stepping stone to map mosaicing (multiple maps composed onto one
+    workspace).
+
+  - Optional password encryption on saved bundle files
+    Web Crypto AES-GCM with a PBKDF2-derived key. Bundle gains a flag +
+    cipher payload; loader prompts for the password. For premium packs and
+    work-in-progress content the user doesn't want shared raw.
+==============================================================================
+
+
 Other features suggested and could probably be rolled in to one of the above releases:
-Player View Export - Be able to .webm screen capture a player view in "full resolution" to use elsewhere. Possible now with simple screen capture (already done by the transition engine). But to get "full resolution" it would need to capture off a "virtual screen" of the desired capture resolution. 
+Player View Export - Be able to .webm screen capture a player view in "full resolution" to use elsewhere. Possible now with simple screen capture (already done by the transition engine). But to get "full resolution" it would need to capture off a "virtual screen" of the desired capture resolution.
 
 Do some docuemnt updates and recommendations on how to use in various environments. eg: mobile devices better as player views rather than GM views. Using across the internet (probably better using a proper VTT). This is more designed for local network type stuff.
 
