@@ -516,13 +516,50 @@ export interface MsgTrackerBlob {
  * Projector → GM identification message. Sent by the projector window on
  * connect (and on its own resize) so the GM knows the projector is live and
  * can size the projector viewport rectangle correctly on its canvas.
+ *
+ * `clientId` is a per-window uuid generated on load — the GM uses it to
+ * decide which projector is the primary (first to connect) and which are
+ * monitors (everyone after), and to address per-projector role messages
+ * back via broadcast (see MsgProjectorRole).
  */
 export interface MsgProjectorHello {
   type: 'projector_hello';
+  clientId:        string;
   setupName:       string;
   pixelsPerSquare: number;
   canvasWidth:     number;
   canvasHeight:    number;
+}
+
+/**
+ * Projector → GM clean disconnect notification. Sent on window unload so the
+ * GM can drop the entry from its connection map and re-shuffle monitor roles
+ * without waiting for transport-level disconnect (BroadcastChannel never
+ * signals close on its own).
+ */
+export interface MsgProjectorBye {
+  type: 'projector_bye';
+  clientId: string;
+}
+
+/**
+ * GM → Projector role assignment. Broadcast — projectors ignore unless
+ * `targetId` matches their own clientId. Sent on every projector_hello and
+ * re-sent to monitors when their primary's view fraction changes (primary
+ * resize, map calibration change, primary swap).
+ *
+ * Monitors render the primary's crop fit-to-window with a bezel frame —
+ * they do not use their own projector calibration. `primaryViewNW/NH` is
+ * the fraction of the map shown by the primary; monitors combine that with
+ * `projectorViewport.centerX/Y` to render the same crop.
+ */
+export interface MsgProjectorRole {
+  type: 'projector_role';
+  targetId: string;
+  role: 'primary' | 'monitor';
+  monitorIndex?: number;
+  primaryViewNW?: number;
+  primaryViewNH?: number;
 }
 
 /**
@@ -553,6 +590,8 @@ export type GMMessage =
   | MsgTrackerScan
   | MsgTrackerBlob
   | MsgProjectorHello
+  | MsgProjectorBye
+  | MsgProjectorRole
   | MsgProjectorViewportUpdate;
 
 // ─── Storage types ───────────────────────────────────────────────────────────

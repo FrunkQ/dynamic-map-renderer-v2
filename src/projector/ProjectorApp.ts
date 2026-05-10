@@ -7,11 +7,14 @@ import {
 } from './calibrationStorage.ts';
 import { ProjectorCalibrationModal } from '../gm/ProjectorCalibrationModal.ts';
 import { bindFullscreenButton } from '../utils/fullscreen.ts';
+import { generateId } from '../utils/id.ts';
 import {
   type GMMessage, type ViewState, type FogState, type Marker, type MarkerIconData,
   type ProjectorViewport,
   defaultProjectorViewport,
 } from '../types.ts';
+
+type ProjectorRole = 'primary' | 'monitor';
 
 /**
  * ProjectorApp — top-level orchestrator for the projector view.
@@ -28,6 +31,14 @@ import {
  * GM device handle audio output.
  */
 export class ProjectorApp {
+  private clientId = generateId();
+  private role: ProjectorRole | null = null;     // null = role not yet assigned by GM
+  private monitorIndex: number | null = null;
+  /** Fraction of the map width/height the primary projector currently shows.
+   *  Only meaningful when role === 'monitor' — drives the monitor's crop. */
+  private primaryViewNW: number = 1;
+  private primaryViewNH: number = 1;
+
   private guest: Guest | null = null;
   private setup: ProjectorSetup | null = null;
   private renderer!: Renderer;
@@ -100,6 +111,13 @@ export class ProjectorApp {
       this._applyView();
     });
 
+    // Notify the GM on window close so it can drop our slot from its
+    // connection map and re-shuffle monitor roles cleanly (BroadcastChannel
+    // never signals its own close).
+    window.addEventListener('beforeunload', () => {
+      this.guest?.send({ type: 'projector_bye', clientId: this.clientId });
+    });
+
     // Read room code from fragment; show connect panel if missing.
     const room = window.location.hash.replace(/^#/, '').trim();
     if (room) {
@@ -111,13 +129,30 @@ export class ProjectorApp {
 
   private _refreshSetup(): void {
     this.setup = getActiveSetup();
+    this._refreshChromeForRole();
+    this._applyView();
+  }
+
+  /**
+   * Show / hide the calibration prompt and pick the right setup label based on
+   * current role. Monitors don't need calibration; their badge says
+   * "Projector Monitor N" instead of the calibration info.
+   */
+  private _refreshChromeForRole(): void {
+    if (this.role === 'monitor') {
+      this.calibratePrompt.hidden = true;
+      this.controlsEl.hidden      = false;
+      this.setupLabelEl.textContent = `Projector Monitor ${this.monitorIndex ?? ''}`.trim();
+      document.body.classList.add('projector-view--monitor');
+      return;
+    }
+    document.body.classList.remove('projector-view--monitor');
     const calibrated = !!this.setup;
     this.calibratePrompt.hidden = calibrated;
     this.controlsEl.hidden      = !calibrated;
     if (this.setup) {
       this.setupLabelEl.textContent = `${this.setup.name} · ${this.setup.pixelsPerSquare.toFixed(1)} px/sq`;
     }
-    this._applyView();
   }
 
   private async _openCalibration(): Promise<void> {
@@ -153,11 +188,13 @@ export class ProjectorApp {
   }
 
   private _sendHello(): void {
-    if (!this.setup) return;
+    // Monitors don't need their own calibration — fall back to dummy values
+    // so the GM can still register the connection and assign a role.
     this.guest?.send({
       type:            'projector_hello',
-      setupName:       this.setup.name,
-      pixelsPerSquare: this.setup.pixelsPerSquare,
+      clientId:        this.clientId,
+      setupName:       this.setup?.name ?? '(uncalibrated)',
+      pixelsPerSquare: this.setup?.pixelsPerSquare ?? 0,
       canvasWidth:     window.innerWidth,
       canvasHeight:    window.innerHeight,
     });
@@ -214,6 +251,16 @@ export class ProjectorApp {
         this._applyView();
         break;
       }
+      case 'projector_role': {
+        if (msg.targetId !== this.clientId) break; // not for us
+        this.role         = msg.role;
+        this.monitorIndex = msg.monitorIndex ?? null;
+        if (msg.primaryViewNW !== undefined) this.primaryViewNW = msg.primaryViewNW;
+        if (msg.primaryViewNH !== undefined) this.primaryViewNH = msg.primaryViewNH;
+        this._refreshChromeForRole();
+        this._applyView();
+        break;
+      }
       // view_update / filter_update / audio messages: intentionally ignored
       // by the projector. View comes from our own calibration. Filters are
       // off (D8 will toggle). Audio plays on the player / GM device only.
@@ -262,6 +309,18 @@ export class ProjectorApp {
     // / pillarbox already handles aspect; ViewNW=ViewNH=1 means full extent.
     if (mode === 'full') {
       return { centerX: 0.5, centerY: 0.5, viewNW: 1, viewNH: 1, backgroundColor: bg };
+    }
+
+    // Monitor mode — show the same crop as the primary, fit-to-window.
+    // The primary's view fraction comes from the GM (projector_role).
+    if (this.role === 'monitor') {
+      return {
+        centerX: this.projectorViewport.centerX,
+        centerY: this.projectorViewport.centerY,
+        viewNW:  this.primaryViewNW,
+        viewNH:  this.primaryViewNH,
+        backgroundColor: bg,
+      };
     }
 
     // 'scaled' — derive from calibration. Falls back to fit-to-window if any
@@ -322,6 +381,7 @@ export class ProjectorApp {
 
     if (!this.projectorViewport.gridEnabled) return;
     if (this.projectorViewport.mode === 'black') return;
+    if (this.role === 'monitor') return; // monitors don't show the calibration grid
     if (!this.setup) return;
 
     const spacing = this.setup.pixelsPerSquare;

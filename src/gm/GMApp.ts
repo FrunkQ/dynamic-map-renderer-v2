@@ -59,7 +59,15 @@ export class GMApp {
   private fogEditor!:      FogEditor;
   private viewportEditor!: ViewportEditor;
   private projectorEditor!: ProjectorViewportEditor;
-  private projectorConnection: ProjectorConnection | null = null;
+  /**
+   * Connected projectors keyed by their per-window clientId. The first entry
+   * (insertion order) is the primary; everyone after is a monitor. The map
+   * preserves order (Map iterator is FIFO), so promoting the next-oldest
+   * projector if the primary disconnects is just "first key in the map".
+   */
+  private projectorConnections = new Map<string, ProjectorConnection & { clientId: string }>();
+  /** Active map's asset metadata, mirrored for projector-role math. Null when no map / no calibration. */
+  private _lastMapAssetMeta: { pixelsPerSquare: number; imageWidth: number; imageHeight: number } | null = null;
   private markerEditor!:   MarkerEditor;
   private filterPanel!:     FilterPanel;
   private transitionPanel!: TransitionPanel;
@@ -812,19 +820,41 @@ export class GMApp {
   }
 
   private onPeerMessage(_peerId: string, msg: GMMessage): void {
+    if (msg.type === 'projector_bye') {
+      const wasPrimary = this._primaryProjector()?.clientId === msg.clientId;
+      this.projectorConnections.delete(msg.clientId);
+      const newPrimary = this._primaryProjector();
+      this.projectorEditor?.setConnection(newPrimary ?? null);
+      this.refreshProjectorStatus();
+      // Promote the next-oldest connection if the primary just left.
+      if (wasPrimary) this._broadcastRoles(false);
+      return;
+    }
     if (msg.type === 'projector_hello') {
-      this.projectorConnection = {
+      const wasNew = !this.projectorConnections.has(msg.clientId);
+      this.projectorConnections.set(msg.clientId, {
+        clientId:        msg.clientId,
         setupName:       msg.setupName,
         pixelsPerSquare: msg.pixelsPerSquare,
         canvasWidth:     msg.canvasWidth,
         canvasHeight:    msg.canvasHeight,
-      };
-      this.projectorEditor?.setConnection(this.projectorConnection);
+      });
+
+      // The first connection (insertion order) is primary; the GM rectangle
+      // tracks the primary's dimensions. Monitors don't influence the GM rect.
+      const primary = this._primaryProjector();
+      if (primary) this.projectorEditor?.setConnection(primary);
       this.refreshProjectorStatus();
+
       // If the active map has no projectorViewport yet, seed a default one.
       if (!this.state.snapshot().projectorViewport) {
         this.state.setProjectorViewport(defaultProjectorViewport());
       }
+
+      // Send role assignment to this projector (and refresh monitors if the
+      // primary's view fraction changed because primary itself just resized).
+      this._broadcastRoles(wasNew);
+
       // Re-broadcast the current projector viewport so the projector
       // window can position itself correctly.
       const vp = this.state.snapshot().projectorViewport;
@@ -832,15 +862,73 @@ export class GMApp {
     }
   }
 
+  /** Returns the primary projector connection (oldest by insertion order), or null. */
+  private _primaryProjector(): (ProjectorConnection & { clientId: string }) | null {
+    const first = this.projectorConnections.values().next();
+    return first.done ? null : first.value;
+  }
+
+  /**
+   * Compute the primary's view fraction (viewNW × viewNH on the active map)
+   * given its calibration + window size + the active map's calibration.
+   * Returns null if any input is missing.
+   */
+  private _primaryViewFraction(): { viewNW: number; viewNH: number } | null {
+    const primary = this._primaryProjector();
+    if (!primary || primary.pixelsPerSquare <= 0) return null;
+    const meta = this._lastMapAssetMeta;
+    if (!meta) return null;
+    const ratio = meta.pixelsPerSquare / primary.pixelsPerSquare;
+    const wMap  = primary.canvasWidth  * ratio;
+    const hMap  = primary.canvasHeight * ratio;
+    return {
+      viewNW: Math.min(1, wMap / meta.imageWidth),
+      viewNH: Math.min(1, hMap / meta.imageHeight),
+    };
+  }
+
+  /**
+   * Send role messages to all currently-connected projectors. Cheap to spam;
+   * the GM does this on hello, primary swap, primary resize, or map-asset
+   * metadata change so monitors stay in sync with the primary's crop.
+   */
+  private _broadcastRoles(_includesNew: boolean): void {
+    const primary = this._primaryProjector();
+    if (!primary) return;
+    const view = this._primaryViewFraction();
+    let monitorIndex = 0;
+    for (const conn of this.projectorConnections.values()) {
+      if (conn.clientId === primary.clientId) {
+        this.host.broadcast({ type: 'projector_role', targetId: conn.clientId, role: 'primary' });
+      } else {
+        monitorIndex++;
+        this.host.broadcast({
+          type: 'projector_role',
+          targetId: conn.clientId,
+          role: 'monitor',
+          monitorIndex,
+          ...(view ? { primaryViewNW: view.viewNW, primaryViewNH: view.viewNH } : {}),
+        });
+      }
+    }
+  }
+
   private refreshProjectorStatus(): void {
-    const el = document.getElementById('projector-status');
+    const launchBtn = document.getElementById('projector-launch-btn') as HTMLButtonElement | null;
+    const el        = document.getElementById('projector-status');
+    const hasPrimary = this.projectorConnections.size > 0;
+    if (launchBtn) {
+      launchBtn.textContent = hasPrimary ? 'Open Projector Monitor…' : 'Open Projector Screen…';
+    }
     if (!el) return;
-    if (!this.projectorConnection) {
+    if (!hasPrimary) {
       el.textContent = 'No projector connected.';
       return;
     }
-    const c = this.projectorConnection;
-    el.textContent = `Connected: ${c.setupName} · ${c.canvasWidth}×${c.canvasHeight} @ ${c.pixelsPerSquare.toFixed(1)} px/sq`;
+    const primary = this._primaryProjector()!;
+    const monitorCount = this.projectorConnections.size - 1;
+    const monitorSuffix = monitorCount > 0 ? ` · +${monitorCount} monitor${monitorCount === 1 ? '' : 's'}` : '';
+    el.textContent = `Connected: ${primary.setupName} · ${primary.canvasWidth}×${primary.canvasHeight} @ ${primary.pixelsPerSquare.toFixed(1)} px/sq${monitorSuffix}`;
   }
 
   private bindViewportEditor(): void {
@@ -1214,6 +1302,8 @@ export class GMApp {
       this.projectorEditor.setMapPixelsPerSquare(null);
       this.projectorEditor.setMapImageWidth(0);
       this.host.updateMapAssetInfo(undefined, undefined, undefined);
+      this._lastMapAssetMeta = null;
+      this._broadcastRoles(false);
       return;
     }
     const asset = await this.maps.getAsset(mapState.id);
@@ -1221,11 +1311,18 @@ export class GMApp {
       this.projectorEditor.setMapPixelsPerSquare(null);
       this.projectorEditor.setMapImageWidth(0);
       this.host.updateMapAssetInfo(undefined, undefined, undefined);
+      this._lastMapAssetMeta = null;
+      this._broadcastRoles(false);
       return;
     }
     this.projectorEditor.setMapPixelsPerSquare(asset.pixelsPerSquare ?? null);
     this.projectorEditor.setMapImageWidth(asset.imageWidth ?? 0);
     this.host.updateMapAssetInfo(asset.pixelsPerSquare, asset.imageWidth, asset.imageHeight);
+    this._lastMapAssetMeta = (asset.pixelsPerSquare && asset.imageWidth && asset.imageHeight)
+      ? { pixelsPerSquare: asset.pixelsPerSquare, imageWidth: asset.imageWidth, imageHeight: asset.imageHeight }
+      : null;
+    // Monitors care about the primary's resulting view fraction — push it so they re-crop.
+    this._broadcastRoles(false);
   }
 
   private setStatus(msg: string, level: 'ok' | 'warn' | 'error'): void {
