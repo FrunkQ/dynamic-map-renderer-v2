@@ -80,6 +80,10 @@ export class ProjectorApp {
     this.renderer.setFilterEnabled(false);
     this.markerTexture = new MarkerTexture();
     this.renderer.setMarkerCanvas(this.markerTexture.canvas);
+    this.renderer.onMapLoaded = (aspect) => {
+      this.markerTexture.setAspectRatio(aspect);
+      this._renderMarkers();
+    };
     this.renderer.start();
 
     this._refreshSetup();
