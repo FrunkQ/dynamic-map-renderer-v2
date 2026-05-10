@@ -85,10 +85,13 @@ export class ProjectorCalibrationModal {
             <p class="pcal-step-blurb"></p>
           </div>
           <div class="pcal-topbar-actions">
-            <button class="btn btn--ghost btn--xs pcal-fullscreen" title="Toggle fullscreen — best for ruler-testing the projector">⛶ Fullscreen</button>
             <button class="btn btn--ghost btn--xs pcal-close" title="Close">&times;</button>
           </div>
         </header>
+
+        <!-- Fullscreen toggle pinned to bottom-right, matching the player /
+             projector / GM placement. Subtle until hovered. -->
+        <button class="btn btn--ghost btn--xs pcal-fullscreen" title="Toggle fullscreen — best for ruler-testing the projector">⛶ Fullscreen</button>
 
         <!-- Step 1 — Intro / pick method -->
         <section class="pcal-step pcal-step-intro" hidden>

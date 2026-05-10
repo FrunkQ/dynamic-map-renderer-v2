@@ -1740,6 +1740,20 @@ body.player-view #renderer-canvas {
 .pcal-topbar-actions {
   display: flex; align-items: center; gap: 6px;
 }
+
+/* Fullscreen toggle pinned to bottom-right of the calibration overlay,
+   matching the player + projector + GM placement. Subtle until hovered
+   so it doesn't compete with the calibration grid. */
+.pcal-fullscreen {
+  position: fixed;
+  bottom: 12px; right: 12px;
+  z-index: 10002;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border);
+  opacity: 0.4;
+  transition: opacity 0.25s;
+}
+.pcal-fullscreen:hover { opacity: 1; }
 .pcal-saved-label { font-size: 0.7rem; color: var(--text-dim); }
 .pcal-saved-select {
   background: var(--bg-input);
