@@ -57,6 +57,8 @@ export class ProjectorApp {
   private blackoutEl!:      HTMLElement;
   private gridCanvas!:      HTMLCanvasElement;
   private monitorBadge!:    HTMLElement;
+  private noMapEl!:         HTMLElement;
+  private uncalWarnEl!:     HTMLElement;
   private rendererCanvas!:  HTMLCanvasElement;
   private fsUnbind:         (() => void) | null = null;
   private fsBtn:            HTMLElement | null = null;
@@ -92,6 +94,20 @@ export class ProjectorApp {
     this.monitorBadge.className = 'monitor-badge';
     this.monitorBadge.hidden = true;
     document.body.appendChild(this.monitorBadge);
+
+    // "No map yet" overlay — centred message when GM hasn't loaded a map.
+    this.noMapEl = document.createElement('div');
+    this.noMapEl.className = 'projector-overlay-msg';
+    this.noMapEl.textContent = 'Waiting for GM to load a map…';
+    this.noMapEl.hidden = true;
+    document.body.appendChild(this.noMapEl);
+
+    // Uncalibrated-map warning — small banner pinned to top.
+    this.uncalWarnEl = document.createElement('div');
+    this.uncalWarnEl.className = 'projector-warn-banner';
+    this.uncalWarnEl.textContent = '⚠ Map not calibrated — projection is fit-to-window, not at table scale';
+    this.uncalWarnEl.hidden = true;
+    document.body.appendChild(this.uncalWarnEl);
 
     // Black-out overlay — covers the full window when projectorViewport.mode === 'black'.
     this.blackoutEl = document.createElement('div');
@@ -457,6 +473,7 @@ export class ProjectorApp {
     // Reflect rotation onto body so CSS can rotate the canvas + grid.
     document.body.dataset['rot'] = String(this.projectorViewport.rotation);
     this._drawGrid();
+    this._refreshErrorStates();
     if (mode === 'black') return;
     const view = this._computeViewState();
     this.renderer.setView(view);
@@ -464,6 +481,23 @@ export class ProjectorApp {
     this.markerTexture.setViewHeight(1);
     this.markerTexture.render(this.currentMarkers, this.playerIconCache);
     this.renderer.markMarkersDirty();
+  }
+
+  /**
+   * Decide which overlay messages should show right now:
+   *   - "Waiting for GM to load a map…" if no map blob has arrived yet
+   *   - "Map not calibrated…" banner if map exists but no pixelsPerSquare
+   *     (only when the primary is in 'scaled' mode — full-map mode is fine
+   *     uncalibrated, and monitors don't care since they mirror primary).
+   */
+  private _refreshErrorStates(): void {
+    const noMap = !this.mapBlob;
+    this.noMapEl.hidden = !noMap || this.projectorViewport.mode === 'black';
+    const uncal = !!this.mapBlob
+                  && this.role !== 'monitor'
+                  && this.projectorViewport.mode === 'scaled'
+                  && (!this.mapPixelsPerSquare || !this.setup);
+    this.uncalWarnEl.hidden = !uncal || this.projectorViewport.mode === 'black';
   }
 
   /**

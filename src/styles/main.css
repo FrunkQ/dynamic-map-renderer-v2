@@ -730,6 +730,17 @@ body.player-view #renderer-canvas {
 
 .view-hint--gap { margin-top: var(--space-md); }
 
+.view-warn {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #ffb86b;
+  background: rgba(255, 140, 0, 0.1);
+  border: 1px solid rgba(255, 140, 0, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin: 0 0 var(--space-sm);
+}
+
 /* Orange toggle button — used for the "Reset to Full Map" projector toggle
    so the GM can spot at a glance that the projector is in a non-default
    "show everything" state. */
@@ -1613,6 +1624,35 @@ body.player-view #renderer-canvas {
 .projector-grid {
   position: fixed; inset: 0;
   z-index: 40;
+  pointer-events: none;
+}
+
+/* "No map yet" — centred message overlay shown when the GM hasn't loaded a map. */
+.projector-overlay-msg {
+  position: fixed; inset: 0;
+  z-index: 45;
+  display: flex; align-items: center; justify-content: center;
+  background: #000;
+  color: var(--text-dim);
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* Uncalibrated-map warning banner — pinned to top, stays out of the way. */
+.projector-warn-banner {
+  position: fixed;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  padding: 6px 14px;
+  background: rgba(255, 140, 0, 0.18);
+  border: 1px solid rgba(255, 140, 0, 0.55);
+  border-radius: var(--radius-sm);
+  color: #ffd29a;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
   pointer-events: none;
 }
 

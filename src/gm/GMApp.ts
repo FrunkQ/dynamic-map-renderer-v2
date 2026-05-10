@@ -1315,11 +1315,13 @@ export class GMApp {
    */
   private async refreshProjectorMapInfo(): Promise<void> {
     const mapState = this.state.snapshot().map;
+    const warnEl = document.getElementById('projection-map-cal-warning');
     if (!mapState) {
       this.projectorEditor.setMapPixelsPerSquare(null);
       this.projectorEditor.setMapImageWidth(0);
       this.host.updateMapAssetInfo(undefined, undefined, undefined);
       this._lastMapAssetMeta = null;
+      if (warnEl) warnEl.hidden = true;
       this._broadcastRoles(false);
       return;
     }
@@ -1329,6 +1331,7 @@ export class GMApp {
       this.projectorEditor.setMapImageWidth(0);
       this.host.updateMapAssetInfo(undefined, undefined, undefined);
       this._lastMapAssetMeta = null;
+      if (warnEl) warnEl.hidden = true;
       this._broadcastRoles(false);
       return;
     }
@@ -1338,6 +1341,8 @@ export class GMApp {
     this._lastMapAssetMeta = (asset.pixelsPerSquare && asset.imageWidth && asset.imageHeight)
       ? { pixelsPerSquare: asset.pixelsPerSquare, imageWidth: asset.imageWidth, imageHeight: asset.imageHeight }
       : null;
+    // Active-map calibration warning — visible when the map has no pps.
+    if (warnEl) warnEl.hidden = !!asset.pixelsPerSquare;
     // Monitors care about the primary's resulting view fraction — push it so they re-crop.
     this._broadcastRoles(false);
   }
