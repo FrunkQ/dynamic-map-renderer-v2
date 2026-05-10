@@ -143,14 +143,17 @@ export class ProjectorApp {
    * "Projector Monitor N" instead of the calibration info.
    */
   private _refreshChromeForRole(): void {
+    const recalBtn = document.getElementById('recalibrate-btn') as HTMLElement | null;
     if (this.role === 'monitor') {
       this.calibratePrompt.hidden = true;
       this.controlsEl.hidden      = false;
+      // Monitors don't need calibration — the recalibrate button is irrelevant.
+      if (recalBtn) recalBtn.hidden = true;
       this.setupLabelEl.textContent = `Projector Monitor ${this.monitorIndex ?? ''}`.trim();
       document.body.classList.add('projector-view--monitor');
       // Constrain the canvas to the primary's aspect ratio so what's inside
       // the bezel matches the primary's viewport exactly. White surround
-      // visible outside the canvas but inside the bezel is the body bg.
+      // visible outside the canvas is the body bg.
       if (this.primaryAspect && this.primaryAspect > 0) {
         document.body.style.setProperty('--monitor-aspect', String(this.primaryAspect));
       }
@@ -158,6 +161,7 @@ export class ProjectorApp {
     }
     document.body.classList.remove('projector-view--monitor');
     document.body.style.removeProperty('--monitor-aspect');
+    if (recalBtn) recalBtn.hidden = false;
     const calibrated = !!this.setup;
     this.calibratePrompt.hidden = calibrated;
     this.controlsEl.hidden      = !calibrated;
