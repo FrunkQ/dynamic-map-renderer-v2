@@ -53,10 +53,14 @@ export function markFullscreenBtnSeen(): void {
  * Wire a fullscreen toggle button: handles the click, keeps the label /
  * tooltip in sync with the actual fullscreen state, and minimises to just
  * the icon after the first interaction. Returns an unsubscribe fn.
+ *
+ * `forceMinimised` collapses the button to the icon regardless of the
+ * localStorage flag — useful for monitor / secondary windows where the
+ * full label is just clutter.
  */
-export function bindFullscreenButton(btn: HTMLElement): () => void {
+export function bindFullscreenButton(btn: HTMLElement, opts?: { forceMinimised?: boolean }): () => void {
   const update = () => {
-    const mini = isFullscreenBtnMinimised();
+    const mini = opts?.forceMinimised || isFullscreenBtnMinimised();
     const fs   = isFullscreen();
     btn.textContent = mini ? '⛶' : (fs ? '⛶ Exit fullscreen' : '⛶ Fullscreen');
     btn.title       = fs ? 'Exit fullscreen' : 'Toggle fullscreen';

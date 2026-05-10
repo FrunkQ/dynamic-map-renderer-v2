@@ -56,7 +56,10 @@ export class ProjectorApp {
   private setupLabelEl!:    HTMLElement;
   private blackoutEl!:      HTMLElement;
   private gridCanvas!:      HTMLCanvasElement;
+  private monitorBadge!:    HTMLElement;
   private rendererCanvas!:  HTMLCanvasElement;
+  private fsUnbind:         (() => void) | null = null;
+  private fsBtn:            HTMLElement | null = null;
 
   // Cached pieces of state needed to compute our viewport.
   private mapBlob:           ArrayBuffer | null = null;
@@ -82,6 +85,12 @@ export class ProjectorApp {
     this.gridCanvas.className = 'projector-grid';
     document.body.appendChild(this.gridCanvas);
 
+    // Monitor identification badge — only shown when this window is a monitor.
+    this.monitorBadge = document.createElement('div');
+    this.monitorBadge.className = 'monitor-badge';
+    this.monitorBadge.hidden = true;
+    document.body.appendChild(this.monitorBadge);
+
     // Black-out overlay — covers the full window when projectorViewport.mode === 'black'.
     this.blackoutEl = document.createElement('div');
     this.blackoutEl.className = 'projector-blackout';
@@ -93,8 +102,8 @@ export class ProjectorApp {
     document.getElementById('connect-btn')?.addEventListener('click', () => this._connectFromInput());
     this.roomInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._connectFromInput(); });
 
-    const fsBtn = document.getElementById('fullscreen-btn');
-    if (fsBtn) bindFullscreenButton(fsBtn);
+    this.fsBtn = document.getElementById('fullscreen-btn');
+    if (this.fsBtn) this.fsUnbind = bindFullscreenButton(this.fsBtn);
 
     // Renderer: filters off by default (D8 will gate this), no fog opacity reduction.
     this.renderer = new Renderer(this.rendererCanvas);
@@ -147,9 +156,12 @@ export class ProjectorApp {
     if (this.role === 'monitor') {
       this.calibratePrompt.hidden = true;
       this.controlsEl.hidden      = false;
-      // Monitors don't need calibration — the recalibrate button is irrelevant.
+      // Monitors don't need calibration — recalibrate button + setup label are
+      // both hidden. The big red badge identifies the window separately.
       if (recalBtn) recalBtn.hidden = true;
-      this.setupLabelEl.textContent = `Projector Monitor ${this.monitorIndex ?? ''}`.trim();
+      this.setupLabelEl.hidden = true;
+      this.monitorBadge.hidden = false;
+      this.monitorBadge.textContent = `Projector Monitor ${this.monitorIndex ?? ''}`.trim();
       document.body.classList.add('projector-view--monitor');
       // Constrain the canvas to the primary's aspect ratio so what's inside
       // the bezel matches the primary's viewport exactly. White surround
@@ -157,17 +169,29 @@ export class ProjectorApp {
       if (this.primaryAspect && this.primaryAspect > 0) {
         document.body.style.setProperty('--monitor-aspect', String(this.primaryAspect));
       }
+      this._rebindFullscreen(true);
       return;
     }
     document.body.classList.remove('projector-view--monitor');
     document.body.style.removeProperty('--monitor-aspect');
     if (recalBtn) recalBtn.hidden = false;
+    this.setupLabelEl.hidden = false;
+    this.monitorBadge.hidden = true;
     const calibrated = !!this.setup;
     this.calibratePrompt.hidden = calibrated;
     this.controlsEl.hidden      = !calibrated;
     if (this.setup) {
       this.setupLabelEl.textContent = `${this.setup.name} · ${this.setup.pixelsPerSquare.toFixed(1)} px/sq`;
     }
+    this._rebindFullscreen(false);
+  }
+
+  /** Re-wire the fullscreen button so monitor windows always show just the
+   *  ⛶ icon, regardless of the localStorage minimised flag. */
+  private _rebindFullscreen(forceMinimised: boolean): void {
+    if (!this.fsBtn) return;
+    this.fsUnbind?.();
+    this.fsUnbind = bindFullscreenButton(this.fsBtn, { forceMinimised });
   }
 
   private async _openCalibration(): Promise<void> {
