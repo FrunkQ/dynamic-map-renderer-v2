@@ -8,7 +8,7 @@ import { MapAssetModal } from './MapAssetModal.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
 import { ProjectorCalibrationModal } from './ProjectorCalibrationModal.ts';
-import { getAllSetups, getActiveSetupId, setActiveSetupId } from '../projector/calibrationStorage.ts';
+import { getAllSetups, setActiveSetupId } from '../projector/calibrationStorage.ts';
 import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts';
 import { SoundboardEngine } from '../audio/SoundboardEngine.ts';
 import { Renderer } from '../rendering/Renderer.ts';
@@ -792,7 +792,7 @@ export class GMApp {
     });
 
     // Unified Projector dropdown. Acts as launcher, off-switch, and setup
-    // picker rolled into one. Options: "🚫 No Projection" / each saved
+    // picker rolled into one. Options: "No Projection" / each saved
     // setup / "+ Calibrate New Projector…". GM and projector share
     // localStorage on the same device, so the list is read fresh.
     const projectorSelect = document.getElementById('projection-projector-select') as HTMLSelectElement | null;
@@ -847,7 +847,7 @@ export class GMApp {
 
   /**
    * Populate the unified Projector dropdown from localStorage:
-   *     🚫 No Projection
+   *     No Projection
    *     <each saved setup>
    *     + Calibrate New Projector…
    * Selection reflects the current connection — if a primary is live, its
@@ -857,17 +857,16 @@ export class GMApp {
   private refreshProjectorSetupSelect(): void {
     const sel = document.getElementById('projection-projector-select') as HTMLSelectElement | null;
     if (!sel) return;
-    const setups       = getAllSetups();
-    const primary      = this._primaryProjector();
-    const activeSetup  = getActiveSetupId();
-    const liveSetupId  = primary
+    const setups      = getAllSetups();
+    const primary     = this._primaryProjector();
+    const liveSetupId = primary
       ? setups.find((s) => s.name === primary.setupName)?.id ?? null
       : null;
     sel.innerHTML = '';
 
     const off = document.createElement('option');
     off.value = 'off';
-    off.textContent = '🚫 No Projection';
+    off.textContent = 'No Projection';
     sel.appendChild(off);
 
     for (const s of setups) {
@@ -882,10 +881,10 @@ export class GMApp {
     add.textContent = '+ Calibrate New Projector…';
     sel.appendChild(add);
 
-    sel.value = liveSetupId ?? activeSetup ?? 'off';
-    if (sel.value !== 'off' && !setups.some((s) => s.id === sel.value)) {
-      sel.value = 'off';
-    }
+    // Selected option reflects the LIVE state only — when nothing's running,
+    // default to "No Projection" so picking the previously-active setup
+    // actually fires a change event and re-launches it.
+    sel.value = liveSetupId ?? 'off';
   }
 
   /**
