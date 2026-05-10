@@ -1555,6 +1555,35 @@ body.player-view #renderer-canvas {
 .projector-view { background: #000; color: var(--text); margin: 0; overflow: hidden; }
 .projector-view #renderer-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
 
+/* Rotation — primary projector only. The canvas (and grid overlay) are sized
+   as the swapped window for 90/270, then rotated visually. The renderer's
+   ResizeObserver picks up the new clientWidth/Height and rebuilds the WebGL
+   buffer at the rotated dimensions, so calibration stays accurate. The
+   :not(.projector-view--monitor) qualifier keeps these rules off monitor
+   windows — they have their own bezel-constrained sizing and ignore rotation. */
+.projector-view:not(.projector-view--monitor)[data-rot="180"] #renderer-canvas,
+.projector-view:not(.projector-view--monitor)[data-rot="180"] .projector-grid {
+  transform: rotate(180deg);
+}
+.projector-view:not(.projector-view--monitor)[data-rot="90"]  #renderer-canvas,
+.projector-view:not(.projector-view--monitor)[data-rot="90"]  .projector-grid,
+.projector-view:not(.projector-view--monitor)[data-rot="270"] #renderer-canvas,
+.projector-view:not(.projector-view--monitor)[data-rot="270"] .projector-grid {
+  inset: auto;
+  position: fixed;
+  width:  100vh;
+  height: 100vw;
+  left: 50%; top: 50%;
+}
+.projector-view:not(.projector-view--monitor)[data-rot="90"]  #renderer-canvas,
+.projector-view:not(.projector-view--monitor)[data-rot="90"]  .projector-grid {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+.projector-view:not(.projector-view--monitor)[data-rot="270"] #renderer-canvas,
+.projector-view:not(.projector-view--monitor)[data-rot="270"] .projector-grid {
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+
 /* Monitor mode — secondary projector windows that mirror the primary's crop.
    The canvas is constrained to the primary's aspect ratio (set via the
    --monitor-aspect CSS var by ProjectorApp). The TV bezel hugs the canvas

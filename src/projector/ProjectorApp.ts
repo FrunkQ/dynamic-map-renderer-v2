@@ -244,14 +244,27 @@ export class ProjectorApp {
   private _sendHello(): void {
     // Monitors don't need their own calibration — fall back to dummy values
     // so the GM can still register the connection and assign a role.
+    const eff = this._effectiveDims();
     this.guest?.send({
       type:            'projector_hello',
       clientId:        this.clientId,
       setupName:       this.setup?.name ?? '(uncalibrated)',
       pixelsPerSquare: this.setup?.pixelsPerSquare ?? 0,
-      canvasWidth:     window.innerWidth,
-      canvasHeight:    window.innerHeight,
+      // Effective dimensions account for 90/270° rotation: a portrait map
+      // projected onto a landscape window has effective dims = (H, W).
+      // The GM sizes its rectangle from these so it stays correct.
+      canvasWidth:     eff.w,
+      canvasHeight:    eff.h,
     });
+  }
+
+  /** Effective projection-area dimensions in CSS px, accounting for rotation. */
+  private _effectiveDims(): { w: number; h: number } {
+    const rot = this.projectorViewport.rotation;
+    if (rot === 90 || rot === 270) {
+      return { w: window.innerHeight, h: window.innerWidth };
+    }
+    return { w: window.innerWidth, h: window.innerHeight };
   }
 
   // ─── Message handling ────────────────────────────────────────────────────
@@ -301,8 +314,12 @@ export class ProjectorApp {
         break;
       }
       case 'projector_viewport_update': {
+        const prevRot = this.projectorViewport.rotation;
         this.projectorViewport = msg.payload;
         this._applyView();
+        // Rotation flips effective dims, so the GM needs an updated hello to
+        // resize the orange/green rectangle correctly.
+        if (prevRot !== this.projectorViewport.rotation) this._sendHello();
         break;
       }
       case 'projector_role': {
@@ -389,9 +406,10 @@ export class ProjectorApp {
     // 'scaled' — derive from calibration. Falls back to fit-to-window if any
     // input is missing (which D9 will surface as a clear warning).
     if (this.setup && this.mapPixelsPerSquare && this.mapImageWidth > 0 && this.mapImageHeight > 0) {
+      const eff    = this._effectiveDims();
       const ratio  = this.mapPixelsPerSquare / this.setup.pixelsPerSquare;
-      const wMap   = window.innerWidth  * ratio;
-      const hMap   = window.innerHeight * ratio;
+      const wMap   = eff.w * ratio;
+      const hMap   = eff.h * ratio;
       const viewNW = Math.min(1, wMap / this.mapImageWidth);
       const viewNH = Math.min(1, hMap / this.mapImageHeight);
       return {
@@ -410,6 +428,8 @@ export class ProjectorApp {
   private _applyView(): void {
     const mode = this.projectorViewport.mode;
     this.blackoutEl.hidden = mode !== 'black';
+    // Reflect rotation onto body so CSS can rotate the canvas + grid.
+    document.body.dataset['rot'] = String(this.projectorViewport.rotation);
     this._drawGrid();
     if (mode === 'black') return;
     const view = this._computeViewState();
@@ -429,8 +449,11 @@ export class ProjectorApp {
    */
   private _drawGrid(): void {
     const cv = this.gridCanvas;
-    const w  = window.innerWidth;
-    const h  = window.innerHeight;
+    // Effective dims account for rotation — grid CSS box is sized like the
+    // canvas so they share the same rotation transform and stay aligned.
+    const eff = this._effectiveDims();
+    const w  = eff.w;
+    const h  = eff.h;
     const dpr = window.devicePixelRatio || 1;
     cv.width  = Math.round(w * dpr);
     cv.height = Math.round(h * dpr);
