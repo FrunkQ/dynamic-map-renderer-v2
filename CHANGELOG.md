@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.10.4 — 2026-05-10
+
+Docs:
+- **screenshot.png** refreshed to show the v2.10 GM interface.
+
 ## v2.10.3 — 2026-05-10
 
 Docs:
