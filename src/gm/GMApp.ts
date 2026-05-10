@@ -823,11 +823,17 @@ export class GMApp {
     if (msg.type === 'projector_bye') {
       const wasPrimary = this._primaryProjector()?.clientId === msg.clientId;
       this.projectorConnections.delete(msg.clientId);
-      const newPrimary = this._primaryProjector();
-      this.projectorEditor?.setConnection(newPrimary ?? null);
+      if (wasPrimary) {
+        // Closing the primary window is the canonical "turn off projection"
+        // gesture — tear down every monitor too rather than auto-promoting
+        // someone else. Send shutdown to each remaining client and forget them.
+        for (const conn of this.projectorConnections.values()) {
+          this.host.broadcast({ type: 'projector_shutdown', targetId: conn.clientId });
+        }
+        this.projectorConnections.clear();
+      }
+      this.projectorEditor?.setConnection(this._primaryProjector() ?? null);
       this.refreshProjectorStatus();
-      // Promote the next-oldest connection if the primary just left.
-      if (wasPrimary) this._broadcastRoles(false);
       return;
     }
     if (msg.type === 'projector_hello') {
@@ -919,6 +925,8 @@ export class GMApp {
     const hasPrimary = this.projectorConnections.size > 0;
     if (launchBtn) {
       launchBtn.textContent = hasPrimary ? 'Open Projector Monitor…' : 'Open Projector Screen…';
+      launchBtn.classList.toggle('btn--primary', !hasPrimary);
+      launchBtn.classList.toggle('btn--ghost',    hasPrimary);
     }
     if (!el) return;
     if (!hasPrimary) {

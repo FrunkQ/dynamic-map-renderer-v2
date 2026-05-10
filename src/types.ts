@@ -543,6 +543,17 @@ export interface MsgProjectorBye {
 }
 
 /**
+ * GM → Projector shutdown. Broadcast — projectors ignore unless `targetId`
+ * matches their own clientId. Sent to every monitor when the primary
+ * disconnects: closing the primary window is the canonical "turn off
+ * projection" gesture, and monitors should follow.
+ */
+export interface MsgProjectorShutdown {
+  type: 'projector_shutdown';
+  targetId: string;
+}
+
+/**
  * GM → Projector role assignment. Broadcast — projectors ignore unless
  * `targetId` matches their own clientId. Sent on every projector_hello and
  * re-sent to monitors when their primary's view fraction changes (primary
@@ -592,6 +603,7 @@ export type GMMessage =
   | MsgProjectorHello
   | MsgProjectorBye
   | MsgProjectorRole
+  | MsgProjectorShutdown
   | MsgProjectorViewportUpdate;
 
 // ─── Storage types ───────────────────────────────────────────────────────────

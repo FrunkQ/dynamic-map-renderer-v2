@@ -261,6 +261,14 @@ export class ProjectorApp {
         this._applyView();
         break;
       }
+      case 'projector_shutdown': {
+        if (msg.targetId !== this.clientId) break; // not for us
+        // Closing the primary projector tears down the whole projection;
+        // monitors close themselves to follow. window.close only works for
+        // windows opened via window.open (which is how the GM launches us).
+        window.close();
+        break;
+      }
       // view_update / filter_update / audio messages: intentionally ignored
       // by the projector. View comes from our own calibration. Filters are
       // off (D8 will toggle). Audio plays on the player / GM device only.
