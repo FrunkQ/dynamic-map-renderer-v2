@@ -334,9 +334,12 @@
               <button id="projection-blackout-btn" class="btn btn--ghost btn--sm" title="Black out the projector display">Black Out</button>
               <button id="projection-fullmap-btn"  class="btn btn--ghost btn--sm" title="Show the entire map fit-to-window on the projector, ignoring calibration">Full Map</button>
             </div>
-            <div class="param-row">
-              <label for="projection-filter-toggle" title="When ticked, the GM&rsquo;s visual filter does NOT apply to the projector — useful when projecting battlemaps that should stay unfiltered.">Disable Filters</label>
-              <input type="checkbox" id="projection-filter-toggle" />
+            <div class="param-row param-row--toggle">
+              <label for="projection-filter-toggle" title="When on, the GM&rsquo;s visual filter does NOT apply to the projector — useful when projecting battlemaps that should stay unfiltered.">Disable Filters</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="projection-filter-toggle" />
+                <span class="toggle-slider"></span>
+              </label>
             </div>
           </div>
           <div id="edit-projection-actions" class="viewport-actions" hidden>
@@ -356,9 +359,12 @@
           </div>
 
           <p class="view-hint view-hint--gap">1&Prime; Grid Overlay</p>
-          <div class="param-row">
+          <div class="param-row param-row--toggle">
             <label for="projection-grid-toggle">Show grid</label>
-            <input type="checkbox" id="projection-grid-toggle" />
+            <label class="toggle-switch">
+              <input type="checkbox" id="projection-grid-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
           </div>
           <div class="param-row">
             <label for="projection-grid-colour">Colour</label>
