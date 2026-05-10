@@ -571,6 +571,10 @@ export interface MsgProjectorRole {
   monitorIndex?: number;
   primaryViewNW?: number;
   primaryViewNH?: number;
+  /** Primary projector window's CSS-pixel aspect ratio (canvasWidth / canvasHeight).
+   *  Monitors use this to letterbox/pillarbox their own canvas so what's
+   *  rendered inside the bezel matches the primary's viewport exactly. */
+  primaryAspect?: number;
 }
 
 /**

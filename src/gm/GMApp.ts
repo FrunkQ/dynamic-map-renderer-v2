@@ -902,6 +902,9 @@ export class GMApp {
     const primary = this._primaryProjector();
     if (!primary) return;
     const view = this._primaryViewFraction();
+    const primaryAspect = primary.canvasHeight > 0
+      ? primary.canvasWidth / primary.canvasHeight
+      : undefined;
     let monitorIndex = 0;
     for (const conn of this.projectorConnections.values()) {
       if (conn.clientId === primary.clientId) {
@@ -914,6 +917,7 @@ export class GMApp {
           role: 'monitor',
           monitorIndex,
           ...(view ? { primaryViewNW: view.viewNW, primaryViewNH: view.viewNH } : {}),
+          ...(primaryAspect ? { primaryAspect } : {}),
         });
       }
     }

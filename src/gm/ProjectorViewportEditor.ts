@@ -277,6 +277,7 @@ export class ProjectorViewportEditor {
       centerY: Math.max(0, Math.min(1, this.dragStartCenter.y + dy)),
     };
     this._redrawNoAnim();
+    if (this.onChangeFn) this.onChangeFn(this.viewport);
   }
 
   private onPointerUp(e: PointerEvent): void {

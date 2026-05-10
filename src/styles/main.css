@@ -1526,8 +1526,22 @@ body.player-view #renderer-canvas {
 .projector-view { background: #000; color: var(--text); margin: 0; overflow: hidden; }
 .projector-view #renderer-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
 
-/* Monitor mode — secondary projector windows that just mirror the primary's
-   crop. A subtle TV-bezel frame makes it obvious this isn't the table screen. */
+/* Monitor mode — secondary projector windows that mirror the primary's crop.
+   The canvas is constrained to the primary's aspect ratio (set via the
+   --monitor-aspect CSS var by ProjectorApp); the body's white shows around
+   it as letterbox / pillarbox bars so what's INSIDE the bezel matches the
+   primary's view exactly. */
+.projector-view--monitor { background: #fff; }
+
+.projector-view--monitor #renderer-canvas {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width:  min(100vw, calc(100vh * var(--monitor-aspect, 1)));
+  height: min(100vh, calc(100vw / var(--monitor-aspect, 1)));
+}
+
+/* TV-bezel frame on top — fixed to the window edges, sits above the canvas. */
 .projector-view--monitor::before {
   content: '';
   position: fixed; inset: 0;

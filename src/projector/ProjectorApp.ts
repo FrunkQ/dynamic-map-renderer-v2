@@ -38,6 +38,10 @@ export class ProjectorApp {
    *  Only meaningful when role === 'monitor' — drives the monitor's crop. */
   private primaryViewNW: number = 1;
   private primaryViewNH: number = 1;
+  /** Primary's canvas aspect ratio. When in monitor mode, the canvas is
+   *  constrained to this aspect so what's inside the bezel matches the
+   *  primary's viewport exactly — bars (white) fill the rest. */
+  private primaryAspect: number | null = null;
 
   private guest: Guest | null = null;
   private setup: ProjectorSetup | null = null;
@@ -144,9 +148,16 @@ export class ProjectorApp {
       this.controlsEl.hidden      = false;
       this.setupLabelEl.textContent = `Projector Monitor ${this.monitorIndex ?? ''}`.trim();
       document.body.classList.add('projector-view--monitor');
+      // Constrain the canvas to the primary's aspect ratio so what's inside
+      // the bezel matches the primary's viewport exactly. White surround
+      // visible outside the canvas but inside the bezel is the body bg.
+      if (this.primaryAspect && this.primaryAspect > 0) {
+        document.body.style.setProperty('--monitor-aspect', String(this.primaryAspect));
+      }
       return;
     }
     document.body.classList.remove('projector-view--monitor');
+    document.body.style.removeProperty('--monitor-aspect');
     const calibrated = !!this.setup;
     this.calibratePrompt.hidden = calibrated;
     this.controlsEl.hidden      = !calibrated;
@@ -257,6 +268,7 @@ export class ProjectorApp {
         this.monitorIndex = msg.monitorIndex ?? null;
         if (msg.primaryViewNW !== undefined) this.primaryViewNW = msg.primaryViewNW;
         if (msg.primaryViewNH !== undefined) this.primaryViewNH = msg.primaryViewNH;
+        if (msg.primaryAspect !== undefined) this.primaryAspect = msg.primaryAspect;
         this._refreshChromeForRole();
         this._applyView();
         break;
