@@ -1,6 +1,7 @@
 import type { MapAsset, StoredMap } from '../types.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { MapManager } from './MapManager.ts';
+import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { getUsedMapAssetIds } from '../storage/assetUsage.ts';
 
 /** Standard licence options shared with the audio editor. */
@@ -248,11 +249,15 @@ export class MapAssetModal {
     const tags: string[] = [];
     if (asset.source === 'web-link') tags.push('<span class="sound-tag sound-tag--url">URL</span>');
     if (asset.locallyStored)         tags.push('<span class="sound-tag sound-tag--local">Stored</span>');
+    if (asset.pixelsPerSquare)       tags.push('<span class="sound-tag sound-tag--scaled map-recal-pill" title="Click to re-calibrate" role="button" tabindex="0">Scaled</span>');
     const tagsHtml = tags.join('');
 
     const storeBtnHtml = asset.locallyStored
       ? ''
       : `<button class="btn btn--ghost btn--xs map-store-btn" title="Download and keep a local copy">Store</button>`;
+    const scaleBtnHtml = asset.pixelsPerSquare
+      ? ''
+      : `<button class="btn btn--ghost btn--xs map-scale-btn" title="Calibrate map scale (pixels per 5' square)">Scale</button>`;
 
     const dimText = asset.imageWidth && asset.imageHeight
       ? `${asset.imageWidth} × ${asset.imageHeight}`
@@ -272,12 +277,20 @@ export class MapAssetModal {
           </span>
         </div>
         <div class="sound-row-actions">
+          ${scaleBtnHtml}
           ${storeBtnHtml}
           <button class="btn btn--primary btn--xs map-use-btn">Use</button>
           <button class="btn btn--danger btn--xs map-del-btn" title="Remove from library">✕</button>
         </div>
       </div>
       <div class="sound-row-edit" hidden>
+        <div class="sound-edit-row">
+          <label>Calibration</label>
+          <span class="map-edit-calibration-state">${asset.pixelsPerSquare
+            ? `${asset.pixelsPerSquare.toFixed(1)} px per 5&prime; square`
+            : 'Not yet calibrated'}</span>
+          <button class="btn btn--ghost btn--xs map-edit-calibrate">Calibrate…</button>
+        </div>
         <div class="sound-edit-row">
           <label>Licence</label>
           <select class="map-edit-license">
@@ -338,6 +351,16 @@ export class MapAssetModal {
     row.querySelector<HTMLButtonElement>('.map-edit-cancel')?.addEventListener('click', () => {
       if (editPanel) editPanel.hidden = true;
     });
+    const openCalibration = async () => {
+      const cal = new MapCalibrationModal();
+      await cal.open(asset);
+      await this._renderLibrary();
+    };
+    row.querySelector<HTMLButtonElement>('.map-scale-btn')?.addEventListener('click', openCalibration);
+    row.querySelector<HTMLButtonElement>('.map-edit-calibrate')?.addEventListener('click', openCalibration);
+    // Click the Scaled pill to re-calibrate without opening the pen editor.
+    row.querySelector<HTMLElement>('.map-recal-pill')?.addEventListener('click', (e) => { e.stopPropagation(); void openCalibration(); });
+
     row.querySelector<HTMLButtonElement>('.map-edit-save')?.addEventListener('click', async () => {
       const license     = row.querySelector<HTMLSelectElement>('.map-edit-license')?.value ?? asset.license;
       const attribution = row.querySelector<HTMLInputElement>('.map-edit-attribution')?.value.trim() ?? '';

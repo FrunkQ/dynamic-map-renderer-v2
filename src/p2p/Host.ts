@@ -10,6 +10,9 @@ export interface HostEvents {
   onPeerDisconnected: (peerId: string) => void;
   onError: (err: Error) => void;
   onReady: (roomCode: string) => void;
+  /** Inbound message from a peer (e.g. projector_hello). Optional — only
+   *  bidirectional callers need to wire this. */
+  onPeerMessage?: (peerId: string, msg: GMMessage) => void;
 }
 
 /**
@@ -27,6 +30,10 @@ export class Host {
   private events: HostEvents;
   private lastState:            SessionState | null = null;
   private lastMapBlob:          ArrayBuffer | null = null;
+  /** Cached map-asset metadata so full_state messages can size projector views. */
+  private lastMapPps:           number | undefined = undefined;
+  private lastMapImgW:          number | undefined = undefined;
+  private lastMapImgH:          number | undefined = undefined;
   private lastIconData:         MarkerIconData[] = [];
   private lastSoundboardActive: SoundboardAudioData[] = [];
   private lastSoundboardAssets: { assetId: string; dataUrl: string }[] = [];
@@ -66,6 +73,16 @@ export class Host {
       this.events.onError(err as Error);
     });
 
+    // Same-browser projector / player windows can also send GMMessages
+    // upstream (e.g. projector_hello). Forward to the same callback the
+    // network connection uses so GMApp doesn't care which transport.
+    this.local.onPeerMessage((msg) => {
+      if (this.events.onPeerMessage) {
+        try { this.events.onPeerMessage('local', msg); }
+        catch (err) { this.events.onError(err as Error); }
+      }
+    });
+
     // When a local player window opens it immediately requests state via
     // BroadcastChannel. Respond with full_state so it doesn't wait for PeerJS.
     this.local.onRequest(() => {
@@ -77,6 +94,9 @@ export class Host {
           ...(this.lastIconData.length > 0             ? { iconData:         this.lastIconData          } : {}),
           ...(this.lastSoundboardActive.length > 0     ? { soundboardActive: this.lastSoundboardActive } : {}),
           ...(this.lastSoundboardAssets.length > 0     ? { soundboardAssets: this.lastSoundboardAssets } : {}),
+          ...(this.lastMapPps  !== undefined           ? { mapPixelsPerSquare: this.lastMapPps          } : {}),
+          ...(this.lastMapImgW !== undefined           ? { mapImageWidth:      this.lastMapImgW         } : {}),
+          ...(this.lastMapImgH !== undefined           ? { mapImageHeight:     this.lastMapImgH         } : {}),
         };
         this.local.send(msg);
         // Deliver active positional plays inline (BroadcastChannel supports large payloads)
@@ -157,6 +177,13 @@ export class Host {
     if (soundboardActive !== undefined) this.lastSoundboardActive  = soundboardActive;
   }
 
+  /** Update the cached map-asset metadata used by full_state for projector views. */
+  updateMapAssetInfo(pps: number | undefined, imgW: number | undefined, imgH: number | undefined): void {
+    this.lastMapPps  = pps;
+    this.lastMapImgW = imgW;
+    this.lastMapImgH = imgH;
+  }
+
   /** Update the preload asset cache — called whenever blobs finish loading in SoundboardPanel */
   updateSoundboardAssets(assets: { assetId: string; dataUrl: string }[]): void {
     this.lastSoundboardAssets = assets;
@@ -185,12 +212,25 @@ export class Host {
           ...(this.lastIconData.length > 0             ? { iconData:         this.lastIconData          } : {}),
           ...(this.lastSoundboardActive.length > 0     ? { soundboardActive: this.lastSoundboardActive } : {}),
           ...(this.lastSoundboardAssets.length > 0     ? { soundboardAssets: this.lastSoundboardAssets } : {}),
+          ...(this.lastMapPps  !== undefined           ? { mapPixelsPerSquare: this.lastMapPps          } : {}),
+          ...(this.lastMapImgW !== undefined           ? { mapImageWidth:      this.lastMapImgW         } : {}),
+          ...(this.lastMapImgH !== undefined           ? { mapImageHeight:     this.lastMapImgH         } : {}),
         };
         this.sendTo(conn, msg);
         // Deliver active positional plays as chunked binary messages
         for (const p of this.lastPositionalActive.values()) {
           this.sendTo(conn, { type: 'positional_play', markerId: p.markerId, assetId: p.assetId, loop: p.loop, volume: p.volume, dataUrl: p.dataUrl });
         }
+      }
+    });
+
+    conn.on('data', (raw) => {
+      // Inbound peer message (e.g. projector_hello). Ignore if no listener.
+      if (!this.events.onPeerMessage) return;
+      const data = raw as { type?: string };
+      if (typeof data === 'object' && data && typeof data.type === 'string') {
+        try { this.events.onPeerMessage(conn.peer, data as GMMessage); }
+        catch (err) { this.events.onError(err as Error); }
       }
     });
 

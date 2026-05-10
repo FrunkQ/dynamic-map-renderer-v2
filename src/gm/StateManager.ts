@@ -1,4 +1,4 @@
-import type { SessionState, MapState, FilterState, FogState, ViewState, Marker, AudioState, TransitionConfig, MotionTrackerConfig } from '../types.ts';
+import type { SessionState, MapState, FilterState, FogState, ViewState, Marker, AudioState, TransitionConfig, MotionTrackerConfig, ProjectorViewport } from '../types.ts';
 import { defaultSessionState } from '../types.ts';
 import { saveConfig, loadConfig } from '../storage/db.ts';
 import { migrateSessionState } from '../storage/migrations.ts';
@@ -60,6 +60,16 @@ export class StateManager {
   setView(view: ViewState): void {
     this.state = { ...this.state, view };
     this._notify(['view']);
+  }
+
+  setProjectorViewport(vp: ProjectorViewport): void {
+    this.state = { ...this.state, projectorViewport: vp };
+    this._notify(['projectorViewport']);
+  }
+
+  /** Read-only access to the current state. */
+  snapshot(): SessionState {
+    return this.state;
   }
 
   setFilter(filterId: string): void {

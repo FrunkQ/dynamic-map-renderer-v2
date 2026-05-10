@@ -9,6 +9,10 @@ interface LocalRequest {
   type: 'request_state';
 }
 
+/** Anything sent on the Player-to-GM channel: either a request_state ping or
+ *  a full GMMessage from a peer (e.g. projector_hello). */
+type PeerToGm = LocalRequest | GMMessage;
+
 /**
  * LocalChannel — BroadcastChannel wrapper for same-browser communication.
  *
@@ -27,13 +31,20 @@ export class LocalChannel {
   private outbound  = new BroadcastChannel(GM_TO_PLAYER);
   private inbound   = new BroadcastChannel(PLAYER_TO_GM);
 
-  private msgListeners: ((msg: GMMessage) => void)[]     = [];
-  private reqListeners: ((req: LocalRequest) => void)[]  = [];
+  private msgListeners:      ((msg: GMMessage) => void)[]     = [];
+  private reqListeners:      ((req: LocalRequest) => void)[]  = [];
+  private peerMsgListeners:  ((msg: GMMessage) => void)[]     = [];
 
   constructor() {
-    // Listen for incoming player requests (GM side)
-    this.inbound.addEventListener('message', (e: MessageEvent<LocalRequest>) => {
-      for (const fn of this.reqListeners) fn(e.data);
+    // Listen for incoming peer-to-GM messages (GM side). Splits into
+    // request_state pings vs. full GMMessages from connected peers.
+    this.inbound.addEventListener('message', (e: MessageEvent<PeerToGm>) => {
+      const data = e.data;
+      if ((data as LocalRequest).type === 'request_state') {
+        for (const fn of this.reqListeners) fn(data as LocalRequest);
+      } else {
+        for (const fn of this.peerMsgListeners) fn(data as GMMessage);
+      }
     });
 
     // Listen for incoming state messages (Player side)
@@ -55,11 +66,22 @@ export class LocalChannel {
     return () => { this.reqListeners = this.reqListeners.filter((l) => l !== fn); };
   }
 
+  /** Register a callback for incoming peer GMMessages (e.g. projector_hello). */
+  onPeerMessage(fn: (msg: GMMessage) => void): () => void {
+    this.peerMsgListeners.push(fn);
+    return () => { this.peerMsgListeners = this.peerMsgListeners.filter((l) => l !== fn); };
+  }
+
   // ─── Player side ─────────────────────────────────────────────────────────
 
   /** Ask the GM for the current full state. Call once on player page load. */
   requestState(): void {
     this.inbound.postMessage({ type: 'request_state' } satisfies LocalRequest);
+  }
+
+  /** Send an upstream GMMessage to the GM (e.g. projector_hello). */
+  sendUpstream(msg: GMMessage): void {
+    this.inbound.postMessage(msg);
   }
 
   /** Register a callback for incoming state messages from GM */

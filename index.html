@@ -44,6 +44,7 @@
           <button id="clone-map-btn"  class="btn btn--ghost   btn--sm">Clone Map</button>
           <button id="delete-map-btn" class="btn btn--danger  btn--sm">Delete Map</button>
         </div>
+
         <p class="map-section-label map-section-label--gap">All Map Data</p>
         <div class="btn-row">
           <button id="export-btn" class="btn btn--ghost btn--sm">Save to File</button>
@@ -302,6 +303,42 @@
       </div>
     </section>
 
+    <section class="panel" id="projection-panel">
+      <button type="button" class="panel-title" aria-expanded="false">Projection View</button>
+      <div class="panel-body" hidden>
+        <p class="view-hint">The orange &amp; green outline on the map shows what the projector renders. Calibrate this map first to enable.</p>
+
+        <button id="projector-launch-btn" class="btn btn--primary btn--full">Open Projector Screen…</button>
+
+        <div id="projection-default-actions" class="viewport-actions">
+          <button id="edit-projection-btn"     class="btn btn--primary btn--full">Edit Projection View</button>
+          <div class="btn-row">
+            <button id="projection-blackout-btn" class="btn btn--ghost btn--sm" title="Black out the projector display">Black Out</button>
+            <button id="projection-fullmap-btn"  class="btn btn--ghost btn--sm" title="Show the entire map fit-to-window on the projector, ignoring calibration">Full Map</button>
+          </div>
+        </div>
+        <div id="edit-projection-actions" class="viewport-actions" hidden>
+          <p class="view-hint view-hint--editing">Drag the rectangle to pan · Size is locked to projector calibration</p>
+          <div class="btn-row">
+            <button id="projection-ok-btn"     class="btn btn--primary btn--sm">OK</button>
+            <button id="projection-cancel-btn" class="btn btn--ghost   btn--sm">Cancel</button>
+          </div>
+        </div>
+
+        <p class="view-hint view-hint--gap">Rotation</p>
+        <div class="btn-row" id="projection-rotation-row">
+          <button class="btn btn--ghost btn--sm" data-rotation="0">0&deg;</button>
+          <button class="btn btn--ghost btn--sm" data-rotation="90">90&deg;</button>
+          <button class="btn btn--ghost btn--sm" data-rotation="180">180&deg;</button>
+          <button class="btn btn--ghost btn--sm" data-rotation="270">270&deg;</button>
+        </div>
+
+        <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full">Recalibrate this Map…</button>
+
+        <p id="projector-status" class="projector-status">No projector connected.</p>
+      </div>
+    </section>
+
     <section class="panel" id="filter-panel-section">
       <button type="button" class="panel-title" aria-expanded="false">Visual Filter</button>
       <div class="panel-body" hidden>
@@ -334,6 +371,7 @@
       <canvas id="fog-canvas"></canvas>
       <canvas id="gm-markers-canvas"></canvas>
       <canvas id="viewport-canvas"></canvas>
+      <canvas id="projector-viewport-canvas"></canvas>
     </div>
 
     <div id="marker-context-menu" class="context-menu" hidden>

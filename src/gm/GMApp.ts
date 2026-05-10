@@ -5,6 +5,8 @@ import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { IconPicker } from './IconPicker.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
+import { MapCalibrationModal } from './MapCalibrationModal.ts';
+import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
 import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts';
 import { SoundboardEngine } from '../audio/SoundboardEngine.ts';
 import { Renderer } from '../rendering/Renderer.ts';
@@ -26,7 +28,8 @@ import { MotionTrackerInteraction } from './markerInteractions/MotionTrackerInte
 import { TrackerAudioPlayer } from '../audio/TrackerAudioPlayer.ts';
 import { blobToDataUrl } from '../utils/blob.ts';
 import type { MotionOverlay } from '../rendering/MarkerLayer.ts';
-import type { SessionState, StoredMap, TransitionConfig, Marker, MarkerIconData, AudioAsset, AudioRole, MotionRole } from '../types.ts';
+import type { SessionState, StoredMap, TransitionConfig, Marker, MarkerIconData, AudioAsset, AudioRole, MotionRole, ProjectorConnection, ProjectorViewport, GMMessage } from '../types.ts';
+import { defaultProjectorViewport } from '../types.ts';
 import QRCode from 'qrcode';
 
 const REMOTE_AUDIO_KEY = 'dmr_remote_audio';
@@ -55,6 +58,8 @@ export class GMApp {
   private renderer!:       Renderer;
   private fogEditor!:      FogEditor;
   private viewportEditor!: ViewportEditor;
+  private projectorEditor!: ProjectorViewportEditor;
+  private projectorConnection: ProjectorConnection | null = null;
   private markerEditor!:   MarkerEditor;
   private filterPanel!:     FilterPanel;
   private transitionPanel!: TransitionPanel;
@@ -118,6 +123,7 @@ export class GMApp {
       onPeerConnected:    (id) => this.onPeerConnected(id),
       onPeerDisconnected: (id) => this.onPeerDisconnected(id),
       onError: (err) => this.setStatus(`P2P error: ${err.message}`, 'error'),
+      onPeerMessage: (peerId, msg) => this.onPeerMessage(peerId, msg),
     });
   }
 
@@ -126,6 +132,7 @@ export class GMApp {
     this.bindRenderer();
     this.bindFogEditor();
     this.bindViewportEditor();
+    this.bindProjectorEditor();
     this.bindFilterPanel();
     this.bindTransitionPanel();
     this.bindUIControls();
@@ -574,9 +581,13 @@ export class GMApp {
       this.mapAspectRatio = aspect;
       this.fogEditor.setMapAspect(aspect);
       this.viewportEditor.setMapAspect(aspect);
+      this.projectorEditor.setMapAspect(aspect, true);
       this.markerEditor.update(this.state.getState().markers, aspect);
       this.motionTracker.setMapAspect(aspect);
       this.updateMarkerPanel();
+      // Push the loaded map's calibration + intrinsic width to the projector
+      // editor so it can size its rectangle correctly.
+      void this.refreshProjectorMapInfo();
     };
 
     // Pass fog explicitly so the texture-load callback always redraws the right
@@ -609,6 +620,8 @@ export class GMApp {
       !m.hidden || m.roles.audio === 'source' || m.roles.motion === 'source');
     const markerIconData    = this._collectIconData(visibleMarkers);
     const soundboardActive  = await this.soundboardPanel.getActiveSlots();
+    // Pull asset metadata so projector windows can size their crop correctly.
+    const asset = await this.maps.getAsset(map.id);
     this.host.broadcast({
       type: 'map_change',
       payload:    { id: map.id, name: map.name },
@@ -619,6 +632,9 @@ export class GMApp {
       audio:      this.state.getState().audio,
       ...(markerIconData.length > 0    ? { iconData:         markerIconData    } : {}),
       ...(soundboardActive.length > 0  ? { soundboardActive: soundboardActive } : {}),
+      ...(asset?.pixelsPerSquare       ? { mapPixelsPerSquare: asset.pixelsPerSquare } : {}),
+      ...(asset?.imageWidth            ? { mapImageWidth:      asset.imageWidth     } : {}),
+      ...(asset?.imageHeight           ? { mapImageHeight:     asset.imageHeight    } : {}),
       mapBlob:    blob,
       transition: this.buildTransitionConfig(),
     });
@@ -666,6 +682,153 @@ export class GMApp {
     this.renderer.setFilterEnabled(false); // GM sees raw unfiltered scene
     this.renderer.enableGMOverlay();
     this.renderer.setFogOpacity(0.35);     // GM sees through fog; players get full opacity
+  }
+
+  private bindProjectorEditor(): void {
+    const canvas = document.querySelector<HTMLCanvasElement>('#projector-viewport-canvas')!;
+    this.projectorEditor = new ProjectorViewportEditor(canvas);
+    this.projectorEditor.onChange((vp) => {
+      this.state.setProjectorViewport(vp);
+      this.host.broadcast({ type: 'projector_viewport_update', payload: vp });
+    });
+
+    // Edit Projection View toggle (mirrors the player viewport edit-mode flow).
+    const defaultActions = document.getElementById('projection-default-actions')!;
+    const editActions    = document.getElementById('edit-projection-actions')!;
+    let preEditViewport: ProjectorViewport | null = null;
+
+    const enterEdit = () => {
+      preEditViewport = this.state.snapshot().projectorViewport ?? null;
+      defaultActions.hidden = true;
+      editActions.hidden    = false;
+      this.projectorEditor.setEditMode(true);
+    };
+    const exitEdit = (commit: boolean) => {
+      if (!commit && preEditViewport) {
+        this.state.setProjectorViewport(preEditViewport);
+        this.projectorEditor.setViewport(preEditViewport);
+        this.host.broadcast({ type: 'projector_viewport_update', payload: preEditViewport });
+      }
+      preEditViewport = null;
+      defaultActions.hidden = false;
+      editActions.hidden    = true;
+      this.projectorEditor.setEditMode(false);
+    };
+    document.getElementById('edit-projection-btn')?.addEventListener('click',   enterEdit);
+    document.getElementById('projection-ok-btn')?.addEventListener('click',     () => exitEdit(true));
+    document.getElementById('projection-cancel-btn')?.addEventListener('click', () => exitEdit(false));
+
+    // Mode toggles — Reset to Full Map and Black Out are mutually exclusive
+    // states relative to 'scaled' (the default). Clicking an active button
+    // returns the projector to scaled; clicking the inactive other button
+    // switches to that mode.
+    const setMode = (mode: 'scaled' | 'full' | 'black') => {
+      const current = this.state.snapshot().projectorViewport ?? defaultProjectorViewport();
+      const next: ProjectorViewport = { ...current, mode };
+      this.state.setProjectorViewport(next);
+      this.projectorEditor.setViewport(next);
+      this.host.broadcast({ type: 'projector_viewport_update', payload: next });
+      this.refreshProjectionModeButtons();
+    };
+    document.getElementById('projection-fullmap-btn')?.addEventListener('click', () => {
+      const cur = this.state.snapshot().projectorViewport?.mode ?? 'scaled';
+      setMode(cur === 'full' ? 'scaled' : 'full');
+    });
+    document.getElementById('projection-blackout-btn')?.addEventListener('click', () => {
+      const cur = this.state.snapshot().projectorViewport?.mode ?? 'scaled';
+      setMode(cur === 'black' ? 'scaled' : 'black');
+    });
+
+    // Rotation buttons — quick set-and-broadcast.
+    document.querySelectorAll<HTMLButtonElement>('#projection-rotation-row [data-rotation]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const rotation = Number(btn.dataset['rotation']) as 0 | 90 | 180 | 270;
+        const current = this.state.snapshot().projectorViewport ?? defaultProjectorViewport();
+        const next: ProjectorViewport = { ...current, rotation };
+        this.state.setProjectorViewport(next);
+        this.projectorEditor.setViewport(next);
+        this.host.broadcast({ type: 'projector_viewport_update', payload: next });
+        this.refreshRotationButtons();
+      });
+    });
+
+    // Recalibrate this Map — opens the calibration modal for the active map's asset.
+    document.getElementById('projection-recal-map-btn')?.addEventListener('click', async () => {
+      const mapState = this.state.snapshot().map;
+      if (!mapState) return;
+      const asset = await this.maps.getAsset(mapState.id);
+      if (!asset) return;
+      const cal = new MapCalibrationModal();
+      await cal.open(asset);
+      // Pick up the new value into the projector editor.
+      void this.refreshProjectorMapInfo();
+    });
+
+    // Open Projector Screen — popup + URL fragment carries setup id (if known)
+    // so the projector window can pre-select. v1: just opens with the room
+    // code; the projector picks up its localStorage active setup. D10 will
+    // surface a setup-picker if the user wants to override.
+    document.getElementById('projector-launch-btn')?.addEventListener('click', () => {
+      const room = this.host.roomCode;
+      if (!room) { this.setStatus('Waiting for P2P… try again in a moment.', 'warn'); return; }
+      window.open(`/projector.html#${room}`, '_blank', 'noopener,popup,width=1280,height=800');
+    });
+  }
+
+  private refreshRotationButtons(): void {
+    const current = this.state.snapshot().projectorViewport?.rotation ?? 0;
+    document.querySelectorAll<HTMLButtonElement>('#projection-rotation-row [data-rotation]').forEach((btn) => {
+      btn.classList.toggle('btn--primary', Number(btn.dataset['rotation']) === current);
+      btn.classList.toggle('btn--ghost',   Number(btn.dataset['rotation']) !== current);
+    });
+  }
+
+  private refreshProjectionModeButtons(): void {
+    const mode = this.state.snapshot().projectorViewport?.mode ?? 'scaled';
+    const fullBtn  = document.getElementById('projection-fullmap-btn');
+    const blackBtn = document.getElementById('projection-blackout-btn');
+    if (fullBtn) {
+      const active = mode === 'full';
+      fullBtn.classList.toggle('btn--warn', active);
+      fullBtn.textContent = active ? 'Scaled View' : 'Full Map';
+    }
+    if (blackBtn) {
+      const active = mode === 'black';
+      blackBtn.classList.toggle('btn--danger', active);
+      blackBtn.textContent = active ? 'Restore' : 'Black Out';
+    }
+  }
+
+  private onPeerMessage(_peerId: string, msg: GMMessage): void {
+    if (msg.type === 'projector_hello') {
+      this.projectorConnection = {
+        setupName:       msg.setupName,
+        pixelsPerSquare: msg.pixelsPerSquare,
+        canvasWidth:     msg.canvasWidth,
+        canvasHeight:    msg.canvasHeight,
+      };
+      this.projectorEditor?.setConnection(this.projectorConnection);
+      this.refreshProjectorStatus();
+      // If the active map has no projectorViewport yet, seed a default one.
+      if (!this.state.snapshot().projectorViewport) {
+        this.state.setProjectorViewport(defaultProjectorViewport());
+      }
+      // Re-broadcast the current projector viewport so the projector
+      // window can position itself correctly.
+      const vp = this.state.snapshot().projectorViewport;
+      if (vp) this.host.broadcast({ type: 'projector_viewport_update', payload: vp });
+    }
+  }
+
+  private refreshProjectorStatus(): void {
+    const el = document.getElementById('projector-status');
+    if (!el) return;
+    if (!this.projectorConnection) {
+      el.textContent = 'No projector connected.';
+      return;
+    }
+    const c = this.projectorConnection;
+    el.textContent = `Connected: ${c.setupName} · ${c.canvasWidth}×${c.canvasHeight} @ ${c.pixelsPerSquare.toFixed(1)} px/sq`;
   }
 
   private bindViewportEditor(): void {
@@ -1018,6 +1181,34 @@ export class GMApp {
   private syncView(state: SessionState): void {
     this.viewportEditor.setView(state.view);
     this.viewBgColour.value = state.view.backgroundColor;
+    if (state.projectorViewport) this.projectorEditor.setViewport(state.projectorViewport);
+    this.refreshRotationButtons();
+    this.refreshProjectionModeButtons();
+  }
+
+  /**
+   * Push the active map's pixelsPerSquare and intrinsic image width to the
+   * projector editor so it can size its viewport rectangle. Called whenever
+   * the active map changes (or its calibration is updated).
+   */
+  private async refreshProjectorMapInfo(): Promise<void> {
+    const mapState = this.state.snapshot().map;
+    if (!mapState) {
+      this.projectorEditor.setMapPixelsPerSquare(null);
+      this.projectorEditor.setMapImageWidth(0);
+      this.host.updateMapAssetInfo(undefined, undefined, undefined);
+      return;
+    }
+    const asset = await this.maps.getAsset(mapState.id);
+    if (!asset) {
+      this.projectorEditor.setMapPixelsPerSquare(null);
+      this.projectorEditor.setMapImageWidth(0);
+      this.host.updateMapAssetInfo(undefined, undefined, undefined);
+      return;
+    }
+    this.projectorEditor.setMapPixelsPerSquare(asset.pixelsPerSquare ?? null);
+    this.projectorEditor.setMapImageWidth(asset.imageWidth ?? 0);
+    this.host.updateMapAssetInfo(asset.pixelsPerSquare, asset.imageWidth, asset.imageHeight);
   }
 
   private setStatus(msg: string, level: 'ok' | 'warn' | 'error'): void {

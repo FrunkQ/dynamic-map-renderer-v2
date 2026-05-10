@@ -77,8 +77,9 @@ export default defineConfig(({ command }) => ({
   build: {
     rollupOptions: {
       input: {
-        main: 'index.html',
-        player: 'player.html',
+        main:      'index.html',
+        player:    'player.html',
+        projector: 'projector.html',
       },
     },
     target: 'es2023',

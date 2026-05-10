@@ -251,6 +251,51 @@ export interface TransitionConfig {
 /** Increment when breaking changes are made to the schema. Add a migrator in storage/migrations.ts. */
 export const STATE_VERSION = 2;
 
+/**
+ * GM-controlled position of the projector viewport rectangle on the active map.
+ * The size of the rectangle is NOT stored here — it's derived per-frame from
+ * the projector's reported canvas size + projector calibration + map calibration.
+ * Stored: only the centre and rotation (which the GM directly controls).
+ */
+/**
+ * Projector display mode.
+ *  - 'scaled': default — render the calibrated crop at true table scale.
+ *  - 'full':   ignore calibration; show the entire map fit-to-window.
+ *  - 'black':  render solid black, e.g. while the GM resets the table.
+ * Mutually exclusive.
+ */
+export type ProjectorMode = 'scaled' | 'full' | 'black';
+
+export interface ProjectorViewport {
+  /** Centre of the projector view, normalised 0..1 over the map. */
+  centerX: number;
+  centerY: number;
+  /** Display rotation applied at the projector end. 0 / 90 / 180 / 270. */
+  rotation: 0 | 90 | 180 | 270;
+  /** Render mode — see ProjectorMode docs. */
+  mode: ProjectorMode;
+}
+
+export function defaultProjectorViewport(): ProjectorViewport {
+  return { centerX: 0.5, centerY: 0.5, rotation: 0, mode: 'scaled' };
+}
+
+/**
+ * Live info about a connected projector window. Reported by the projector
+ * via `projector_hello` on connect (and on resize). Cleared when the
+ * projector window disconnects. Used by the GM to size the projector
+ * viewport rectangle on the map.
+ */
+export interface ProjectorConnection {
+  /** Human-readable setup name from the projector's localStorage. */
+  setupName: string;
+  /** Projector device's CSS pixels per 1"/25 mm physical square. */
+  pixelsPerSquare: number;
+  /** Projector window's current canvas size, CSS pixels. */
+  canvasWidth: number;
+  canvasHeight: number;
+}
+
 export interface SessionState {
   version: typeof STATE_VERSION;
   map: MapState | null;
@@ -263,6 +308,9 @@ export interface SessionState {
   transition?: TransitionConfig;
   /** Per-map motion tracker config — controls whichever marker holds the tracker role. */
   motionTracker: MotionTrackerConfig;
+  /** Projector viewport position + rotation (per-map). Optional — only set
+   *  once a projector has connected at least once. */
+  projectorViewport?: ProjectorViewport;
 }
 
 export function defaultSessionState(): SessionState {
@@ -294,6 +342,10 @@ export interface MsgFullState {
   soundboardActive?: SoundboardAudioData[];
   /** All loaded audio assets — preloaded so sounds start instantly on first play */
   soundboardAssets?: { assetId: string; dataUrl?: string }[];
+  /** Map asset metadata needed by the projector view to size its viewport. */
+  mapPixelsPerSquare?: number;
+  mapImageWidth?:      number;
+  mapImageHeight?:     number;
 }
 
 export interface MsgViewUpdate {
@@ -338,6 +390,10 @@ export interface MsgMapChange {
   soundboardActive?: SoundboardAudioData[];
   /** All loaded audio assets for the incoming map — preloaded for instant playback */
   soundboardAssets?: { assetId: string; dataUrl?: string }[];
+  /** Map asset metadata needed by the projector view to size its viewport. */
+  mapPixelsPerSquare?: number;
+  mapImageWidth?:      number;
+  mapImageHeight?:     number;
   mapBlob: ArrayBuffer;
   transition?: TransitionConfig;
 }
@@ -448,6 +504,28 @@ export interface MsgTrackerBlob {
   audioVolume?:   number;
 }
 
+/**
+ * Projector → GM identification message. Sent by the projector window on
+ * connect (and on its own resize) so the GM knows the projector is live and
+ * can size the projector viewport rectangle correctly on its canvas.
+ */
+export interface MsgProjectorHello {
+  type: 'projector_hello';
+  setupName:       string;
+  pixelsPerSquare: number;
+  canvasWidth:     number;
+  canvasHeight:    number;
+}
+
+/**
+ * GM → Projector update of the projector viewport (centre + rotation) so the
+ * projector can compute its own crop on the map.
+ */
+export interface MsgProjectorViewportUpdate {
+  type: 'projector_viewport_update';
+  payload: ProjectorViewport;
+}
+
 export type GMMessage =
   | MsgFullState
   | MsgViewUpdate
@@ -465,7 +543,9 @@ export type GMMessage =
   | MsgPositionalVolume
   | MsgPositionalStop
   | MsgTrackerScan
-  | MsgTrackerBlob;
+  | MsgTrackerBlob
+  | MsgProjectorHello
+  | MsgProjectorViewportUpdate;
 
 // ─── Storage types ───────────────────────────────────────────────────────────
 
@@ -511,6 +591,23 @@ export interface MapAsset {
   attribution?:     string;
   attributionLink?: string;
   license?:         string;
+  /**
+   * Map-image pixels per 1"/25 mm grid square. Set via the Calibrate flow in
+   * the asset editor (drag two endpoints, type the distance in squares). Used
+   * by the Projector view to render at true table scale. Undefined = uncalibrated.
+   */
+  pixelsPerSquare?: number;
+  /**
+   * Last-saved positions of the two calibration endpoints in NATURAL image
+   * coordinates, plus the squares value the user typed. Stored so the user
+   * can reopen the calibration UI and tweak from where they left off rather
+   * than restart from the default centered line.
+   */
+  calibrationLine?: {
+    ax: number; ay: number;
+    bx: number; by: number;
+    squares: number;
+  };
   addedAt:       number;
 }
 

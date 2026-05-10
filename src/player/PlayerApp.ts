@@ -1,4 +1,5 @@
 import { Guest } from '../p2p/Guest.ts';
+import { bindFullscreenButton } from '../utils/fullscreen.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { MarkerTexture } from '../rendering/MarkerTexture.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
@@ -73,6 +74,9 @@ export class PlayerApp {
   private seenSeqs = new Set<number>();
 
   async init(): Promise<void> {
+    const fsBtn = document.getElementById('player-fullscreen-btn');
+    if (fsBtn) bindFullscreenButton(fsBtn);
+
     this.renderer = new Renderer(
       document.querySelector<HTMLCanvasElement>('#renderer-canvas')!,
       { preserveDrawingBuffer: true },

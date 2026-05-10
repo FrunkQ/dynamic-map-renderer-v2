@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#000000" />
+  <title>Dynamic Map Renderer — Projector</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body class="projector-view">
+
+  <canvas id="renderer-canvas"></canvas>
+
+  <!-- Status overlay — shown while connecting or on errors -->
+  <div id="status" hidden></div>
+
+  <!-- Connect panel — shown when no room code in URL -->
+  <div id="connect-panel" class="connect-panel" hidden>
+    <h1 class="connect-title">Dynamic Map Renderer — Projector</h1>
+    <p class="connect-sub">Enter the room code shown on the GM screen</p>
+    <div class="connect-row">
+      <input type="text" id="room-input" class="room-input" placeholder="e.g. abc-1234-xyz" autocomplete="off" />
+      <button id="connect-btn" class="btn btn--primary">Connect</button>
+    </div>
+  </div>
+
+  <!-- Calibration prompt — shown when no projector calibration is set up yet -->
+  <div id="calibration-prompt" class="calibration-prompt" hidden>
+    <h1>Projector not yet calibrated</h1>
+    <p>Tell this device how many of its pixels equal one inch on the projection surface. Once calibrated, this window will render maps at true table scale.</p>
+    <button id="calibrate-btn" class="btn btn--primary">Calibrate this device</button>
+  </div>
+
+  <!-- Floating controls panel — fade-out when idle, accessible via right-click -->
+  <div id="projector-controls" class="projector-controls" hidden>
+    <span class="projector-setup-label"></span>
+    <button id="recalibrate-btn"  class="btn btn--ghost btn--xs" title="Re-calibrate this device">⚙ Calibrate</button>
+    <button id="fullscreen-btn"   class="btn btn--ghost btn--xs" title="Toggle fullscreen">⛶ Fullscreen</button>
+  </div>
+
+  <script type="module" src="/src/projector.ts"></script>
+</body>
+</html>

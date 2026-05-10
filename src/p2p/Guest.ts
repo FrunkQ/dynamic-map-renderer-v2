@@ -65,6 +65,17 @@ export class Guest {
     this._doConnect(roomCode);
   }
 
+  /**
+   * Send a message upstream to the GM. Goes through both LocalChannel
+   * (instant for same-browser windows) and the PeerJS connection (for
+   * remote players). Cheap to double-send: GM dedups by message identity
+   * via inbound type discrimination on its own state.
+   */
+  send(msg: GMMessage): void {
+    this.local.sendUpstream(msg);
+    if (this.conn?.open) this.conn.send(msg);
+  }
+
   destroy(): void {
     this._destroyed     = true;
     this._reconnectCode = null;

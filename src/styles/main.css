@@ -47,6 +47,13 @@
 
   /* Sidebar */
   --sidebar-width: 280px;
+
+  /* Aliases — newer code uses shorter names that were never originally
+     defined. Resolve them to the canonical tokens so colour and surface
+     references everywhere fall back consistently. */
+  --text:         var(--text-primary);
+  --bg-elevated:  var(--bg-panel);
+  --surface-2:    var(--bg-hover);
 }
 
 /* ── Reset ─────────────────────────────────────────────────────────────── */
@@ -121,6 +128,23 @@ body.gm-view {
 #viewport-canvas {
   pointer-events: none;
   z-index: 3;
+}
+#projector-viewport-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  /* The editor hit-tests on a parent wrapper and only consumes events that
+     land inside the rect, so the canvas itself stays click-transparent. */
+  pointer-events: none;
+}
+.projector-status {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0;
+  font-family: var(--font-mono);
+  line-height: 1.4;
 }
 
 /* ── Player Layout ─────────────────────────────────────────────────────── */
@@ -674,6 +698,18 @@ body.player-view #renderer-canvas {
 .view-hint--editing {
   color: rgba(255, 140, 0, 0.8);
 }
+
+.view-hint--gap { margin-top: var(--space-md); }
+
+/* Orange toggle button — used for the "Reset to Full Map" projector toggle
+   so the GM can spot at a glance that the projector is in a non-default
+   "show everything" state. */
+.btn--warn {
+  background: rgba(208, 144, 32, 0.18);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.btn--warn:hover { background: rgba(208, 144, 32, 0.28); }
 
 .viewport-actions {
   display: flex;
@@ -1353,6 +1389,309 @@ body.player-view #renderer-canvas {
 .weblinks-result--fail  { border-left-color: #dc2626; color: var(--text-dim); }
 .weblinks-result--busy  { border-left-color: var(--accent); color: var(--text-dim); }
 
+/* Map calibration modal — full-screen drag-two-crosses overlay with zoom/pan. */
+.calibration-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 10001;
+}
+.calibration-frame {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+.calibration-header {
+  padding: 8px var(--space-md);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.calibration-header h3 { margin: 0 0 2px; font-size: 0.95rem; }
+.calibration-header p  { margin: 0; font-size: 0.7rem; color: var(--text-dim); }
+.calibration-canvas-wrap {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: #050505;
+  /* Subtle checker so transparent images stay visible. */
+  background-image:
+    linear-gradient(45deg, #0c0c0c 25%, transparent 25%),
+    linear-gradient(-45deg, #0c0c0c 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #0c0c0c 75%),
+    linear-gradient(-45deg, transparent 75%, #0c0c0c 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  cursor: grab;
+}
+.calibration-canvas-wrap:active { cursor: grabbing; }
+.calibration-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  touch-action: none;
+}
+.calibration-image { pointer-events: none; }
+
+/* Connecting line + cross arms use a layered "yellow base + dark marching
+   ants" pattern so they stay visible on light and dark map backgrounds.
+   non-scaling-stroke keeps stroke widths and dash sizes in screen pixels
+   regardless of viewBox zoom. */
+.calibration-line { fill: none; vector-effect: non-scaling-stroke; }
+.calibration-line-base { stroke: #fbbf24; stroke-width: 2; }
+.calibration-line-ants {
+  stroke: #0a0e1a;
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  animation: cx-march 0.7s linear infinite;
+}
+
+.calibration-handle .cx-arm  { vector-effect: non-scaling-stroke; }
+.calibration-handle .cx-base { stroke: #fbbf24; stroke-width: 3; }
+.calibration-handle .cx-ants {
+  stroke: #0a0e1a;
+  stroke-width: 3;
+  stroke-dasharray: 4 4;
+  animation: cx-march 0.6s linear infinite;
+}
+.calibration-handle .cx-dot {
+  fill: #fbbf24;
+  stroke: #0a0e1a;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.calibration-handle .cx-hit {
+  fill: transparent;
+  pointer-events: all;
+  cursor: grab;
+}
+.calibration-handle:active .cx-hit { cursor: grabbing; }
+
+@keyframes cx-march {
+  to { stroke-dashoffset: -12; }
+}
+.calibration-footer {
+  padding: var(--space-md);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.calibration-distance { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.calibration-distance-input {
+  width: 90px;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.calibration-current { font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono); }
+.calibration-actions { margin-left: auto; display: flex; gap: var(--space-sm); }
+
+.map-edit-calibration-state {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  flex: 1;
+  font-family: var(--font-mono);
+}
+
+/* Player + Projector floating fullscreen corner button — auto-fades when idle. */
+.player-fullscreen-btn {
+  position: fixed;
+  bottom: 12px; right: 12px;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  opacity: 0.25;
+  transition: opacity 0.25s;
+}
+.player-fullscreen-btn:hover { opacity: 1; }
+
+/* Projector view standalone styles */
+.projector-view { background: #000; color: var(--text); margin: 0; overflow: hidden; }
+.projector-view #renderer-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+/* Black-out overlay — covers everything when state.projectorViewport.mode === 'black'. */
+.projector-blackout {
+  position: fixed; inset: 0;
+  background: #000;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.calibration-prompt {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  padding: var(--space-lg);
+  background: #000;
+  color: var(--text);
+}
+.calibration-prompt h1 { margin: 0 0 var(--space-sm); font-size: 1.5rem; }
+.calibration-prompt p  { margin: 0 0 var(--space-md); max-width: 480px; color: var(--text-dim); }
+
+.projector-controls {
+  position: fixed;
+  bottom: 12px; right: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.75rem;
+  backdrop-filter: blur(4px);
+  opacity: 0.3;
+  transition: opacity 0.25s;
+}
+.projector-controls:hover { opacity: 1; }
+.projector-setup-label { color: var(--text-dim); font-family: var(--font-mono); margin-right: 4px; }
+
+/* Projector calibration modal — fullscreen with thin top/bottom bars and
+   the calibration stage filling everything in between. */
+.pcal-overlay {
+  position: fixed; inset: 0;
+  background: #000;
+  z-index: 10001;
+}
+.pcal-frame {
+  width: 100vw; height: 100vh;
+  display: flex; flex-direction: column;
+  background: #000;
+}
+.pcal-topbar {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 8px var(--space-md);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.pcal-titlewrap h3 { margin: 0 0 2px; font-size: 0.95rem; }
+.pcal-titlewrap p  { margin: 0; font-size: 0.7rem; color: var(--text-dim); max-width: 60ch; }
+.pcal-topbar-actions {
+  display: flex; align-items: center; gap: 6px;
+}
+.pcal-saved-label { font-size: 0.7rem; color: var(--text-dim); }
+.pcal-saved-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  min-width: 180px;
+}
+
+.pcal-method {
+  display: flex; align-items: center; gap: var(--space-md);
+  padding: 8px var(--space-md);
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.pcal-radio {
+  font-size: 0.85rem;
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer;
+}
+
+.pcal-stage {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #050505;
+}
+.pcal-lfd-pane {
+  padding: var(--space-lg);
+  display: flex; flex-direction: column; gap: var(--space-md);
+  align-items: flex-start;
+}
+.pcal-lfd-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-sm) var(--space-md);
+  align-items: center;
+}
+.pcal-lfd-grid label { font-size: 0.85rem; color: var(--text-dim); }
+.pcal-lfd-grid select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.95rem;
+  min-width: 280px;
+}
+.pcal-lfd-note {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  max-width: 60ch;
+  margin: 0;
+}
+
+.pcal-proj-pane {
+  position: absolute; inset: 0;
+}
+.pcal-proj-grid { display: block; width: 100%; height: 100%; background: #0a0a0a; }
+.pcal-proj-ruler-hint {
+  position: absolute; left: var(--space-md); top: var(--space-md);
+  font-size: 0.8rem;
+  color: rgba(251, 191, 36, 0.95);
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  pointer-events: none;
+  max-width: 50ch;
+  line-height: 1.4;
+}
+
+.pcal-bottombar {
+  display: flex; align-items: center; gap: var(--space-md);
+  padding: 8px var(--space-md);
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  flex-wrap: wrap;
+}
+.pcal-sliders {
+  display: grid;
+  grid-template-columns: auto minmax(200px, 280px) auto minmax(120px, 180px);
+  gap: 4px var(--space-sm);
+  align-items: center;
+}
+.pcal-sliders label { font-size: 0.7rem; color: var(--text-dim); }
+.pcal-sliders input[type=range] { width: 100%; }
+.pcal-result-value {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.pcal-name-input {
+  flex: 1;
+  min-width: 220px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
 /* Map asset library hover-preview popover. */
 .map-preview-popover {
   position: fixed;
@@ -1389,6 +1728,9 @@ body.player-view #renderer-canvas {
 .sound-tag--freesound { color: #22c55e; border-color: rgba(34, 197, 94, 0.4); }
 .sound-tag--url       { color: #3b82f6; border-color: rgba(59, 130, 246, 0.4); }
 .sound-tag--local     { color: #94a3b8; border-color: rgba(148, 163, 184, 0.4); }
+.sound-tag--scaled    { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
+.map-recal-pill { cursor: pointer; transition: background 0.15s; }
+.map-recal-pill:hover { background: rgba(251, 191, 36, 0.15); }
 
 /* Unused-asset chip — shown next to library rows / icons that aren't referenced anywhere. */
 .sound-unused {
