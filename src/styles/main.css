@@ -1586,10 +1586,14 @@ body.player-view #renderer-canvas {
   padding: 6px 10px;
   display: flex; align-items: center; gap: 6px;
   font-size: 0.75rem;
+  /* Slow fade so the panel can fully disappear after a period of mouse
+     inactivity (managed by ProjectorApp via the .idle class) — table
+     players shouldn't see lingering UI chrome. */
+  transition: opacity 0.6s ease;
   backdrop-filter: blur(4px);
   opacity: 0.3;
-  transition: opacity 0.25s;
 }
+.projector-controls.idle { opacity: 0; }
 .projector-controls:hover { opacity: 1; }
 .projector-setup-label { color: var(--text-dim); font-family: var(--font-mono); margin-right: 4px; }
 

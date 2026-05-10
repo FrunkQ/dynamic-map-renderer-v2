@@ -60,6 +60,7 @@ export class ProjectorApp {
   private rendererCanvas!:  HTMLCanvasElement;
   private fsUnbind:         (() => void) | null = null;
   private fsBtn:            HTMLElement | null = null;
+  private idleTimer:        ReturnType<typeof setTimeout> | null = null;
 
   // Cached pieces of state needed to compute our viewport.
   private mapBlob:           ArrayBuffer | null = null;
@@ -104,6 +105,20 @@ export class ProjectorApp {
 
     this.fsBtn = document.getElementById('fullscreen-btn');
     if (this.fsBtn) this.fsUnbind = bindFullscreenButton(this.fsBtn);
+
+    // Auto-fade the controls panel after 10 s of mouse inactivity. Any mouse
+    // movement on the page brings it back. The CSS .idle class drives a slow
+    // opacity transition; :hover always wins so the user can still grab the
+    // panel by hovering over its corner even when fully faded.
+    const wakeControls = () => {
+      this.controlsEl.classList.remove('idle');
+      if (this.idleTimer) clearTimeout(this.idleTimer);
+      this.idleTimer = setTimeout(() => this.controlsEl.classList.add('idle'), 10_000);
+    };
+    window.addEventListener('mousemove',   wakeControls);
+    window.addEventListener('pointermove', wakeControls);
+    window.addEventListener('keydown',     wakeControls);
+    wakeControls();
 
     // Renderer: filters off by default (D8 will gate this), no fog opacity reduction.
     this.renderer = new Renderer(this.rendererCanvas);
