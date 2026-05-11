@@ -711,6 +711,12 @@ export class GMApp {
     const soundboardActive  = await this.soundboardPanel.getActiveSlots();
     // Pull asset metadata so projector windows can size their crop correctly.
     const asset = await this.maps.getAsset(map.id);
+    // Pull the new map's projector viewport so the projector window applies
+    // its rotation / mode / grid / filter-toggle atomically with the map
+    // swap. Fall back to defaults when this map's config never saved one,
+    // so the projector resets to a clean state rather than inheriting the
+    // previous map's rotation.
+    const nextProjVp = this.state.getState().projectorViewport ?? defaultProjectorViewport();
     this.host.broadcast({
       type: 'map_change',
       payload:    { id: map.id, name: map.name },
@@ -724,6 +730,7 @@ export class GMApp {
       ...(asset?.pixelsPerSquare       ? { mapPixelsPerSquare: asset.pixelsPerSquare } : {}),
       ...(asset?.imageWidth            ? { mapImageWidth:      asset.imageWidth     } : {}),
       ...(asset?.imageHeight           ? { mapImageHeight:     asset.imageHeight    } : {}),
+      projectorViewport: nextProjVp,
       mapBlob:    blob,
       transition: this.buildTransitionConfig(),
     });

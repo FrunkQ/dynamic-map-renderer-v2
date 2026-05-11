@@ -408,6 +408,10 @@ export interface MsgMapChange {
   mapPixelsPerSquare?: number;
   mapImageWidth?:      number;
   mapImageHeight?:     number;
+  /** Projector viewport for the incoming map (rotation, mode, grid, filter
+   *  toggle, etc.). Carried in map_change so the projector window applies
+   *  the new map's saved viewport instead of holding over the prior map's. */
+  projectorViewport?: ProjectorViewport;
   mapBlob: ArrayBuffer;
   transition?: TransitionConfig;
 }

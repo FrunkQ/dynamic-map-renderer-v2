@@ -322,6 +322,16 @@ export class ProjectorApp {
         if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
         if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
         if (msg.mapImageHeight     !== undefined) this.mapImageHeight     = msg.mapImageHeight;
+        // Viewport (rotation / mode / grid / filterEnabled) also belongs to
+        // the incoming map. Apply the same way projector_viewport_update
+        // would so we don't hold over the prior map's rotation.
+        if (msg.projectorViewport) {
+          const prevRot           = this.projectorViewport.rotation;
+          const prevFilterEnabled = this.projectorViewport.filterEnabled;
+          this.projectorViewport  = msg.projectorViewport;
+          if (prevRot !== this.projectorViewport.rotation) this._sendHello();
+          if (prevFilterEnabled !== this.projectorViewport.filterEnabled) this._applyFilter();
+        }
         if (blob) {
           this.mapBlob = blob;
           void this.renderer.loadMap(blob, this.currentFog);
