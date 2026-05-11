@@ -115,13 +115,14 @@ export class AboutDialog {
     body.className = 'about-body';
     dialog.appendChild(body);
 
-    // ── Action footer — bottom-right buttons.
-    //    Edit mode: Cancel + Save.
-    //    Display mode: OK (close). The × in the header still works too, but
-    //    a discoverable OK button at the bottom matches user expectations.
-    const actionFooter = document.createElement('div');
-    actionFooter.className = 'about-actions';
+    // ── Action footer ─────────────────────────────────────────────────
+    // Edit mode keeps Cancel + Save as a standalone right-aligned row;
+    // display mode tucks an OK button into the always-on Mappadux footer
+    // below (alongside the icon + links) so we don't have two stacked
+    // footer rows when the only action is "close this".
     if (this.editing) {
+      const actionFooter = document.createElement('div');
+      actionFooter.className = 'about-actions';
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
       cancelBtn.className = 'btn btn--ghost';
@@ -138,15 +139,8 @@ export class AboutDialog {
         });
       });
       actionFooter.append(cancelBtn, saveBtn);
-    } else {
-      const okBtn = document.createElement('button');
-      okBtn.type = 'button';
-      okBtn.className = 'btn btn--primary';
-      okBtn.textContent = 'OK';
-      okBtn.addEventListener('click', () => this._resolve(null));
-      actionFooter.appendChild(okBtn);
+      dialog.appendChild(actionFooter);
     }
-    dialog.appendChild(actionFooter);
 
     // ── Always-on Mappadux footer (never editable) ──
     const footer = document.createElement('div');
@@ -766,10 +760,24 @@ export class AboutDialog {
     const root = document.createElement('div');
     root.className = 'about-mpx-footer';
 
+    // Left column: small Mappadux duck icon, visually balancing the
+    // action button on the right.
+    const iconCol = document.createElement('div');
+    iconCol.className = 'about-mpx-icon';
+    const icon = document.createElement('img');
+    icon.src = '/icons/icon-192.png';
+    icon.alt = '';
+    iconCol.appendChild(icon);
+    root.appendChild(iconCol);
+
+    // Centre column: version, links, licence stacked.
+    const info = document.createElement('div');
+    info.className = 'about-mpx-info';
+
     const versionLine = document.createElement('div');
     versionLine.className = 'about-mpx-version';
     versionLine.textContent = `Mappadux v${__APP_VERSION__} — VTT@Home`;
-    root.appendChild(versionLine);
+    info.appendChild(versionLine);
 
     const linksRow = document.createElement('div');
     linksRow.className = 'about-mpx-links';
@@ -793,12 +801,28 @@ export class AboutDialog {
       a.textContent = label;
       linksRow.appendChild(a);
     });
-    root.appendChild(linksRow);
+    info.appendChild(linksRow);
 
     const licence = document.createElement('div');
     licence.className = 'about-mpx-licence';
     licence.textContent = 'MIT © FrunkQ';
-    root.appendChild(licence);
+    info.appendChild(licence);
+
+    root.appendChild(info);
+
+    // Right column: OK button when in display mode. Edit mode keeps the
+    // standalone Cancel/Save row above; nothing here.
+    const actionCol = document.createElement('div');
+    actionCol.className = 'about-mpx-action';
+    if (!this.editing) {
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'btn btn--primary';
+      okBtn.textContent = 'OK';
+      okBtn.addEventListener('click', () => this._resolve(null));
+      actionCol.appendChild(okBtn);
+    }
+    root.appendChild(actionCol);
 
     return root;
   }

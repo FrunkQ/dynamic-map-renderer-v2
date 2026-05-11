@@ -2229,13 +2229,28 @@ option.select-option--add {
   background: rgba(0, 0, 0, 0.15);
 }
 .about-mpx-footer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+}
+.about-mpx-icon img {
+  width: 48px;
+  height: 48px;
+  display: block;
+  border-radius: 6px;
+  opacity: 0.92;
+}
+.about-mpx-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
   align-items: center;
-  font-size: var(--font-size-sm);
-  color: var(--text-dim);
+  text-align: center;
 }
+.about-mpx-action { display: flex; justify-content: flex-end; }
 .about-mpx-version { color: var(--text-secondary); font-weight: 500; }
 .about-mpx-links { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .about-mpx-links a { color: var(--accent); text-decoration: none; }
