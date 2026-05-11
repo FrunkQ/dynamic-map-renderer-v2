@@ -1,6 +1,14 @@
 import type { ImageAsset, ImageCategory } from '../types.ts';
 import { SYSTEM_CATEGORY_IDS } from '../types.ts';
 import { ImageAssetStore } from './ImageAssetStore.ts';
+import type { ImageSourceConnector, ConnectorManifestEntry } from './connectors/types.ts';
+import { gameIconsConnector } from './connectors/gameIcons.ts';
+import { lucideConnector } from './connectors/lucide.ts';
+
+const CONNECTORS: readonly ImageSourceConnector[] = [
+  gameIconsConnector,
+  lucideConnector,
+];
 
 /**
  * ImageAssetModal — Image Assets Library browser. Third first-class asset
@@ -26,6 +34,14 @@ export class ImageAssetModal {
   private assets: ImageAsset[]        = [];
   private blobUrls: string[]          = []; // collected for revocation on close
   private previewPopover: HTMLElement | null = null;
+  /** Which tab is active. 'library' shows the local categories+assets grid;
+   *  a connector id shows that connector's manifest as importable rows. */
+  private activeTab: 'library' | string = 'library';
+  /** Cached manifest entries per connector — fetched on first tab open. */
+  private connectorManifests = new Map<string, ConnectorManifestEntry[]>();
+  /** Connector tab's own search query — separate from the library search so
+   *  switching tabs doesn't clobber state. */
+  private connectorSearchQuery: string = '';
 
   async open(opts: ImageAssetModalOptions = {}): Promise<void> {
     if (opts.initialCategoryId) this.selectedCategoryId = opts.initialCategoryId;
@@ -95,6 +111,12 @@ export class ImageAssetModal {
     main.className = 'img-modal-main';
     body.appendChild(main);
 
+    // Tab strip — library + one per registered connector
+    const tabs = document.createElement('div');
+    tabs.className = 'img-modal-tabs';
+    tabs.id = 'img-modal-tabs';
+    main.appendChild(tabs);
+
     // Main area: toolbar + grid
     const toolbar = document.createElement('div');
     toolbar.className = 'img-modal-toolbar';
@@ -109,10 +131,57 @@ export class ImageAssetModal {
     return overlay;
   }
 
+  private _renderTabs(): void {
+    const host = this.overlay?.querySelector<HTMLElement>('#img-modal-tabs');
+    if (!host) return;
+    host.innerHTML = '';
+
+    const libTab = document.createElement('button');
+    libTab.type = 'button';
+    libTab.className = 'img-modal-tab' + (this.activeTab === 'library' ? ' is-active' : '');
+    libTab.textContent = 'My Library';
+    libTab.addEventListener('click', () => {
+      this.activeTab = 'library';
+      this._renderTabs();
+      this._renderToolbar();
+      this._renderGrid();
+    });
+    host.appendChild(libTab);
+
+    for (const c of CONNECTORS) {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'img-modal-tab' + (this.activeTab === c.id ? ' is-active' : '');
+      tab.textContent = `Browse ${c.displayName}`;
+      tab.title = `${c.license} — ${c.sourceUrl}`;
+      tab.addEventListener('click', () => void this._switchToConnectorTab(c));
+      host.appendChild(tab);
+    }
+  }
+
+  private async _switchToConnectorTab(c: ImageSourceConnector): Promise<void> {
+    this.activeTab = c.id;
+    this.connectorSearchQuery = '';
+    // Lazy-load the manifest on first visit; cache thereafter.
+    if (!this.connectorManifests.has(c.id)) {
+      try {
+        const manifest = await c.loadManifest();
+        this.connectorManifests.set(c.id, manifest);
+      } catch (err) {
+        this.connectorManifests.set(c.id, []);
+        console.warn(`Connector ${c.id} manifest load failed:`, err);
+      }
+    }
+    this._renderTabs();
+    this._renderToolbar();
+    this._renderGrid();
+  }
+
   private async _reload(): Promise<void> {
     this.categories = await ImageAssetStore.getAllCategories();
     this.assets     = await ImageAssetStore.getAll();
     this._renderSidebar();
+    this._renderTabs();
     this._renderToolbar();
     this._renderGrid();
   }
@@ -214,6 +283,14 @@ export class ImageAssetModal {
     if (!host) return;
     host.innerHTML = '';
 
+    if (this.activeTab === 'library') {
+      this._renderLibraryToolbar(host);
+    } else {
+      this._renderConnectorToolbar(host);
+    }
+  }
+
+  private _renderLibraryToolbar(host: HTMLElement): void {
     // Category title + count
     const cat = this.categories.find((c) => c.id === this.selectedCategoryId);
     const countInCat = this.assets.filter((a) => a.categoryId === this.selectedCategoryId).length;
@@ -248,6 +325,46 @@ export class ImageAssetModal {
     addUpload.textContent = '+ Upload image';
     addUpload.addEventListener('click', () => this._promptUpload());
     host.appendChild(addUpload);
+  }
+
+  private _renderConnectorToolbar(host: HTMLElement): void {
+    const conn = CONNECTORS.find((c) => c.id === this.activeTab);
+    if (!conn) return;
+
+    // Title + licence chip
+    const title = document.createElement('div');
+    title.className = 'img-modal-cat-title';
+    title.textContent = conn.displayName;
+    host.appendChild(title);
+
+    const lic = document.createElement('a');
+    lic.className = 'img-modal-license-chip';
+    lic.href = conn.licenseUrl;
+    lic.target = '_blank';
+    lic.rel = 'noopener noreferrer';
+    lic.textContent = conn.license;
+    host.appendChild(lic);
+
+    // Search
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'img-modal-search';
+    search.placeholder = 'Search this source…';
+    search.value = this.connectorSearchQuery;
+    search.addEventListener('input', () => {
+      this.connectorSearchQuery = search.value.trim().toLowerCase();
+      this._renderGrid();
+    });
+    host.appendChild(search);
+
+    // "Import into" target — small label + read-only display of the
+    // currently-selected sidebar category. The sidebar selection drives
+    // where imported icons land.
+    const target = document.createElement('div');
+    target.className = 'img-modal-import-target';
+    const targetCat = this.categories.find((c) => c.id === this.selectedCategoryId);
+    target.textContent = `Imports → ${targetCat?.name ?? 'Unknown'}`;
+    host.appendChild(target);
   }
 
   private async _promptAddUnicode(): Promise<void> {
@@ -326,6 +443,14 @@ export class ImageAssetModal {
     this.blobUrls = [];
     host.innerHTML = '';
 
+    if (this.activeTab === 'library') {
+      this._renderLibraryGrid(host);
+    } else {
+      this._renderConnectorGrid(host);
+    }
+  }
+
+  private _renderLibraryGrid(host: HTMLElement): void {
     const filtered = this.assets
       .filter((a) => a.categoryId === this.selectedCategoryId)
       .filter((a) => {
@@ -346,6 +471,199 @@ export class ImageAssetModal {
 
     for (const asset of filtered) {
       host.appendChild(this._iconCell(asset));
+    }
+  }
+
+  private _renderConnectorGrid(host: HTMLElement): void {
+    const conn = CONNECTORS.find((c) => c.id === this.activeTab);
+    if (!conn) return;
+    const manifest = this.connectorManifests.get(conn.id) ?? [];
+
+    if (manifest.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'img-modal-empty';
+      empty.textContent = `Manifest unavailable. Check your connection and try again.`;
+      host.appendChild(empty);
+      return;
+    }
+
+    const filtered = manifest.filter((entry) => {
+      if (!this.connectorSearchQuery) return true;
+      const haystack = (entry.name + ' ' + entry.tags.join(' ') + ' ' + (entry.author ?? '')).toLowerCase();
+      return haystack.includes(this.connectorSearchQuery);
+    });
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'img-modal-empty';
+      empty.textContent = 'No icons match that search.';
+      host.appendChild(empty);
+      return;
+    }
+
+    for (const entry of filtered) {
+      host.appendChild(this._connectorCell(conn, entry));
+    }
+  }
+
+  private _connectorCell(conn: ImageSourceConnector, entry: ConnectorManifestEntry): HTMLElement {
+    const cell = document.createElement('div');
+    cell.className = 'img-modal-cell img-modal-cell--connector';
+    cell.title = entry.name;
+
+    const visual = document.createElement('div');
+    visual.className = 'img-modal-visual';
+    // Lazy-load preview SVG on first render of the cell; fall back to a
+    // placeholder while the network request is in flight. We don't preload
+    // the whole grid — only the cells the user scrolls past.
+    visual.innerHTML = '<div class="img-modal-broken" style="font-size:18px;">…</div>';
+    cell.appendChild(visual);
+
+    void this._renderConnectorPreview(visual, conn, entry);
+
+    const label = document.createElement('div');
+    label.className = 'img-modal-label';
+    label.textContent = entry.name;
+    cell.appendChild(label);
+
+    const importBtn = document.createElement('button');
+    importBtn.type = 'button';
+    importBtn.className = 'img-modal-import';
+    importBtn.textContent = 'Import';
+    importBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      importBtn.disabled = true;
+      importBtn.textContent = '…';
+      try {
+        await this._importFromConnector(conn, entry);
+        importBtn.textContent = 'Imported ✓';
+      } catch (err) {
+        importBtn.disabled = false;
+        importBtn.textContent = 'Failed — retry';
+        console.warn('Import failed:', err);
+      }
+    });
+    cell.appendChild(importBtn);
+
+    cell.addEventListener('mouseenter', (e) => {
+      // Hover preview reuses the connector entry's name; visual is shared
+      // with the grid cell rendering above.
+      this._showConnectorPreview(conn, entry, e);
+    });
+    cell.addEventListener('mousemove',  (e) => this._movePreview(e));
+    cell.addEventListener('mouseleave', () => this._hidePreview());
+
+    return cell;
+  }
+
+  private async _renderConnectorPreview(
+    container: HTMLElement,
+    conn: ImageSourceConnector,
+    entry: ConnectorManifestEntry,
+  ): Promise<void> {
+    try {
+      const svg = await conn.fetchSvg(entry);
+      container.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.className = 'img-modal-svg';
+      wrap.innerHTML = svg;
+      const svgEl = wrap.querySelector('svg');
+      if (svgEl) {
+        svgEl.setAttribute('width',  '100%');
+        svgEl.setAttribute('height', '100%');
+        if (conn.tintable) {
+          svgEl.querySelectorAll('[fill]').forEach((el) => el.setAttribute('fill', 'currentColor'));
+          svgEl.querySelectorAll('[stroke]').forEach((el) => {
+            const cur = el.getAttribute('stroke');
+            if (cur && cur !== 'none') el.setAttribute('stroke', 'currentColor');
+          });
+        }
+      }
+      container.appendChild(wrap);
+    } catch {
+      container.innerHTML = '<div class="img-modal-broken">⚠</div>';
+    }
+  }
+
+  private async _importFromConnector(
+    conn: ImageSourceConnector,
+    entry: ConnectorManifestEntry,
+  ): Promise<void> {
+    const svg = await conn.fetchSvg(entry);
+    const id = `${conn.id}-${entry.slug.replace(/[^\w-]/g, '_')}-${Date.now().toString(36)}`;
+    const asset: ImageAsset = {
+      id,
+      name:            entry.name,
+      source:          conn.id,
+      categoryId:      this.selectedCategoryId,
+      tintable:        conn.tintable,
+      svgSource:       svg,
+      mimeType:        'image/svg+xml',
+      license:         conn.license,
+      attribution:     conn.attributionFor(entry),
+      attributionLink: conn.sourceUrl,
+      sourceUrl:       conn.buildUrl(entry),
+      tags:            entry.tags,
+      addedAt:         Date.now(),
+    };
+    await ImageAssetStore.save(asset);
+    // Refresh sidebar counts without leaving the connector tab.
+    this.assets = await ImageAssetStore.getAll();
+    this._renderSidebar();
+  }
+
+  private async _showConnectorPreview(
+    conn: ImageSourceConnector,
+    entry: ConnectorManifestEntry,
+    e: MouseEvent,
+  ): Promise<void> {
+    if (!this.previewPopover) {
+      this.previewPopover = document.createElement('div');
+      this.previewPopover.className = 'img-modal-preview-popover';
+      document.body.appendChild(this.previewPopover);
+    }
+    this.previewPopover.innerHTML = '';
+
+    const big = document.createElement('div');
+    big.className = 'img-modal-preview-visual';
+    big.innerHTML = '<div class="img-modal-broken" style="font-size:24px;">…</div>';
+    this.previewPopover.appendChild(big);
+
+    const label = document.createElement('div');
+    label.className = 'img-modal-preview-label';
+    label.textContent = entry.name;
+    this.previewPopover.appendChild(label);
+
+    const meta = document.createElement('div');
+    meta.className = 'img-modal-preview-meta';
+    meta.textContent = `${conn.displayName} · ${conn.license}${entry.author ? ` · ${entry.author}` : ''}`;
+    this.previewPopover.appendChild(meta);
+
+    this.previewPopover.hidden = false;
+    this._movePreview(e);
+
+    // Lazy-load the preview SVG into the popover.
+    try {
+      const svg = await conn.fetchSvg(entry);
+      big.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.className = 'img-modal-svg';
+      wrap.innerHTML = svg;
+      const svgEl = wrap.querySelector('svg');
+      if (svgEl) {
+        svgEl.setAttribute('width',  '100%');
+        svgEl.setAttribute('height', '100%');
+        if (conn.tintable) {
+          svgEl.querySelectorAll('[fill]').forEach((el) => el.setAttribute('fill', 'currentColor'));
+          svgEl.querySelectorAll('[stroke]').forEach((el) => {
+            const cur = el.getAttribute('stroke');
+            if (cur && cur !== 'none') el.setAttribute('stroke', 'currentColor');
+          });
+        }
+      }
+      big.appendChild(wrap);
+    } catch {
+      big.innerHTML = '<div class="img-modal-broken">⚠</div>';
     }
   }
 

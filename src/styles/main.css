@@ -1540,6 +1540,73 @@ option.select-option--add {
   line-height: 1.3;
 }
 
+/* Tabs (My Library / Browse Game Icons / Browse Lucide / …) */
+.img-modal-tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md) 0;
+  border-bottom: 1px solid var(--border);
+}
+.img-modal-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 6px 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.88rem;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: -1px;
+}
+.img-modal-tab:hover { color: var(--text); }
+.img-modal-tab.is-active {
+  background: var(--bg-panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* Licence chip + import-target chip on connector toolbars */
+.img-modal-license-chip {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  text-decoration: none;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.img-modal-license-chip:hover { color: var(--accent); border-color: var(--accent-dim); }
+.img-modal-import-target {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Connector grid cells use the same .img-modal-cell sizing, with the Import
+ * action sitting at the bottom-edge instead of an overlay × delete. */
+.img-modal-cell--connector .img-modal-import {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.img-modal-cell--connector .img-modal-import:hover {
+  background: var(--accent-dim);
+  color: var(--accent-hover);
+}
+.img-modal-cell--connector .img-modal-import:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ── About / Splash dialog ─────────────────────────────────────────────── */
 .about-dialog { width: 600px; }
 
