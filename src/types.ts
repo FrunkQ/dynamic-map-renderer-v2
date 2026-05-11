@@ -789,13 +789,14 @@ export interface ImageCategory {
  *  funnel newly-imported icons into a specific category (e.g. the Text Map
  *  editor "insert icon" flow auto-targets the Textmap category). */
 export const SYSTEM_CATEGORY_IDS = {
-  unicode:      'sys-unicode',
-  abstract:     'sys-abstract',
-  fantasy:      'sys-fantasy',
-  scifi:        'sys-scifi',
-  contemporary: 'sys-contemporary',
-  textmap:      'sys-textmap',
-  fonts:        'sys-fonts',
+  unicode:       'sys-unicode',
+  abstract:      'sys-abstract',
+  fantasy:       'sys-fantasy',
+  scifi:         'sys-scifi',
+  contemporary:  'sys-contemporary',
+  textmap:       'sys-textmap',
+  uncategorised: 'sys-uncategorised',
+  fonts:         'sys-fonts',
 } as const;
 
 export interface StoredSession {

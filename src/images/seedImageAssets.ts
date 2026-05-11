@@ -59,18 +59,21 @@ const UNICODE_PRESETS: ReadonlyArray<{ name: string; char: string }> = [
 ];
 
 const SYSTEM_CATEGORIES: ReadonlyArray<ImageCategory> = [
-  { id: SYSTEM_CATEGORY_IDS.unicode,      name: 'Unicode',      isSystem: true, sortOrder: 0  },
-  { id: SYSTEM_CATEGORY_IDS.abstract,     name: 'Abstract',     isSystem: true, sortOrder: 10 },
-  { id: SYSTEM_CATEGORY_IDS.fantasy,      name: 'Fantasy',      isSystem: true, sortOrder: 20 },
-  { id: SYSTEM_CATEGORY_IDS.scifi,        name: 'Sci-fi',       isSystem: true, sortOrder: 30 },
-  { id: SYSTEM_CATEGORY_IDS.contemporary, name: 'Contemporary', isSystem: true, sortOrder: 40 },
-  { id: SYSTEM_CATEGORY_IDS.textmap,      name: 'Textmap',      isSystem: true, sortOrder: 50 },
+  { id: SYSTEM_CATEGORY_IDS.unicode,       name: 'Unicode',       isSystem: true, sortOrder: 0  },
+  { id: SYSTEM_CATEGORY_IDS.abstract,      name: 'Abstract',      isSystem: true, sortOrder: 10 },
+  { id: SYSTEM_CATEGORY_IDS.fantasy,       name: 'Fantasy',       isSystem: true, sortOrder: 20 },
+  { id: SYSTEM_CATEGORY_IDS.scifi,         name: 'Sci-fi',        isSystem: true, sortOrder: 30 },
+  { id: SYSTEM_CATEGORY_IDS.contemporary,  name: 'Contemporary',  isSystem: true, sortOrder: 40 },
+  { id: SYSTEM_CATEGORY_IDS.textmap,       name: 'Textmap',       isSystem: true, sortOrder: 50 },
+  // Uncategorised — dedicated holding pen for icons that the auto-route
+  // couldn't place. Users see them clustered here and can drag-to-fix.
+  { id: SYSTEM_CATEGORY_IDS.uncategorised, name: 'Uncategorised', isSystem: true, sortOrder: 55 },
   // Fonts is special-cased in the library modal — listing-only for now,
   // pre-populated with the eight OFL fonts that Stream C (Text Maps) will
   // bundle. Stored separately from regular ImageAssets so attribution can
   // travel into the unified Copy attributions output even though users
   // can't yet add fonts themselves.
-  { id: SYSTEM_CATEGORY_IDS.fonts,        name: 'Fonts',        isSystem: true, sortOrder: 60 },
+  { id: SYSTEM_CATEGORY_IDS.fonts,         name: 'Fonts',         isSystem: true, sortOrder: 60 },
 ];
 
 /** Standard licence label for built-in / user-typed Unicode glyphs. Unicode

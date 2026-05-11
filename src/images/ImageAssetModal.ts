@@ -950,19 +950,12 @@ export class ImageAssetModal {
   ): Promise<void> {
     const svg = await conn.fetchSvg(entry);
     const id = `${conn.id}-${entry.slug.replace(/[^\w-]/g, '_')}-${Date.now().toString(36)}`;
-    // Pick where to land. Auto: route by tags; explicit: respect the choice.
-    // Auto falls back to the user's sidebar selection (or Abstract by default)
-    // if no tag rule matches.
+    // Pick where to land. Auto: route by tags; if no rule fires, drop into
+    // Uncategorised so the user has a clear holding pen they can sort out
+    // with drag-to-category. Explicit target overrides Auto entirely.
     let categoryId: string;
     if (this.connectorImportTarget === 'auto') {
-      const suggested = suggestCategoryFromTags(entry.tags);
-      if (suggested) {
-        categoryId = suggested;
-      } else if (this.selectedCategoryId && this.selectedCategoryId !== ALL_CATEGORY_ID) {
-        categoryId = this.selectedCategoryId;
-      } else {
-        categoryId = SYSTEM_CATEGORY_IDS.abstract;
-      }
+      categoryId = suggestCategoryFromTags(entry.tags) ?? SYSTEM_CATEGORY_IDS.uncategorised;
     } else {
       categoryId = this.connectorImportTarget;
     }
