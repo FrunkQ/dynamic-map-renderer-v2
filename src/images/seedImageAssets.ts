@@ -1,0 +1,106 @@
+import type { ImageAsset, ImageCategory } from '../types.ts';
+import { SYSTEM_CATEGORY_IDS } from '../types.ts';
+import { ImageAssetStore } from './ImageAssetStore.ts';
+
+/**
+ * First-run seeding for the Image Assets library.
+ *
+ *   • Ensures every system category exists with stable ids (so consumers
+ *     can reference SYSTEM_CATEGORY_IDS.textmap etc. without lookup).
+ *   • Migrates the 47 hardcoded marker icon Unicode presets into ImageAsset
+ *     records under the Unicode category, the first time the function runs
+ *     against a fresh imageAssets store.
+ *
+ * Idempotent — safe to call on every app start. Skips work that's already
+ * done. Existing user-defined categories are preserved as-is.
+ */
+
+/** The Unicode glyph presets that existed in the v2.10 IconPicker. Kept as a
+ *  literal so migration is deterministic — same glyphs always land with the
+ *  same display order. */
+const UNICODE_PRESETS: ReadonlyArray<{ name: string; char: string }> = [
+  { name: 'Diamond filled',   char: '◆' },
+  { name: 'Diamond outline',  char: '◇' },
+  { name: 'Circle filled',    char: '●' },
+  { name: 'Circle outline',   char: '○' },
+  { name: 'Square filled',    char: '■' },
+  { name: 'Square outline',   char: '□' },
+  { name: 'Triangle up',      char: '▲' },
+  { name: 'Triangle up out',  char: '△' },
+  { name: 'Triangle down',    char: '▼' },
+  { name: 'Triangle down out',char: '▽' },
+  { name: 'Star filled',      char: '★' },
+  { name: 'Star outline',     char: '☆' },
+  { name: 'Sparkle',          char: '✦' },
+  { name: 'Sparkle outline',  char: '✧' },
+  { name: 'Knot',             char: '❖' },
+  { name: 'Diamond suit',     char: '♦' },
+  { name: 'Spade suit',       char: '♠' },
+  { name: 'Heart suit',       char: '♥' },
+  { name: 'Club suit',        char: '♣' },
+  { name: 'Pawn',             char: '♟' },
+  { name: 'Heavy plus',       char: '✚' },
+  { name: 'Heavy cross',      char: '✖' },
+  { name: 'X mark',           char: '✗' },
+  { name: 'X mark heavy',     char: '✘' },
+  { name: 'Check light',      char: '✓' },
+  { name: 'Check heavy',      char: '✔' },
+  { name: 'Speaker',          char: '🔊' },
+  { name: 'Circled 1',  char: '①' }, { name: 'Circled 2',  char: '②' },
+  { name: 'Circled 3',  char: '③' }, { name: 'Circled 4',  char: '④' },
+  { name: 'Circled 5',  char: '⑤' }, { name: 'Circled 6',  char: '⑥' },
+  { name: 'Circled 7',  char: '⑦' }, { name: 'Circled 8',  char: '⑧' },
+  { name: 'Circled 9',  char: '⑨' }, { name: 'Circled 10', char: '⑩' },
+  { name: 'Circled 11', char: '⑪' }, { name: 'Circled 12', char: '⑫' },
+  { name: 'Circled 13', char: '⑬' }, { name: 'Circled 14', char: '⑭' },
+  { name: 'Circled 15', char: '⑮' }, { name: 'Circled 16', char: '⑯' },
+  { name: 'Circled 17', char: '⑰' }, { name: 'Circled 18', char: '⑱' },
+  { name: 'Circled 19', char: '⑲' }, { name: 'Circled 20', char: '⑳' },
+];
+
+const SYSTEM_CATEGORIES: ReadonlyArray<ImageCategory> = [
+  { id: SYSTEM_CATEGORY_IDS.unicode,      name: 'Unicode',      isSystem: true, sortOrder: 0  },
+  { id: SYSTEM_CATEGORY_IDS.abstract,     name: 'Abstract',     isSystem: true, sortOrder: 10 },
+  { id: SYSTEM_CATEGORY_IDS.fantasy,      name: 'Fantasy',      isSystem: true, sortOrder: 20 },
+  { id: SYSTEM_CATEGORY_IDS.scifi,        name: 'Sci-fi',       isSystem: true, sortOrder: 30 },
+  { id: SYSTEM_CATEGORY_IDS.contemporary, name: 'Contemporary', isSystem: true, sortOrder: 40 },
+  { id: SYSTEM_CATEGORY_IDS.textmap,      name: 'Textmap',      isSystem: true, sortOrder: 50 },
+];
+
+export async function seedImageAssetsIfNeeded(): Promise<void> {
+  // 1. Ensure system categories exist. Idempotent — saveCategory upserts.
+  const existing = await ImageAssetStore.getAllCategories();
+  const existingIds = new Set(existing.map((c) => c.id));
+  for (const cat of SYSTEM_CATEGORIES) {
+    if (!existingIds.has(cat.id)) {
+      await ImageAssetStore.saveCategory(cat);
+    }
+  }
+
+  // 2. Migrate Unicode presets exactly once. Detect by looking for any
+  //    imageAsset with source='unicode' in the Unicode category — if even
+  //    one exists, assume migration ran (the user may have deleted some
+  //    presets since; we don't want to re-seed them on every load).
+  const allAssets = await ImageAssetStore.getAll();
+  const hasAnyUnicode = allAssets.some(
+    (a) => a.source === 'unicode' && a.categoryId === SYSTEM_CATEGORY_IDS.unicode,
+  );
+  if (!hasAnyUnicode) {
+    const now = Date.now();
+    let i = 0;
+    for (const preset of UNICODE_PRESETS) {
+      const asset: ImageAsset = {
+        id:           `unicode-preset-${String(i).padStart(3, '0')}`,
+        name:         preset.name,
+        source:       'unicode',
+        categoryId:   SYSTEM_CATEGORY_IDS.unicode,
+        tintable:     true,
+        unicodeChar:  preset.char,
+        license:      'N/A',
+        addedAt:      now - i, // Preserve original ordering via timestamps
+      };
+      await ImageAssetStore.save(asset);
+      i++;
+    }
+  }
+}

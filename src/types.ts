@@ -721,6 +721,82 @@ export interface MapAsset {
   addedAt:       number;
 }
 
+/* ── Image Assets ────────────────────────────────────────────────────────────
+ * Third first-class asset library alongside MapAsset and AudioAsset. Holds
+ * the icons available to markers and to text-map inline insertions, plus
+ * future image-like assets (e.g. handout decorations).
+ *
+ *   • Unicode glyph entries (source='unicode')        — visual is the char
+ *   • SVG icons (source='upload' | 'game-icons')      — markup in svgSource
+ *   • Raster icons (source='upload' | 'lucide')       — blob in record
+ *
+ * Categories are also first-class records (see ImageCategory) so users can
+ * add their own. System categories are pinned and uneditable. */
+
+export type ImageAssetSource =
+  | 'unicode'    // Built-in or user-added Unicode glyph (no blob/SVG needed)
+  | 'upload'     // User-uploaded PNG / SVG file
+  | 'game-icons' // Imported from game-icons.net via the source connector
+  | 'lucide';    // Imported from Lucide via the source connector
+
+export interface ImageAsset {
+  id:           string;
+  /** Display name shown in the library and used as a fallback in attribution. */
+  name:         string;
+  source:       ImageAssetSource;
+  /** id of the ImageCategory this asset belongs to. */
+  categoryId:   string;
+  /**
+   * Can this image be recoloured at render time? True for Unicode glyphs and
+   * single-fill SVGs (e.g. game-icons.net assets). False for arbitrary PNGs
+   * and user-uploaded multi-colour SVGs. Consumers (marker renderer, text-
+   * map inline insertion) pick a colour at usage time when tintable=true.
+   */
+  tintable:     boolean;
+  /** For source='unicode' — the glyph itself. */
+  unicodeChar?: string;
+  /** For SVG sources — the raw SVG markup, so consumers can swap the fill
+   *  attribute when rendering tintable icons. */
+  svgSource?:   string;
+  /** For raster sources — the image bytes. */
+  blob?:        Blob;
+  /** MIME type when blob is present (image/png, image/webp, image/svg+xml). */
+  mimeType?:    string;
+  license?:         string;
+  attribution?:     string;
+  attributionLink?: string;
+  /** Canonical source URL on the origin host (e.g. the game-icons.net page).
+   *  Used for attribution display and to re-fetch the asset if needed. */
+  sourceUrl?:   string;
+  /** Free-text tags from the source manifest (e.g. ['weapon','sword']) — used
+   *  for keyword search within the library modal. */
+  tags?:        string[];
+  addedAt:      number;
+}
+
+export interface ImageCategory {
+  id:   string;
+  name: string;
+  /** System categories ship with Mappadux and can't be deleted / renamed.
+   *  User-defined categories are isSystem=false. */
+  isSystem: boolean;
+  /** Display order — system categories use 0..99, user categories 100+ to
+   *  keep system rows pinned at the top of the sidebar. */
+  sortOrder: number;
+}
+
+/** IDs of the six system categories — referenced by code that needs to
+ *  funnel newly-imported icons into a specific category (e.g. the Text Map
+ *  editor "insert icon" flow auto-targets the Textmap category). */
+export const SYSTEM_CATEGORY_IDS = {
+  unicode:      'sys-unicode',
+  abstract:     'sys-abstract',
+  fantasy:      'sys-fantasy',
+  scifi:        'sys-scifi',
+  contemporary: 'sys-contemporary',
+  textmap:      'sys-textmap',
+} as const;
+
 export interface StoredSession {
   /** Fixed key — only one session record */
   key: 'current';

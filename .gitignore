@@ -20,6 +20,9 @@ _shadertoy_dump
 # if it's still in the index from before this rule.
 DMR-2-Roadmap.txt
 
+# Per-release test plan — running notes, gitignored like the roadmap.
+V2.11-TEST-PLAN.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { SessionState, StoredMap, StoredSession, AudioAsset, MapAsset } from '../types.ts';
+import type { SessionState, StoredMap, StoredSession, AudioAsset, MapAsset, ImageAsset, ImageCategory } from '../types.ts';
 
 export type StoredAsset = { id: string; name: string; type: string; blob: Blob; addedAt: number };
 
@@ -32,10 +32,22 @@ interface DMRSchema extends DBSchema {
     key: string; // MapAsset.id
     value: MapAsset;
   };
+  imageAssets: {
+    // Image asset library — Unicode glyphs (no blob), SVG markup, and raster
+    // PNG/SVG blobs all in one store. Each row references a category id.
+    key: string; // ImageAsset.id
+    value: ImageAsset;
+  };
+  imageCategories: {
+    // Categories shown in the library sidebar. System rows are seeded on
+    // first run; user-defined rows are added at runtime.
+    key: string; // ImageCategory.id
+    value: ImageCategory;
+  };
 }
 
 const DB_NAME = 'dynamic-map-renderer';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let _db: IDBPDatabase<DMRSchema> | null = null;
 
@@ -68,6 +80,12 @@ async function getDB(): Promise<IDBPDatabase<DMRSchema>> {
         db.createObjectStore('mapAssets', { keyPath: 'id' });
         // Legacy 'maps' rows still carry their blob inline; src/storage/seedMapAssets
         // splits them out of the maps store into mapAssets the next time the app loads.
+      }
+      if (!db.objectStoreNames.contains('imageAssets')) {
+        db.createObjectStore('imageAssets', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('imageCategories')) {
+        db.createObjectStore('imageCategories', { keyPath: 'id' });
       }
     },
     blocked() {
@@ -227,6 +245,52 @@ export async function deleteMapAsset(id: string): Promise<void> {
   await db.delete('mapAssets', id);
 }
 
+// ─── Image Assets ─────────────────────────────────────────────────────────────
+
+export async function saveImageAsset(asset: ImageAsset): Promise<void> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('imageAssets')) return;
+  await db.put('imageAssets', asset);
+}
+
+export async function getImageAsset(id: string): Promise<ImageAsset | undefined> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('imageAssets')) return undefined;
+  return db.get('imageAssets', id);
+}
+
+export async function getAllImageAssets(): Promise<ImageAsset[]> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('imageAssets')) return [];
+  return db.getAll('imageAssets');
+}
+
+export async function deleteImageAsset(id: string): Promise<void> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('imageAssets')) return;
+  await db.delete('imageAssets', id);
+}
+
+// ─── Image Categories ─────────────────────────────────────────────────────────
+
+export async function saveImageCategory(cat: ImageCategory): Promise<void> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('imageCategories')) return;
+  await db.put('imageCategories', cat);
+}
+
+export async function getAllImageCategories(): Promise<ImageCategory[]> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('imageCategories')) return [];
+  return db.getAll('imageCategories');
+}
+
+export async function deleteImageCategory(id: string): Promise<void> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('imageCategories')) return;
+  await db.delete('imageCategories', id);
+}
+
 /** Wipe every asset-library store. Used by bundle import to replace the workspace. */
 export async function clearAssetLibraries(): Promise<void> {
   const db = await getDB();
@@ -234,18 +298,22 @@ export async function clearAssetLibraries(): Promise<void> {
     db.clear('audioAssets'),
     db.clear('assets'),
     db.clear('mapAssets'),
+    db.clear('imageAssets'),
+    db.clear('imageCategories'),
   ]);
 }
 
 /** Wipe every single store — maps, configs, assets, audio metadata, map
- *  assets, session record. Used by Settings → Delete DB and the New Map
- *  Pack flow. Returns once all stores are empty. */
+ *  assets, image assets, session record. Used by Settings → Delete DB and
+ *  the New Map Pack flow. Returns once all stores are empty. */
 export async function clearEverything(): Promise<void> {
   const db = await getDB();
   await Promise.all([
     db.clear('audioAssets'),
     db.clear('assets'),
     db.clear('mapAssets'),
+    db.clear('imageAssets'),
+    db.clear('imageCategories'),
     db.clear('maps'),
     db.clear('configs'),
     db.clear('session'),

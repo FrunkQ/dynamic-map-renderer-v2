@@ -24,6 +24,7 @@ import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY } from '../storage/loc
 import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
+import { seedImageAssetsIfNeeded } from '../images/seedImageAssets.ts';
 import { exportBundle, importBundleText } from '../storage/bundleIO.ts';
 import { retrofitMapScales } from '../maps/retrofitMapScales.ts';
 import { isEncryptedBundleEnvelope } from '../storage/bundleCrypto.ts';
@@ -242,6 +243,7 @@ export class GMApp {
 
     await seedAudioAssets();
     await migrateLegacyMaps();
+    await seedImageAssetsIfNeeded();
     // Check for ?bundle=<URL> startup load. If the user came in via a
     // shared link, we load that pack instead of seeding the default.
     const handledByUrl = await this._maybeLoadBundleFromUrl();
