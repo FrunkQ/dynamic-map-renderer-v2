@@ -117,15 +117,9 @@ export async function rasterizeTextMap(
 ): Promise<Blob> {
   const { pxW, pxH } = predictTextMapPixelDimensions(cfg, opts.longSidePx);
 
-  // Kick off the host-page font load AND the SVG-context @font-face
-  // fetch in parallel. The SVG document doesn't share font context with
-  // the host page when loaded via <img>, so we embed the woff2 binary
-  // inside a <style> in the SVG itself. The host-page load only helps
-  // the editor preview, not this rasterisation.
+  // Kick off the host-page font load so the editor preview catches the
+  // font even though that path isn't what the rasteriser uses.
   try { ensureFontsLoaded([cfg.fontFamily]); } catch { /* non-fatal */ }
-  const fontFacePromise = fetchFontFaceForSvg(cfg.fontFamily);
-  try { await document.fonts.ready; } catch { /* non-fatal */ }
-  const fontFaceCss = await fontFacePromise;
 
   const sanitised = sanitizeSplashHtml(cfg.bodyHtml ?? '');
   const padPx = Math.round(pxW * 0.06);
@@ -134,33 +128,61 @@ export async function rasterizeTextMap(
   // against the host page; here we anchor to page width.
   const basePx = Math.round((pxW / 60) * cfg.fontScale);
 
-  const styleBlock = fontFaceCss
-    ? `<style xmlns="http://www.w3.org/1999/xhtml">${fontFaceCss}</style>`
-    : '';
+  // Try font embedding first; fall back to system font if anything goes
+  // sideways. Embedding adds an external fetch (Google Fonts CSS + the
+  // woff2 binary) and a big base64 blob inside the SVG — any failure
+  // mode in that chain shouldn't break the rasterisation altogether.
+  let fontFaceCss: string | null = null;
+  try {
+    fontFaceCss = await withTimeout(fetchFontFaceForSvg(cfg.fontFamily), 6000);
+  } catch (err) {
+    console.warn('[rasterizeTextMap] font embedding skipped:', err);
+  }
 
-  const svgMarkup =
-    `<svg xmlns="http://www.w3.org/2000/svg" `
-    + `width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">`
-    + `<foreignObject x="0" y="0" width="100%" height="100%">`
-    + `<div xmlns="http://www.w3.org/1999/xhtml" style="`
-    +   `box-sizing:border-box;`
-    +   `width:${pxW}px;height:${pxH}px;`
-    +   `padding:${padPx}px;`
-    +   `background:${cfg.backgroundColor};`
-    +   `color:${cfg.textColor};`
-    +   `font-family:'${escapeAttr(cfg.fontFamily)}', Georgia, serif;`
-    +   `font-size:${basePx}px;`
-    +   `line-height:1.45;`
-    +   `overflow:hidden;`
-    + `">${styleBlock}${sanitised}</div>`
-    + `</foreignObject>`
-    + `</svg>`;
+  const buildSvg = (withFontCss: boolean): string => {
+    const styleBlock = withFontCss && fontFaceCss
+      ? `<style xmlns="http://www.w3.org/1999/xhtml">${fontFaceCss}</style>`
+      : '';
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" `
+      + `width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">`
+      + `<foreignObject x="0" y="0" width="100%" height="100%">`
+      + `<div xmlns="http://www.w3.org/1999/xhtml" style="`
+      +   `box-sizing:border-box;`
+      +   `width:${pxW}px;height:${pxH}px;`
+      +   `padding:${padPx}px;`
+      +   `background:${cfg.backgroundColor};`
+      +   `color:${cfg.textColor};`
+      +   `font-family:'${escapeAttr(cfg.fontFamily)}', Georgia, serif;`
+      +   `font-size:${basePx}px;`
+      +   `line-height:1.45;`
+      +   `overflow:hidden;`
+      + `">${styleBlock}${sanitised}</div>`
+      + `</foreignObject>`
+      + `</svg>`
+    );
+  };
 
+  // Try with fonts. If the Image load fails (chromium has been known to
+  // choke on huge data: URIs inside foreignObject CSS), retry without.
+  try {
+    return await renderSvgToPng(buildSvg(true), pxW, pxH, cfg.backgroundColor);
+  } catch (err) {
+    console.warn('[rasterizeTextMap] retry without font embedding:', err);
+    return await renderSvgToPng(buildSvg(false), pxW, pxH, cfg.backgroundColor);
+  }
+}
+
+async function renderSvgToPng(
+  svgMarkup: string,
+  pxW: number,
+  pxH: number,
+  bgColor: string,
+): Promise<Blob> {
   const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
-
   try {
-    const img = await loadImage(svgUrl);
+    const img = await withTimeout(loadImage(svgUrl), 8000);
     const canvas = document.createElement('canvas');
     canvas.width = pxW;
     canvas.height = pxH;
@@ -168,7 +190,7 @@ export async function rasterizeTextMap(
     if (!ctx) throw new Error('canvas 2D context unavailable');
     // Paint the background first as a safety net — some browsers don't
     // composite the foreignObject div's background-color reliably.
-    ctx.fillStyle = cfg.backgroundColor;
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, pxW, pxH);
     ctx.drawImage(img, 0, 0, pxW, pxH);
     return await canvasToBlob(canvas);
@@ -181,8 +203,18 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload  = () => resolve(img);
-    img.onerror = () => reject(new Error('failed to rasterise text-map SVG'));
+    img.onerror = () => reject(new Error('image load failed'));
     img.src = url;
+  });
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
   });
 }
 

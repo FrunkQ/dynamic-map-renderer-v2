@@ -89,7 +89,14 @@ export class MapAssetStore {
         const blob = await rasterizeTextMap(asset.textMap);
         MapAssetStore.runtimeBlobs.set(asset.id, blob);
         return blob;
-      } catch {
+      } catch (err) {
+        // Surface the failure so the user / dev can diagnose — without
+        // this the only signal is the "Missing Map Image" placeholder
+        // downstream, with no breadcrumb.
+        console.error(
+          `[MapAssetStore] text-map rasterisation failed for asset ${asset.id}:`,
+          err,
+        );
         return null;
       }
     }

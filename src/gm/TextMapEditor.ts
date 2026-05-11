@@ -45,8 +45,11 @@ const ASPECT_PRESETS: ReadonlyArray<{ label: string; w: number; h: number }> = [
 
 const DEFAULT_TEXT_MAP: TextMapConfig = {
   bodyHtml:        '<p>Proclamation, journal entry, ransom note, or sealed letter — your text here.</p>',
-  width:           210,  // A4 portrait ratio — true 1 : √2 via 210 : 297 mm
-  height:          297,
+  // 16:9 is the most common handout shape (matches projector / monitor /
+  // landscape table-cam framing). A4 portrait is one click away in the
+  // aspect picker for letter-style handouts.
+  width:           16,
+  height:          9,
   fontFamily:      'Cinzel',
   fontScale:       1,
   backgroundColor: '#f4e9c8',

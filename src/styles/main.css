@@ -2000,10 +2000,15 @@ option.select-option--add {
   outline-offset: 1px;
 }
 /* Inline SVGs inherit color from the editor / page so currentColor
-   resolves to the host text colour. Force a transparent background so
-   they don't paint a tinted rectangle behind the glyph. */
-.rte-editor svg { background: transparent; display: block; width: 100%; height: 100%; }
-.txt-map-page svg { background: transparent; display: block; width: 100%; height: 100%; }
+   resolves to the host text colour. Force a transparent background on
+   BOTH the wrapping span and the SVG element so neither paints a
+   rectangle behind the glyph — contenteditable=false elements can pick
+   up unintended UA / theme backgrounds in some browsers, and !important
+   makes sure no .rte-editor rule overrides it. */
+.rte-editor   span[contenteditable="false"],
+.txt-map-page span[contenteditable="false"] { background: transparent !important; }
+.rte-editor svg { background: transparent !important; display: block; width: 100%; height: 100%; }
+.txt-map-page svg { background: transparent !important; display: block; width: 100%; height: 100%; }
 .txt-map-page span[style*="inline-block"] svg,
 .rte-editor  span[style*="inline-block"] svg { pointer-events: none; }
 .rte-editor:empty::before {
