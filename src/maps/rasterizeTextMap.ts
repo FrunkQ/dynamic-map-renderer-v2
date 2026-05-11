@@ -163,14 +163,28 @@ export async function rasterizeTextMap(
     );
   };
 
-  // Try with fonts. If the Image load fails (chromium has been known to
-  // choke on huge data: URIs inside foreignObject CSS), retry without.
+  // Try the rich SVG-foreignObject path with fonts → without fonts → and
+  // if both still fail (Chrome / Firefox have version-dependent
+  // restrictions on what SVG-with-foreignObject loaded via <img> will
+  // accept), fall back to a plain Canvas-2D render. That fallback loses
+  // HTML formatting (bold / italic / lists / inline icons) but always
+  // produces a readable handout — better than the "Missing Map Image"
+  // placeholder.
   try {
     return await renderSvgToPng(buildSvg(true), pxW, pxH, cfg.backgroundColor);
   } catch (err) {
     console.warn('[rasterizeTextMap] retry without font embedding:', err);
-    return await renderSvgToPng(buildSvg(false), pxW, pxH, cfg.backgroundColor);
   }
+  try {
+    return await renderSvgToPng(buildSvg(false), pxW, pxH, cfg.backgroundColor);
+  } catch (err) {
+    console.warn('[rasterizeTextMap] SVG-foreignObject path failed entirely; falling back to Canvas-2D plain text:', err);
+    // Last-chance: log the SVG so we can see what's tripping the parser.
+    if (typeof console.debug === 'function') {
+      console.debug('[rasterizeTextMap] failed SVG markup was:\n', buildSvg(false));
+    }
+  }
+  return await renderPlainTextFallback(cfg, pxW, pxH, basePx, padPx, sanitised);
 }
 
 async function renderSvgToPng(
@@ -179,24 +193,99 @@ async function renderSvgToPng(
   pxH: number,
   bgColor: string,
 ): Promise<Blob> {
-  const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
-  const svgUrl = URL.createObjectURL(svgBlob);
-  try {
-    const img = await withTimeout(loadImage(svgUrl), 8000);
-    const canvas = document.createElement('canvas');
-    canvas.width = pxW;
-    canvas.height = pxH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('canvas 2D context unavailable');
-    // Paint the background first as a safety net — some browsers don't
-    // composite the foreignObject div's background-color reliably.
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, pxW, pxH);
-    ctx.drawImage(img, 0, 0, pxW, pxH);
-    return await canvasToBlob(canvas);
-  } finally {
-    URL.revokeObjectURL(svgUrl);
+  // Use a base64 data: URL rather than a blob: URL. Some Chrome versions
+  // reject SVG-with-foreignObject loaded from blob: URLs but accept the
+  // same content via data:. base64 also sidesteps any URI-encoding
+  // edge cases with unicode characters in the body.
+  const b64 = utf8ToBase64(svgMarkup);
+  const svgUrl = `data:image/svg+xml;base64,${b64}`;
+  const img = await withTimeout(loadImage(svgUrl), 8000);
+  const canvas = document.createElement('canvas');
+  canvas.width = pxW;
+  canvas.height = pxH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas 2D context unavailable');
+  // Paint the background first as a safety net — some browsers don't
+  // composite the foreignObject div's background-color reliably.
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, pxW, pxH);
+  ctx.drawImage(img, 0, 0, pxW, pxH);
+  return await canvasToBlob(canvas);
+}
+
+/** Canvas-2D fallback: paint the background, then word-wrap the body's
+ *  plain text. Strips HTML markup entirely — no inline icons, no
+ *  formatting, just legible text on the chosen background in the chosen
+ *  colour. Last line of defence so a handout always produces SOME image
+ *  rather than the placeholder. */
+async function renderPlainTextFallback(
+  cfg: TextMapConfig,
+  pxW: number,
+  pxH: number,
+  basePx: number,
+  padPx: number,
+  sanitisedBodyHtml: string,
+): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width  = pxW;
+  canvas.height = pxH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas 2D context unavailable');
+  ctx.fillStyle = cfg.backgroundColor;
+  ctx.fillRect(0, 0, pxW, pxH);
+
+  const plain = htmlToPlainText(sanitisedBodyHtml);
+  ctx.fillStyle = cfg.textColor;
+  ctx.font = `${basePx}px "${cfg.fontFamily}", Georgia, serif`;
+  ctx.textBaseline = 'top';
+  const maxWidth = pxW - padPx * 2;
+  const lineHeight = Math.round(basePx * 1.45);
+  let y = padPx;
+  for (const paragraph of plain.split(/\n{2,}/)) {
+    for (const wrapped of wrapToLines(ctx, paragraph, maxWidth)) {
+      if (y + lineHeight > pxH - padPx) break;
+      ctx.fillText(wrapped, padPx, y);
+      y += lineHeight;
+    }
+    y += Math.round(lineHeight * 0.4); // paragraph spacing
   }
+  return await canvasToBlob(canvas);
+}
+
+function htmlToPlainText(html: string): string {
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  // Block elements end with a paragraph break; everything else inlines.
+  for (const block of doc.querySelectorAll('p, div, li, br')) {
+    block.appendChild(doc.createTextNode('\n'));
+  }
+  return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function wrapToLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    const probe = line ? `${line} ${word}` : word;
+    if (ctx.measureText(probe).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = probe;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function utf8ToBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+  }
+  return btoa(bin);
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {

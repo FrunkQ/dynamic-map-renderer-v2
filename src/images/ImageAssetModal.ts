@@ -8,6 +8,7 @@ import { generateId } from '../utils/id.ts';
 import { UNICODE_LICENSE_LABEL } from './seedImageAssets.ts';
 import { ensureFontsLoaded, pangramFor } from './fontCatalog.ts';
 import { fuzzySearch } from '../utils/fuzzySearch.ts';
+import { cleanTintableSvg } from '../utils/resolveAssetImages.ts';
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
   gameIconsConnector,
@@ -1278,7 +1279,13 @@ export class ImageAssetModal {
     entry: ConnectorManifestEntry,
   ): Promise<void> {
     try {
-      const svg = await conn.fetchSvg(entry);
+      const rawSvg = await conn.fetchSvg(entry);
+      // Same cleanup we apply at insertion time — strip the upstream BG
+      // path (game-icons.net `<path d="M0 0h512v512H0z"/>` with no fill,
+      // defaults to black) and normalise paints to currentColor. Without
+      // this the connector preview shows white-on-black icons even
+      // though the inserted version paints correctly.
+      const svg = conn.tintable ? cleanTintableSvg(rawSvg) : rawSvg;
       container.innerHTML = '';
       const wrap = document.createElement('div');
       wrap.className = 'img-modal-svg';
@@ -1287,13 +1294,6 @@ export class ImageAssetModal {
       if (svgEl) {
         svgEl.setAttribute('width',  '100%');
         svgEl.setAttribute('height', '100%');
-        if (conn.tintable) {
-          svgEl.querySelectorAll('[fill]').forEach((el) => el.setAttribute('fill', 'currentColor'));
-          svgEl.querySelectorAll('[stroke]').forEach((el) => {
-            const cur = el.getAttribute('stroke');
-            if (cur && cur !== 'none') el.setAttribute('stroke', 'currentColor');
-          });
-        }
       }
       container.appendChild(wrap);
     } catch {
@@ -1305,7 +1305,11 @@ export class ImageAssetModal {
     conn: ImageSourceConnector,
     entry: ConnectorManifestEntry,
   ): Promise<void> {
-    const svg = await conn.fetchSvg(entry);
+    const rawSvg = await conn.fetchSvg(entry);
+    // Strip BG path + normalise paints at import time so the stored
+    // svgSource is already clean. Future renders (library tile, inline
+    // insertion, rasterised handout) all read this directly.
+    const svg = conn.tintable ? cleanTintableSvg(rawSvg) : rawSvg;
     const id = `${conn.id}-${entry.slug.replace(/[^\w-]/g, '_')}-${Date.now().toString(36)}`;
     // Pick where to land. Auto: route by tags; if no rule fires, drop into
     // Uncategorised so the user has a clear holding pen they can sort out
@@ -1369,7 +1373,8 @@ export class ImageAssetModal {
 
     // Lazy-load the preview SVG into the popover.
     try {
-      const svg = await conn.fetchSvg(entry);
+      const rawSvg = await conn.fetchSvg(entry);
+      const svg = conn.tintable ? cleanTintableSvg(rawSvg) : rawSvg;
       big.innerHTML = '';
       const wrap = document.createElement('div');
       wrap.className = 'img-modal-svg';
@@ -1378,13 +1383,6 @@ export class ImageAssetModal {
       if (svgEl) {
         svgEl.setAttribute('width',  '100%');
         svgEl.setAttribute('height', '100%');
-        if (conn.tintable) {
-          svgEl.querySelectorAll('[fill]').forEach((el) => el.setAttribute('fill', 'currentColor'));
-          svgEl.querySelectorAll('[stroke]').forEach((el) => {
-            const cur = el.getAttribute('stroke');
-            if (cur && cur !== 'none') el.setAttribute('stroke', 'currentColor');
-          });
-        }
       }
       big.appendChild(wrap);
     } catch {

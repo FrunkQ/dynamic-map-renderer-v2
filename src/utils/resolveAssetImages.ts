@@ -72,13 +72,7 @@ export async function renderAssetToInlineHtml(
   if (asset.svgSource) {
     let svg = asset.svgSource;
     if (asset.tintable) {
-      // Normalise tintable paints to currentColor. Leave fill="none"
-      // alone — Lucide's stroke-only icons would otherwise become
-      // solid filled squares. Also handle fillless paths whose paint
-      // comes from a stroke attribute.
-      svg = svg
-        .replace(/fill\s*=\s*"(?!none\b|currentColor\b)[^"]*"/gi, 'fill="currentColor"')
-        .replace(/stroke\s*=\s*"(?!none\b|currentColor\b)[^"]*"/gi, 'stroke="currentColor"');
+      svg = cleanTintableSvg(svg);
     }
     // Force-size the root svg so it lays out at the wrapper size. Some
     // sources ship without width / height attributes which then default
@@ -152,6 +146,38 @@ export async function renderAssetToSrc(id: string, tintColor?: string): Promise<
     return URL.createObjectURL(asset.blob);
   }
   return null;
+}
+
+/** Clean up a tintable SVG so it paints correctly on top of an arbitrary
+ *  host text colour:
+ *   1. Strip the full-viewBox background path that game-icons.net ships
+ *      on every icon (`<path d="M0 0h512v512H0z"/>` with no fill — defaults
+ *      to BLACK, then survives every fill-rewrite below because it has no
+ *      fill attribute to rewrite). That path is the "white-on-black" the
+ *      user reported.
+ *   2. Convert explicit non-none / non-currentColor fills and strokes to
+ *      currentColor so the icon glyph picks up the host's text colour.
+ *      Leave fill="none" alone — Lucide's stroke-only icons rely on it.
+ *  Idempotent — running twice on the same SVG is a no-op.
+ */
+export function cleanTintableSvg(svg: string): string {
+  // BG-path strip: any <path> with a `d` matching the full-viewBox
+  // rectangle pattern AND no explicit fill / stroke is treated as
+  // background. We match the path element open-tag → self-close OR
+  // path → close pair. Both forms appear in upstream SVGs.
+  const bgPattern = /<path\b(?![^>]*\bfill\s*=)(?![^>]*\bstroke\s*=)[^>]*\bd\s*=\s*"M0\s*0\s*h\d+\s*v\d+\s*H0\s*z"[^>]*\/?\s*>/gi;
+  svg = svg.replace(bgPattern, '');
+  // Also handle `<path d="..."></path>` (non-self-closed) form just in
+  // case the upstream serialiser ever switches to it.
+  const bgPatternPaired = /<path\b(?![^>]*\bfill\s*=)(?![^>]*\bstroke\s*=)[^>]*\bd\s*=\s*"M0\s*0\s*h\d+\s*v\d+\s*H0\s*z"[^>]*>\s*<\/path>/gi;
+  svg = svg.replace(bgPatternPaired, '');
+
+  // Tint swap: non-none / non-currentColor fills + strokes → currentColor.
+  svg = svg
+    .replace(/fill\s*=\s*"(?!none\b|currentColor\b)[^"]*"/gi, 'fill="currentColor"')
+    .replace(/stroke\s*=\s*"(?!none\b|currentColor\b)[^"]*"/gi, 'stroke="currentColor"');
+
+  return svg;
 }
 
 function missingIconDataUrl(): string {
