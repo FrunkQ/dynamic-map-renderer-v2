@@ -737,9 +737,15 @@ export interface TextMapConfig {
   /** Sanitised HTML body. Same whitelist as the splash editor, plus inline
    *  `<img src="asset:…">` references resolved from the Image Library. */
   bodyHtml:     string;
-  /** Render aspect ratio — e.g. 1080×1527 for A4 portrait, 1920×1080 for
-   *  16:9. The renderer rasterises at these intrinsic pixel dimensions and
-   *  the projector / player scales to fit. */
+  /**
+   * Aspect-ratio width / height. These are NOT a fixed render resolution —
+   * they exist to express the ratio (so the editor preview and the
+   * eventual rasteriser both know whether to draw A4 portrait or 16:9).
+   * Concrete values like 1080×1527 are convenient round numbers; the
+   * downstream renderer is expected to choose its own actual resolution
+   * per use case (preview = container size, projector = calibration
+   * pixels, print export = 300 DPI of the physical size, etc).
+   */
   width:        number;
   height:       number;
   /** CSS font-family for body text. Loaded via the Image Library's font

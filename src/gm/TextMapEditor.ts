@@ -27,13 +27,17 @@ export interface TextMapEditorResult {
   asset: MapAsset;
 }
 
+/** Aspect-ratio presets. The w/h values express the ratio only — the
+ *  renderer picks an actual resolution per use case (see TextMapConfig
+ *  comment in types.ts). Labels stay ratio-focused so users think in
+ *  shape, not pixel count. */
 const ASPECT_PRESETS: ReadonlyArray<{ label: string; w: number; h: number }> = [
-  { label: 'A4 Portrait',      w: 1080, h: 1527 },
-  { label: 'A4 Landscape',     w: 1527, h: 1080 },
-  { label: '16:9 Landscape',   w: 1920, h: 1080 },
-  { label: '4:3 Landscape',    w: 1440, h: 1080 },
-  { label: 'Square',           w: 1080, h: 1080 },
-  { label: '2:3 Tall',         w: 1080, h: 1620 },
+  { label: 'A4 Portrait (1 : √2)',     w: 1080, h: 1527 },
+  { label: 'A4 Landscape (√2 : 1)',    w: 1527, h: 1080 },
+  { label: '16 : 9 Landscape',         w: 1920, h: 1080 },
+  { label: '4 : 3 Landscape',          w: 1440, h: 1080 },
+  { label: 'Square (1 : 1)',           w: 1080, h: 1080 },
+  { label: '2 : 3 Tall',               w: 1080, h: 1620 },
 ];
 
 const DEFAULT_TEXT_MAP: TextMapConfig = {
@@ -203,23 +207,24 @@ export class TextMapEditor {
   private _buildAspectPicker(): HTMLElement {
     const sel = document.createElement('select');
     sel.className = 'txt-map-input';
+    sel.title = 'Shape of the page. Actual resolution is picked by the renderer per use case (preview, projector, print).';
     for (const preset of ASPECT_PRESETS) {
       const opt = document.createElement('option');
       opt.value = `${preset.w}x${preset.h}`;
-      opt.textContent = `${preset.label} (${preset.w} × ${preset.h})`;
+      opt.textContent = preset.label;
       if (preset.w === this.draft.width && preset.h === this.draft.height) opt.selected = true;
       sel.appendChild(opt);
     }
     const customOpt = document.createElement('option');
     customOpt.value = 'custom';
-    customOpt.textContent = 'Custom…';
+    customOpt.textContent = 'Custom ratio…';
     sel.appendChild(customOpt);
 
     sel.addEventListener('change', () => {
       if (sel.value === 'custom') {
-        const w = parseInt(prompt('Width in pixels:', String(this.draft.width)) ?? '', 10);
-        const h = parseInt(prompt('Height in pixels:', String(this.draft.height)) ?? '', 10);
-        if (Number.isFinite(w) && Number.isFinite(h) && w > 100 && h > 100) {
+        const w = parseInt(prompt('Width units (ratio numerator):', String(this.draft.width)) ?? '', 10);
+        const h = parseInt(prompt('Height units (ratio denominator):', String(this.draft.height)) ?? '', 10);
+        if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
           this.draft.width = w;
           this.draft.height = h;
         }
