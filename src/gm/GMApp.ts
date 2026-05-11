@@ -83,6 +83,13 @@ export class GMApp {
    * projector if the primary disconnects is just "first key in the map".
    */
   private projectorConnections = new Map<string, ProjectorConnection & { clientId: string }>();
+  /** Maps projector clientId → PeerJS peerId for projectors that connected
+   *  remotely. Used to: (a) exclude projectors from the "X players connected"
+   *  count, (b) tear down stale projectorConnections entries when the
+   *  underlying PeerJS connection drops before projector_bye is delivered.
+   *  Local-BC projectors are absent from this map (no peerId) and likewise
+   *  absent from host.connectedCount, so the counting math just works. */
+  private _projectorPeerByClientId = new Map<string, string>();
   /** Active map's asset metadata, mirrored for projector-role math. Null when no map / no calibration. */
   private _lastMapAssetMeta: { pixelsPerSquare: number; imageWidth: number; imageHeight: number } | null = null;
   private markerEditor!:   MarkerEditor;
@@ -330,15 +337,42 @@ export class GMApp {
   }
 
   private onPeerDisconnected(id: string): void {
+    // If this disconnecting peer was a projector, tear down the matching
+    // projectorConnections entry — the projector_bye message might not have
+    // been delivered before the data channel closed.
+    for (const [clientId, peerId] of this._projectorPeerByClientId) {
+      if (peerId === id) {
+        this._projectorPeerByClientId.delete(clientId);
+        this.projectorConnections.delete(clientId);
+      }
+    }
+    this.projectorEditor?.setConnection(this._primaryProjector() ?? null);
+    this.refreshProjectorStatus();
+    this._refreshProjectionPanelMode();
     this._updatePlayerCount();
     this.setStatus(`Player disconnected (${id.slice(0, 8)}…)`, 'warn');
   }
 
   private _updatePlayerCount(): void {
-    const n = this.host.connectedCount;
-    this.playerCountEl.textContent = String(n);
+    // Total raw PeerJS connections includes both players and remote projectors.
+    // Subtract the projector subset so the count reflects actual players.
+    const total      = this.host.connectedCount;
+    const remoteProj = new Set(this._projectorPeerByClientId.values()).size;
+    const players    = Math.max(0, total - remoteProj);
+    this.playerCountEl.textContent = String(players);
     const plural = document.querySelector('#player-count-plural');
-    if (plural) plural.textContent = n === 1 ? '' : 's';
+    if (plural) plural.textContent = players === 1 ? '' : 's';
+
+    // "(+ N projector)" suffix accounts for ALL projector windows, both
+    // local-BroadcastChannel (which never appears in host.connectedCount) and
+    // remote-PeerJS. Hidden when zero so the line reads cleanly.
+    const projCount = this.projectorConnections.size;
+    const suffix = document.querySelector<HTMLElement>('#projector-count-suffix');
+    if (suffix) {
+      suffix.textContent = projCount > 0
+        ? ` (+${projCount} projector${projCount !== 1 ? 's' : ''})`
+        : '';
+    }
   }
 
   // ─── State change → propagate to renderer + P2P ───────────────────────────
@@ -933,9 +967,11 @@ export class GMApp {
         this.host.broadcast({ type: 'projector_shutdown', targetId: conn.clientId });
       }
       this.projectorConnections.clear();
+      this._projectorPeerByClientId.clear();
       this.projectorEditor?.setConnection(null);
       this.refreshProjectorStatus();
       this._refreshProjectionPanelMode();
+      this._updatePlayerCount();
       return;
     }
     if (v === SELECT_ADD_SENTINEL) {
@@ -1034,6 +1070,7 @@ export class GMApp {
     if (msg.type === 'projector_bye') {
       const wasPrimary = this._primaryProjector()?.clientId === msg.clientId;
       this.projectorConnections.delete(msg.clientId);
+      this._projectorPeerByClientId.delete(msg.clientId);
       if (wasPrimary) {
         // Closing the primary window is the canonical "turn off projection"
         // gesture — tear down every monitor too rather than auto-promoting
@@ -1042,11 +1079,13 @@ export class GMApp {
           this.host.broadcast({ type: 'projector_shutdown', targetId: conn.clientId });
         }
         this.projectorConnections.clear();
+        this._projectorPeerByClientId.clear();
       }
       this.projectorEditor?.setConnection(this._primaryProjector() ?? null);
       this.refreshProjectorStatus();
       this._refreshProjectionPanelMode();
       this.refreshProjectorSetupSelect();
+      this._updatePlayerCount();
       return;
     }
     if (msg.type === 'projector_hello') {
@@ -1058,6 +1097,14 @@ export class GMApp {
         canvasWidth:     msg.canvasWidth,
         canvasHeight:    msg.canvasHeight,
       });
+      // Track the underlying PeerJS peer id for remote projectors so we can
+      // (a) exclude them from the player count and (b) clean up if the data
+      // channel closes before projector_bye is delivered. 'local' marker for
+      // BC-only projectors is harmless — they're not in host.connections.
+      if (_peerId && _peerId !== 'local') {
+        this._projectorPeerByClientId.set(msg.clientId, _peerId);
+      }
+      this._updatePlayerCount();
 
       // The first connection (insertion order) is primary; the GM rectangle
       // tracks the primary's dimensions. Monitors don't influence the GM rect.
