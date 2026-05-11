@@ -1584,7 +1584,7 @@ option.select-option--add {
 }
 .img-modal-target-select {
   padding: 3px 6px;
-  background: var(--bg-deep, rgba(0,0,0,0.2));
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text);
@@ -1592,6 +1592,13 @@ option.select-option--add {
   font-family: inherit;
 }
 .img-modal-target-select:focus { outline: 1px solid var(--accent); }
+/* Options need their own colours — browsers render dropdown items via the
+ *  OS-native picker which ignores the parent select's colour scheme on
+ *  Windows / Chrome. Force theme values so the list is readable. */
+.img-modal-target-select option {
+  background: var(--bg-panel);
+  color: var(--text);
+}
 
 /* "More results" footer on connector grids. */
 .img-modal-more {
