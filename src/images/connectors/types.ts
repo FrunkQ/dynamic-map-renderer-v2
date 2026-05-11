@@ -41,6 +41,25 @@ export interface ImageSourceConnector {
   /** General source URL (for display in attribution). */
   readonly sourceUrl:    string;
 
+  /**
+   * Optional API-key support. When set, the modal renders a standard key
+   * panel above the manifest grid: a password input that persists the key
+   * to localStorage (per-browser, never bundled), a clickable signup link,
+   * and a small hint about local-only storage. Connectors leave this
+   * `undefined` when they don't need a key (game-icons.net and Lucide are
+   * key-less catalogs).
+   */
+  readonly apiKeyConfig?: {
+    /** localStorage key the value is stored under, namespaced per source. */
+    storageKey:   string;
+    /** Label shown next to the input (e.g. "Freesound API key"). */
+    label:        string;
+    /** Clickable URL where the user signs up for a free key. */
+    signupUrl:    string;
+    /** Display text for the signup link (e.g. "freesound.org/apiv2/apply"). */
+    signupLabel:  string;
+  };
+
   /** Return the connector's manifest. Implementations may bundle a static
    *  list (current v2.11 default) or fetch from a CDN — caller doesn't care. */
   loadManifest(): Promise<ConnectorManifestEntry[]>;

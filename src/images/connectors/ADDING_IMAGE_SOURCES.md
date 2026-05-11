@@ -92,6 +92,38 @@ That's all. The modal automatically renders a "Browse <DisplayName>" tab; the so
 | `tags`   | yes      | Free-text tags for the client-side search box. Lowercase, no punctuation. |
 | `author` | optional | Display author when relevant (game-icons.net icons credit individual artists). Omit if irrelevant. |
 
+## Connectors that need an API key
+
+Some sources require authentication (e.g. Freesound for audio — a future
+audio connector will inherit the same shape). The interface has an
+optional `apiKeyConfig` block that connectors set to opt into a standard
+key UI:
+
+```typescript
+apiKeyConfig: {
+  storageKey:  'dmr_yoursource_api_key',                  // namespaced
+  label:       'Your Source API key',
+  signupUrl:   'https://yoursource.example/keys/apply',
+  signupLabel: 'yoursource.example/keys/apply',
+}
+```
+
+When set, the modal automatically renders above the manifest grid:
+
+- A password-type input that round-trips through localStorage on save.
+- A clickable signup link (opens in a new tab) — DON'T just print the URL as text; the user copy-pastes API keys often and needs the link live.
+- A note clarifying the key is local-only and never travels in `.mappadux` bundles.
+
+The connector's `fetchSvg()` / `loadManifest()` implementations read the key from localStorage themselves (or via a shared helper) — the interface intentionally doesn't pass it in, so connectors that don't need a key aren't burdened with parameter shape.
+
+**Key UX standards** (apply to every connector type, image / map / audio):
+
+- **Always make the signup URL clickable** — text-only URLs force the user to copy-paste, which is friction.
+- **`target="_blank"` + `rel="noopener noreferrer"`** — let the user keep your library modal open while they grab a key.
+- **Password input, not text** — discourages over-the-shoulder snooping.
+- **`autocomplete="off"`, `data-1p-ignore`, `data-lpignore="true"`** — keeps password managers from offering to save API keys as login passwords.
+- **State explicitly that the key is local-only** — earns trust, encourages real key entry.
+
 ## Manifest strategies
 
 - **Bundle a static manifest** (current v2.11 default for both connectors) — fast, no network dependency at modal-open time. Good for curated subsets.
