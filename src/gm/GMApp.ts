@@ -2023,7 +2023,8 @@ export class GMApp {
 
     this.hamburger = new HamburgerMenu(btn, menu);
 
-    // Pack save / load — moved here from the Map panel.
+    // ── File group ── Save / Load Map Pack lives at the top, matching the
+    // traditional "File" menu placement.
     this.hamburger.addItem({
       label: 'Save Map Pack…',
       onSelect: () => { void this.saveBundle(); },
@@ -2040,36 +2041,40 @@ export class GMApp {
       },
     });
 
-    // Customise pack… — opens the About dialog directly in edit mode so
-    // creators can immediately edit branding without first viewing the
-    // current About.
+    // ── Asset Libraries group ── all three first-class libraries open here.
+    // Each one lands on the library's "My Library" view.
     this.hamburger.addItem({
-      label: 'Customise pack…',
-      onSelect: () => { void this.openAboutDialog({ startInEdit: true }); },
+      label: 'Map Library…',
+      onSelect: () => { this.mapAssetModal.open(() => { /* browse-only */ }); },
     });
-
-    // Image Library — third asset library alongside Maps and Audio. Currently
-    // browse-only; marker-icon integration follows in a later Stream B commit.
+    this.hamburger.addItem({
+      label: 'Sound Library…',
+      onSelect: () => { void this.openSoundLibrary(); },
+    });
     this.hamburger.addItem({
       label: 'Image Library…',
       onSelect: () => { void this.openImageLibrary(); },
     });
 
-    // Destructive / system entries
+    // ── Pack settings ──
+    this.hamburger.addItem({
+      label: 'Customise pack…',
+      onSelect: () => { void this.openAboutDialog({ startInEdit: true }); },
+    });
+
+    // ── System ── App-level Settings, then the destructive New-Pack action
+    // last in the main list to keep it out of muscle-memory reach.
+    this.hamburger.addItem({
+      label: 'Settings…',
+      onSelect: () => { void this.openSettings(); },
+    });
     this.hamburger.addItem({
       label: 'New Map Pack…',
       danger: true,
       onSelect: () => { void this.newMapPack(); },
     });
-    this.hamburger.addItem({
-      label: 'Settings…',
-      onSelect: () => { void this.openSettings(); },
-    });
 
-    // About sits at the bottom of the menu. Opens the customisable splash
-    // dialog in display mode; the always-on Mappadux footer (Discord, Ko-fi,
-    // GitHub, mappadux.com, licence) is rendered regardless of creator
-    // branding above.
+    // ── Footer ── About is pinned at the very bottom.
     this.hamburger.addItem({
       label: 'About…',
       footer: true,
@@ -2235,6 +2240,15 @@ export class GMApp {
    *  At M3 this is browse-only; marker icon integration follows. */
   private async openImageLibrary(): Promise<void> {
     await new ImageAssetModal().open();
+  }
+
+  /** Open the audio library (FreesoundModal) in browse-only mode — onAssign
+   *  callback is a no-op, so picking a sound from the library doesn't try
+   *  to drop it into a soundboard slot. The user can still manage
+   *  attribution, store, delete, etc. on each row. */
+  private async openSoundLibrary(): Promise<void> {
+    const { FreesoundModal } = await import('./FreesoundModal.ts');
+    new FreesoundModal(() => { /* browse-only */ }).open();
   }
 
   /** Open the Settings dialog. Handles the Delete DB / Delete All Data

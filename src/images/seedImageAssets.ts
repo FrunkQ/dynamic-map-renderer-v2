@@ -67,6 +67,13 @@ const SYSTEM_CATEGORIES: ReadonlyArray<ImageCategory> = [
   { id: SYSTEM_CATEGORY_IDS.textmap,      name: 'Textmap',      isSystem: true, sortOrder: 50 },
 ];
 
+/** Standard licence label for built-in / user-typed Unicode glyphs. Unicode
+ *  characters themselves are not copyrighted — the standard is a public
+ *  registry of code points. Font glyph designs are separate; we render via
+ *  the browser's system font stack at runtime, so no third-party font asset
+ *  travels in the pack. */
+export const UNICODE_LICENSE_LABEL = 'Unicode character — Public Domain';
+
 export async function seedImageAssetsIfNeeded(): Promise<void> {
   // 1. Ensure system categories exist. Idempotent — saveCategory upserts.
   const existing = await ImageAssetStore.getAllCategories();
@@ -96,11 +103,20 @@ export async function seedImageAssetsIfNeeded(): Promise<void> {
         categoryId:   SYSTEM_CATEGORY_IDS.unicode,
         tintable:     true,
         unicodeChar:  preset.char,
-        license:      'N/A',
+        license:      UNICODE_LICENSE_LABEL,
         addedAt:      now - i, // Preserve original ordering via timestamps
       };
       await ImageAssetStore.save(asset);
       i++;
+    }
+  }
+
+  // 3. Backfill the licence label on existing Unicode entries that predate
+  //    the proper string (early v2.11.0-dev installs landed with 'N/A').
+  //    One-time fix-up; idempotent thereafter.
+  for (const a of allAssets) {
+    if (a.source === 'unicode' && (a.license === 'N/A' || !a.license)) {
+      await ImageAssetStore.update(a.id, { license: UNICODE_LICENSE_LABEL });
     }
   }
 }

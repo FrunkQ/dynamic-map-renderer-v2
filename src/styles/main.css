@@ -1582,6 +1582,25 @@ option.select-option--add {
   margin-left: auto;
   white-space: nowrap;
 }
+.img-modal-target-select {
+  padding: 3px 6px;
+  background: var(--bg-deep, rgba(0,0,0,0.2));
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+.img-modal-target-select:focus { outline: 1px solid var(--accent); }
+
+/* Footer with shared Attributions button. */
+.img-modal-footer {
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  background: var(--bg-deep, rgba(0,0,0,0.15));
+}
 
 /* Connector grid cells use the same .img-modal-cell sizing, with the Import
  * action sitting at the bottom-edge instead of an overlay × delete. */

@@ -659,18 +659,21 @@ export class FreesoundModal {
   private async _showAttributions(): Promise<void> {
     const modal = document.getElementById('attributions-modal');
     if (!modal) return;
-    const [audioList, mapList] = await Promise.all([
+    const { ImageAssetStore } = await import('../images/ImageAssetStore.ts');
+    const [audioList, mapList, imageList] = await Promise.all([
       AudioAssetStore.getAttributions(),
       MapAssetStore.getAttributions(),
+      ImageAssetStore.getAttributions(),
     ]);
     const bodyEl = modal.querySelector('#attr-list')!;
     bodyEl.innerHTML = '';
 
-    if (audioList.length === 0 && mapList.length === 0) {
+    if (audioList.length === 0 && mapList.length === 0 && imageList.length === 0) {
       bodyEl.innerHTML = '<p class="attr-empty">No assets in library yet.</p>';
     } else {
       this._appendAttrSection(bodyEl, 'Audio assets', audioList);
       this._appendAttrSection(bodyEl, 'Map assets',   mapList);
+      this._appendAttrSection(bodyEl, 'Image assets', imageList);
     }
     const status = modal.querySelector<HTMLElement>('#attr-copy-status');
     if (status) status.textContent = '';
@@ -705,11 +708,13 @@ export class FreesoundModal {
   private async _copyAllAttributions(): Promise<void> {
     const modal  = document.getElementById('attributions-modal');
     const status = modal?.querySelector<HTMLElement>('#attr-copy-status') ?? null;
-    const [audioList, mapList] = await Promise.all([
+    const { ImageAssetStore } = await import('../images/ImageAssetStore.ts');
+    const [audioList, mapList, imageList] = await Promise.all([
       AudioAssetStore.getAttributions(),
       MapAssetStore.getAttributions(),
+      ImageAssetStore.getAttributions(),
     ]);
-    if (audioList.length === 0 && mapList.length === 0) {
+    if (audioList.length === 0 && mapList.length === 0 && imageList.length === 0) {
       if (status) status.textContent = 'Nothing to copy.';
       return;
     }
@@ -732,9 +737,14 @@ export class FreesoundModal {
     if (mapList.length > 0) {
       lines.push('Map assets used in map pack:', '');
       for (const item of mapList) lines.push(formatRow(item, 'Map'));
+      lines.push('');
+    }
+    if (imageList.length > 0) {
+      lines.push('Image assets used in map pack:', '');
+      for (const item of imageList) lines.push(formatRow(item, 'Icon'));
     }
     const text = lines.join('\n').trimEnd();
-    const total = audioList.length + mapList.length;
+    const total = audioList.length + mapList.length + imageList.length;
     try {
       await navigator.clipboard.writeText(text);
       if (status) status.textContent = `Copied ${total} entr${total === 1 ? 'y' : 'ies'} to clipboard.`;

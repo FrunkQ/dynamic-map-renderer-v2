@@ -5,6 +5,7 @@ import type { ImageSourceConnector, ConnectorManifestEntry } from './connectors/
 import { gameIconsConnector } from './connectors/gameIcons.ts';
 import { lucideConnector } from './connectors/lucide.ts';
 import { generateId } from '../utils/id.ts';
+import { UNICODE_LICENSE_LABEL } from './seedImageAssets.ts';
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
   gameIconsConnector,
@@ -43,6 +44,11 @@ export class ImageAssetModal {
   /** Connector tab's own search query — separate from the library search so
    *  switching tabs doesn't clobber state. */
   private connectorSearchQuery: string = '';
+  /** When true the connector grid shows every manifest entry. Default false:
+   *  the grid is empty until the user types a search, which keeps fetch
+   *  traffic light and the experience feels search-first like the public
+   *  catalogs themselves. */
+  private connectorShowAll: boolean = false;
 
   async open(opts: ImageAssetModalOptions = {}): Promise<void> {
     if (opts.initialCategoryId) this.selectedCategoryId = opts.initialCategoryId;
@@ -129,6 +135,22 @@ export class ImageAssetModal {
     grid.id = 'img-modal-grid';
     main.appendChild(grid);
 
+    // Footer with the unified Attributions button — opens the same modal as
+    // Map / Audio libraries via the shared 'dmr-show-attributions' event so
+    // creators get one rollup of credits across all three asset libraries.
+    const footer = document.createElement('div');
+    footer.className = 'img-modal-footer';
+    const attrBtn = document.createElement('button');
+    attrBtn.type = 'button';
+    attrBtn.className = 'btn btn--ghost btn--sm';
+    attrBtn.textContent = 'ℹ Attributions & Licences';
+    attrBtn.title = 'View the combined credits for every audio, map, and image asset in the pack';
+    attrBtn.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('dmr-show-attributions'));
+    });
+    footer.appendChild(attrBtn);
+    dialog.appendChild(footer);
+
     return overlay;
   }
 
@@ -163,6 +185,7 @@ export class ImageAssetModal {
   private async _switchToConnectorTab(c: ImageSourceConnector): Promise<void> {
     this.activeTab = c.id;
     this.connectorSearchQuery = '';
+    this.connectorShowAll = false;
     // Lazy-load the manifest on first visit; cache thereafter.
     if (!this.connectorManifests.has(c.id)) {
       try {
@@ -346,7 +369,9 @@ export class ImageAssetModal {
     lic.textContent = conn.license;
     host.appendChild(lic);
 
-    // Search
+    // Search — drives the search-first UX. Typing reveals matches; an
+    // empty search box with showAll=false leaves the grid intentionally
+    // empty so we don't fetch SVG previews on every tab open.
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'img-modal-search';
@@ -354,18 +379,51 @@ export class ImageAssetModal {
     search.value = this.connectorSearchQuery;
     search.addEventListener('input', () => {
       this.connectorSearchQuery = search.value.trim().toLowerCase();
+      // Typing automatically dismisses the "Show all" state — the search
+      // narrows the result set, never expands beyond a match.
+      if (this.connectorSearchQuery) this.connectorShowAll = false;
       this._renderGrid();
     });
     host.appendChild(search);
 
-    // "Import into" target — small label + read-only display of the
-    // currently-selected sidebar category. The sidebar selection drives
-    // where imported icons land.
-    const target = document.createElement('div');
-    target.className = 'img-modal-import-target';
-    const targetCat = this.categories.find((c) => c.id === this.selectedCategoryId);
-    target.textContent = `Imports → ${targetCat?.name ?? 'Unknown'}`;
-    host.appendChild(target);
+    // "Show all" toggle — escape hatch for users who want to browse the
+    // full curated set without typing.
+    const showAllBtn = document.createElement('button');
+    showAllBtn.type = 'button';
+    showAllBtn.className = 'btn btn--ghost btn--xs';
+    showAllBtn.textContent = this.connectorShowAll ? 'Hide all' : 'Show all';
+    showAllBtn.addEventListener('click', () => {
+      this.connectorShowAll = !this.connectorShowAll;
+      this.connectorSearchQuery = '';
+      this._renderToolbar();
+      this._renderGrid();
+    });
+    host.appendChild(showAllBtn);
+
+    // "Import into" target — dropdown so the user can choose where imports
+    // land without leaving the Browse tab to click in the sidebar. Defaults
+    // to whichever sidebar category is currently selected.
+    const label = document.createElement('span');
+    label.className = 'img-modal-import-target';
+    label.textContent = 'Imports →';
+    host.appendChild(label);
+
+    const targetSel = document.createElement('select');
+    targetSel.className = 'img-modal-target-select';
+    for (const cat of this.categories) {
+      const opt = document.createElement('option');
+      opt.value = cat.id;
+      opt.textContent = cat.name;
+      if (cat.id === this.selectedCategoryId) opt.selected = true;
+      targetSel.appendChild(opt);
+    }
+    targetSel.addEventListener('change', () => {
+      this.selectedCategoryId = targetSel.value;
+      // Refresh sidebar so the active category visually matches the new
+      // target. Grid doesn't need a re-render — it's connector content.
+      this._renderSidebar();
+    });
+    host.appendChild(targetSel);
   }
 
   private async _promptAddUnicode(): Promise<void> {
@@ -381,7 +439,7 @@ export class ImageAssetModal {
       categoryId:   this.selectedCategoryId,
       tintable:     true,
       unicodeChar:  trimmed,
-      license:      'N/A',
+      license:      UNICODE_LICENSE_LABEL,
       addedAt:      Date.now(),
     };
     await ImageAssetStore.save(asset);
@@ -485,6 +543,20 @@ export class ImageAssetModal {
       empty.className = 'img-modal-empty';
       empty.textContent = `Manifest unavailable. Check your connection and try again.`;
       host.appendChild(empty);
+      return;
+    }
+
+    // Search-first UX: with no query AND no "Show all" toggle, show a prompt
+    // rather than the full manifest. Avoids firing 30+ CDN fetches on every
+    // tab open and matches the feel of the upstream catalog browsers.
+    if (!this.connectorSearchQuery && !this.connectorShowAll) {
+      const prompt = document.createElement('div');
+      prompt.className = 'img-modal-empty';
+      prompt.innerHTML = `
+        <p style="margin:0 0 var(--space-sm);">Search by name or tag to browse <strong>${this._esc(conn.displayName)}</strong>.</p>
+        <p style="margin:0; font-size:0.85em;">Try terms like <em>sword</em>, <em>dragon</em>, <em>key</em>, or use <strong>Show all</strong> to browse the curated starter set.</p>
+      `;
+      host.appendChild(prompt);
       return;
     }
 

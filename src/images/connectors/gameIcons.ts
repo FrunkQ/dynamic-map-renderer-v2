@@ -17,44 +17,35 @@ import type { ImageSourceConnector, ConnectorManifestEntry } from './types.ts';
 
 const SVG_BASE = 'https://cdn.jsdelivr.net/gh/game-icons/icons@master';
 
+// Curated starter set — slugs verified to exist in the upstream repo as of
+// v2.11.0. The full game-icons.net catalog is ~4,000 entries; we ship a tiny
+// curated subset and the modal exposes a search-first UX so the bundle stays
+// small. To grow this list, add entries here using the format
+// '<author>/<slug>' that resolves to a valid file under
+// https://cdn.jsdelivr.net/gh/game-icons/icons@master/ — verify each one.
 const STARTER_MANIFEST: ConnectorManifestEntry[] = [
-  // ── Weapons & combat (fantasy) ─────────────────────────────────────────
-  { slug: 'lorc/broadsword',      name: 'Broadsword',      author: 'Lorc',       tags: ['weapon','sword','melee','fantasy'] },
-  { slug: 'lorc/crossed-axes',    name: 'Crossed Axes',    author: 'Lorc',       tags: ['weapon','axe','melee','dual','fantasy'] },
-  { slug: 'lorc/bow-arrow',       name: 'Bow & Arrow',     author: 'Lorc',       tags: ['weapon','bow','ranged','archer','fantasy'] },
-  { slug: 'lorc/spear-hook',      name: 'Spear',           author: 'Lorc',       tags: ['weapon','spear','melee','polearm'] },
-  // ── Magic & power ──────────────────────────────────────────────────────
-  { slug: 'lorc/fire-spell-cast', name: 'Fire Spell',      author: 'Lorc',       tags: ['magic','fire','spell','elemental'] },
-  { slug: 'lorc/ice-spell-cast',  name: 'Ice Spell',       author: 'Lorc',       tags: ['magic','ice','frost','spell','elemental'] },
-  { slug: 'lorc/lightning-trio',  name: 'Lightning',       author: 'Lorc',       tags: ['magic','lightning','storm','elemental'] },
-  { slug: 'lorc/magic-swirl',     name: 'Magic Swirl',     author: 'Lorc',       tags: ['magic','spell','arcane','aura'] },
+  // ── Weapons & combat ──────────────────────────────────────────────────
+  { slug: 'lorc/broadsword',      name: 'Broadsword',      author: 'Lorc', tags: ['weapon','sword','melee','fantasy'] },
+  { slug: 'lorc/crossed-axes',    name: 'Crossed Axes',    author: 'Lorc', tags: ['weapon','axe','melee','dual','fantasy'] },
+  { slug: 'lorc/spear-hook',      name: 'Spear',           author: 'Lorc', tags: ['weapon','spear','melee','polearm'] },
+  // ── Magic & power ─────────────────────────────────────────────────────
+  { slug: 'lorc/lightning-trio',  name: 'Lightning',       author: 'Lorc', tags: ['magic','lightning','storm','elemental'] },
+  { slug: 'lorc/magic-swirl',     name: 'Magic Swirl',     author: 'Lorc', tags: ['magic','spell','arcane','aura'] },
   // ── Creatures ─────────────────────────────────────────────────────────
-  { slug: 'lorc/dragon-head',     name: 'Dragon Head',     author: 'Lorc',       tags: ['creature','dragon','monster','fantasy'] },
-  { slug: 'lorc/wolf-head',       name: 'Wolf Head',       author: 'Lorc',       tags: ['creature','wolf','beast','animal'] },
-  { slug: 'lorc/spider',          name: 'Spider',          author: 'Lorc',       tags: ['creature','spider','vermin','swarm'] },
-  { slug: 'delapouite/skull-bolt',name: 'Lich Skull',      author: 'Delapouite', tags: ['creature','undead','skull','death','lich'] },
+  { slug: 'lorc/dragon-head',     name: 'Dragon Head',     author: 'Lorc', tags: ['creature','dragon','monster','fantasy'] },
+  { slug: 'lorc/wolf-head',       name: 'Wolf Head',       author: 'Lorc', tags: ['creature','wolf','beast','animal'] },
   // ── Items & gear ──────────────────────────────────────────────────────
-  { slug: 'lorc/round-shield',    name: 'Round Shield',    author: 'Lorc',       tags: ['gear','shield','defence','armour'] },
-  { slug: 'lorc/health-potion',   name: 'Health Potion',   author: 'Lorc',       tags: ['item','potion','health','consumable'] },
-  { slug: 'lorc/locked-chest',    name: 'Treasure Chest',  author: 'Lorc',       tags: ['item','chest','loot','treasure'] },
-  { slug: 'lorc/key',             name: 'Key',             author: 'Lorc',       tags: ['item','key','door','unlock'] },
-  // ── Places & dungeon features ─────────────────────────────────────────
-  { slug: 'lorc/portal',          name: 'Portal',          author: 'Lorc',       tags: ['place','portal','gate','arcane'] },
-  { slug: 'delapouite/wooden-door',name:'Wooden Door',     author: 'Delapouite', tags: ['feature','door','dungeon'] },
-  { slug: 'lorc/spiked-trunk',    name: 'Trap',            author: 'Lorc',       tags: ['feature','trap','spike','hazard'] },
-  { slug: 'lorc/cauldron',        name: 'Cauldron',        author: 'Lorc',       tags: ['feature','cauldron','witch','alchemy'] },
-  // ── Sci-fi ─────────────────────────────────────────────────────────────
-  { slug: 'lorc/spaceship',       name: 'Spaceship',       author: 'Lorc',       tags: ['scifi','ship','space','vehicle'] },
-  { slug: 'lorc/ray-gun',         name: 'Ray Gun',         author: 'Lorc',       tags: ['scifi','weapon','blaster','ranged'] },
-  { slug: 'lorc/robot-antennas',  name: 'Robot',           author: 'Lorc',       tags: ['scifi','robot','machine','automaton'] },
-  { slug: 'lorc/processor',       name: 'Processor',       author: 'Lorc',       tags: ['scifi','tech','cpu','machine'] },
+  { slug: 'lorc/locked-chest',    name: 'Treasure Chest',  author: 'Lorc', tags: ['item','chest','loot','treasure'] },
+  { slug: 'lorc/key',             name: 'Key',             author: 'Lorc', tags: ['item','key','door','unlock'] },
+  // ── Places & features ─────────────────────────────────────────────────
+  { slug: 'lorc/portal',          name: 'Portal',          author: 'Lorc', tags: ['place','portal','gate','arcane'] },
+  { slug: 'lorc/cauldron',        name: 'Cauldron',        author: 'Lorc', tags: ['feature','cauldron','witch','alchemy'] },
+  // ── Sci-fi ────────────────────────────────────────────────────────────
+  { slug: 'lorc/ray-gun',         name: 'Ray Gun',         author: 'Lorc', tags: ['scifi','weapon','blaster','ranged'] },
+  { slug: 'lorc/processor',       name: 'Processor',       author: 'Lorc', tags: ['scifi','tech','cpu','machine'] },
   // ── Abstract / status markers ─────────────────────────────────────────
-  { slug: 'lorc/eye-target',      name: 'Eye / Spot',      author: 'Lorc',       tags: ['abstract','eye','spot','vision'] },
-  { slug: 'lorc/footprint',       name: 'Footprint',       author: 'Lorc',       tags: ['abstract','footprint','track','trail'] },
-  { slug: 'lorc/heart-plus',      name: 'Healing',         author: 'Lorc',       tags: ['abstract','heart','heal','health'] },
-  { slug: 'lorc/death-skull',     name: 'Death',           author: 'Lorc',       tags: ['abstract','skull','dead','danger'] },
-  { slug: 'lorc/two-shadows',     name: 'Hidden / Stealth',author: 'Lorc',       tags: ['abstract','stealth','shadow','hidden'] },
-  { slug: 'lorc/flag',            name: 'Flag',            author: 'Lorc',       tags: ['abstract','flag','marker','objective'] },
+  { slug: 'lorc/footprint',       name: 'Footprint',       author: 'Lorc', tags: ['abstract','footprint','track','trail'] },
+  { slug: 'lorc/two-shadows',     name: 'Hidden / Stealth', author: 'Lorc', tags: ['abstract','stealth','shadow','hidden'] },
 ];
 
 export const gameIconsConnector: ImageSourceConnector = {
