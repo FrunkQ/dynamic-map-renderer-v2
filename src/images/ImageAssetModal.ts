@@ -495,12 +495,15 @@ export class ImageAssetModal {
   }
 
   private _renderLibraryToolbar(host: HTMLElement): void {
-    // Category title + count
-    const cat = this.categories.find((c) => c.id === this.selectedCategoryId);
-    const countInCat = this.assets.filter((a) => a.categoryId === this.selectedCategoryId).length;
+    // Category title — the per-category count lives on the sidebar row and
+    // updates correctly during drag-to-recategorise. Repeating it here was
+    // confusing because the toolbar wasn't repainted on drag.
+    const cat = this.selectedCategoryId === ALL_CATEGORY_ID
+      ? { name: 'All' }
+      : this.categories.find((c) => c.id === this.selectedCategoryId);
     const title = document.createElement('div');
     title.className = 'img-modal-cat-title';
-    title.textContent = `${cat?.name ?? 'Unknown'} · ${countInCat}`;
+    title.textContent = cat?.name ?? 'Unknown';
     host.appendChild(title);
 
     // Search box
