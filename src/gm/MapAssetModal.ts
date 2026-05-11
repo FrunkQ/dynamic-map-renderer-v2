@@ -441,6 +441,10 @@ export class MapAssetModal {
       await MapAssetStore.update(asset.id, patch);
       // Drop the duplicate the editor created.
       await MapAssetStore.delete(result.asset.id);
+      // Invalidate the cached rasterisation under the original id so the
+      // next load picks up the edited config instead of returning the
+      // stale PNG from before the edit.
+      MapAssetStore.invalidateRuntimeCache(asset.id);
       await this._renderLibrary();
     });
     // Click any of the scale pills to re-calibrate without opening the pen editor.
