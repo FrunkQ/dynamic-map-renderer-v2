@@ -1,9 +1,13 @@
 import type { MapAsset, TextMapConfig } from '../types.ts';
+import { SYSTEM_CATEGORY_IDS } from '../types.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { ImageAssetStore } from '../images/ImageAssetStore.ts';
+import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { ensureFontsLoaded } from '../images/fontCatalog.ts';
 import { generateId } from '../utils/id.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
+import { resolveAssetImages } from '../utils/resolveAssetImages.ts';
+import { createRichTextEditor } from './RichTextEditor.ts';
 
 /**
  * TextMapEditor — Stream C handout editor.
@@ -300,16 +304,49 @@ export class TextMapEditor {
   }
 
   private _buildBodyTextarea(): HTMLElement {
-    const ta = document.createElement('textarea');
-    ta.className = 'txt-map-textarea';
-    ta.rows = 8;
-    ta.value = this.draft.bodyHtml;
-    ta.placeholder = 'HTML body (rich editor lands in the next commit)';
-    ta.addEventListener('input', () => {
-      this.draft.bodyHtml = ta.value;
-      this._renderPreview();
+    // Rich-text editor shared with the About splash body. Adds an inline-
+    // icon-insert button wired to the Small Assets Library in pick mode.
+    return createRichTextEditor({
+      initialHtml: this.draft.bodyHtml,
+      placeholder: 'Body of the handout — proclamation, journal entry, ransom note…',
+      defaultColour: this.draft.textColor,
+      onChange: (html) => {
+        this.draft.bodyHtml = html;
+        this._renderPreview();
+      },
+      onInsertIcon: () => this._pickInlineIcon(),
     });
-    return ta;
+  }
+
+  /** Opens the Small Assets Library in pick mode (defaulting to the
+   *  Textmap category), resolves to `<img src="asset:<id>">` HTML that the
+   *  RichTextEditor inserts at the current selection. The sanitiser
+   *  whitelist accepts asset: URLs so the inserted markup survives
+   *  the save → load round-trip. */
+  private async _pickInlineIcon(): Promise<string | null> {
+    return new Promise<string | null>((resolve) => {
+      let picked = false;
+      const modal = new ImageAssetModal();
+      void modal.open({
+        initialCategoryId: SYSTEM_CATEGORY_IDS.textmap,
+        pickMode: true,
+        onPick: (asset) => {
+          picked = true;
+          resolve(`<img src="asset:${asset.id}" alt="${this._escAttr(asset.name)}" />`);
+        },
+      });
+      // If the user closes without picking, resolve null so the editor
+      // doesn't hang in a half-inserted state.
+      const origClose = modal.close.bind(modal);
+      modal.close = () => {
+        origClose();
+        if (!picked) resolve(null);
+      };
+    });
+  }
+
+  private _escAttr(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
 
   /** Render the preview. The page element's pixel dimensions are computed
@@ -332,8 +369,18 @@ export class TextMapEditor {
 
     const content = document.createElement('div');
     content.className = 'txt-map-page-content';
-    content.innerHTML = sanitizeSplashHtml(this.draft.bodyHtml);
+    const sanitised = sanitizeSplashHtml(this.draft.bodyHtml);
+    content.innerHTML = sanitised;
     page.appendChild(content);
+
+    // Resolve any inline asset: image references to data / blob URLs so
+    // they show in the preview. This is async (IDB lookup) — fire and
+    // forget; the body paints unchanged until the resolved HTML lands.
+    if (sanitised.includes('asset:')) {
+      void resolveAssetImages(sanitised).then((resolved) => {
+        if (content.isConnected) content.innerHTML = resolved;
+      });
+    }
 
     host.appendChild(page);
     this._fitPage();

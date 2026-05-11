@@ -215,10 +215,18 @@ function extractFamilyFromInput(input: string): { family: string; tags: string[]
 export interface ImageAssetModalOptions {
   /** When set, opens with this category selected. Defaults to Unicode. */
   initialCategoryId?: string;
+  /** When set, opens in "pick" mode: clicking any icon cell calls this
+   *  callback with the picked asset and closes the modal. The × delete
+   *  badges are hidden in this mode so a single click reads as a pick.
+   *  Used by the TextMapEditor inline-icon-insert flow. */
+  pickMode?: boolean;
+  onPick?:   (asset: ImageAsset) => void;
 }
 
 export class ImageAssetModal {
   private overlay: HTMLElement | null = null;
+  private pickMode: boolean            = false;
+  private onPickCallback: ((asset: ImageAsset) => void) | null = null;
   // Opens on "All" by default so users land on a full view of their library
   // rather than seeing only the Unicode presets. Callers can override via
   // ImageAssetModalOptions.initialCategoryId (e.g. text-map editor opening
@@ -253,6 +261,8 @@ export class ImageAssetModal {
 
   async open(opts: ImageAssetModalOptions = {}): Promise<void> {
     if (opts.initialCategoryId) this.selectedCategoryId = opts.initialCategoryId;
+    this.pickMode = !!opts.pickMode;
+    this.onPickCallback = opts.onPick ?? null;
 
     this.overlay = this._buildShell();
     document.body.appendChild(this.overlay);
@@ -1387,12 +1397,26 @@ export class ImageAssetModal {
   private _iconCell(asset: ImageAsset): HTMLElement {
     const cell = document.createElement('div');
     cell.className = 'img-modal-cell';
-    cell.title = asset.name;
+    cell.title = this.pickMode ? `Insert "${asset.name}"` : asset.name;
+
+    // Pick mode — click resolves the modal with this asset. Drag-to-
+    // recategorise is still useful in normal browse mode but disabled here
+    // since the click is now the primary action.
+    if (this.pickMode) {
+      cell.classList.add('img-modal-cell--pickable');
+      cell.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._hidePreview();
+        const cb = this.onPickCallback;
+        this.close();
+        cb?.(asset);
+      });
+    }
 
     // Drag source — let the user drag any icon onto a sidebar category to
     // move it. dataTransfer payload is the asset id; the dragover/drop
     // handlers on category rows do the actual update.
-    cell.draggable = true;
+    cell.draggable = !this.pickMode;
     cell.addEventListener('dragstart', (e) => {
       if (!e.dataTransfer) return;
       e.dataTransfer.setData('application/x-mappadux-image-asset', asset.id);
@@ -1422,18 +1446,21 @@ export class ImageAssetModal {
     label.textContent = asset.name;
     cell.appendChild(label);
 
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'img-modal-del';
-    del.title = 'Delete this icon';
-    del.textContent = '×';
-    del.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!confirm(`Delete "${asset.name}"?`)) return;
-      await ImageAssetStore.delete(asset.id);
-      await this._reload();
-    });
-    cell.appendChild(del);
+    // No delete affordance in pick mode — a single click means insert.
+    if (!this.pickMode) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'img-modal-del';
+      del.title = 'Delete this icon';
+      del.textContent = '×';
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${asset.name}"?`)) return;
+        await ImageAssetStore.delete(asset.id);
+        await this._reload();
+      });
+      cell.appendChild(del);
+    }
 
     return cell;
   }

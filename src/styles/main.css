@@ -1483,6 +1483,11 @@ option.select-option--add {
 .img-modal-cell[draggable="true"]            { cursor: grab; }
 .img-modal-cell[draggable="true"]:active     { cursor: grabbing; }
 .img-modal-cell.is-dragging                  { opacity: 0.35; }
+.img-modal-cell--pickable                    { cursor: pointer; }
+.img-modal-cell--pickable:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
 .img-modal-sidebar-cat.is-drop-target {
   background: var(--accent-dim);
   border: 1px dashed var(--accent);

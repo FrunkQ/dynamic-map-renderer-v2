@@ -14,6 +14,8 @@ const ALLOWED_TAGS = new Set([
   'B', 'STRONG', 'I', 'EM', 'U',
   'UL', 'OL', 'LI',
   'FONT', // execCommand still emits <font color="…" face="…">
+  'IMG',  // Inline icons from the Small Assets Library — src is locked
+          // to "asset:<uuid>" or data: by the attribute filter below.
 ]);
 
 const ALLOWED_STYLE_PROPS = new Set([
@@ -55,7 +57,7 @@ function cleanNode(node: Element): void {
   }
 
   // Filter attributes — only `style` (with whitelisted props) on every tag,
-  // plus `color` / `face` on <font>.
+  // plus `color` / `face` on <font>, plus locked-down image attrs.
   for (const attr of Array.from(node.attributes)) {
     const name = attr.name.toLowerCase();
     if (name === 'style') {
@@ -64,6 +66,17 @@ function cleanNode(node: Element): void {
       else node.removeAttribute('style');
     } else if (node.tagName === 'FONT' && ALLOWED_FONT_ATTRS.has(name)) {
       // Keep — bare colour / face values, no JS-loadable URLs.
+    } else if (node.tagName === 'IMG' && (name === 'src' || name === 'width' || name === 'height' || name === 'alt')) {
+      if (name === 'src') {
+        const src = attr.value.trim();
+        // Only allow our internal asset references and inline data: images.
+        // Bare http(s) URLs are intentionally rejected so a malicious
+        // bundle can't smuggle in tracking pixels or remote loads.
+        if (!/^(asset:[A-Za-z0-9_-]+|data:image\/[a-z+]+;[^"'<>]*)$/i.test(src)) {
+          node.removeAttribute('src');
+        }
+      }
+      // width / height / alt: keep verbatim — no XSS risk via dimension attrs.
     } else {
       node.removeAttribute(attr.name);
     }
