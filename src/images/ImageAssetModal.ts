@@ -4,6 +4,7 @@ import { ImageAssetStore } from './ImageAssetStore.ts';
 import type { ImageSourceConnector, ConnectorManifestEntry } from './connectors/types.ts';
 import { gameIconsConnector } from './connectors/gameIcons.ts';
 import { lucideConnector } from './connectors/lucide.ts';
+import { generateId } from '../utils/id.ts';
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
   gameIconsConnector,
@@ -252,7 +253,7 @@ export class ImageAssetModal {
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed) return;
-    const id = 'cat-' + crypto.randomUUID();
+    const id = 'cat-' + generateId();
     await ImageAssetStore.saveCategory({
       id,
       name: trimmed,
@@ -374,7 +375,7 @@ export class ImageAssetModal {
     if (!trimmed) return;
     const name = prompt('Name for this icon:', trimmed) ?? trimmed;
     const asset: ImageAsset = {
-      id:           'unicode-' + crypto.randomUUID(),
+      id:           'unicode-' + generateId(),
       name:         name.trim() || trimmed,
       source:       'unicode',
       categoryId:   this.selectedCategoryId,
@@ -404,7 +405,7 @@ export class ImageAssetModal {
   private async _handleUpload(file: File): Promise<void> {
     const name = file.name.replace(/\.[^.]+$/, '');
     const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
-    const id = 'upload-' + crypto.randomUUID();
+    const id = 'upload-' + generateId();
     if (isSvg) {
       // Store SVG as text — small, fillable at render time. We don't try to
       // detect tintability automatically (a single-fill SVG would be, but

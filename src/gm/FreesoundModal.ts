@@ -6,6 +6,7 @@ import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { getUsedAudioAssetIds } from '../storage/assetUsage.ts';
 import { downloadAsset } from '../utils/downloadAsset.ts';
+import { generateId } from '../utils/id.ts';
 
 // Duration filter options shown in the dropdown
 const DURATION_OPTIONS: Array<{ label: string; value: number | null }> = [
@@ -545,7 +546,7 @@ export class FreesoundModal {
       importBtn.disabled = true;
       importBtn.textContent = 'Importing…';
       try {
-        const id    = crypto.randomUUID();
+        const id    = generateId();
         const asset = this.searchConnector.toAudioAsset(result, id);
         // Save metadata only — Freesound assets are URL-like by default. Blob
         // is fetched on demand into the runtime cache; click Store in My
@@ -637,7 +638,7 @@ export class FreesoundModal {
     addBtn.textContent = 'Saving…';
     try {
       const asset: AudioAsset = {
-        id:            crypto.randomUUID(),
+        id:            generateId(),
         name,
         source:        'upload',
         locallyStored: true,
@@ -781,7 +782,7 @@ export class FreesoundModal {
 
       const name = _nameFromUrl(url);
       const asset: AudioAsset = {
-        id:            crypto.randomUUID(),
+        id:            generateId(),
         name,
         source:        'web-link',
         locallyStored: false,

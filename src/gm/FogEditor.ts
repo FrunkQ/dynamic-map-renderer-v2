@@ -1,4 +1,5 @@
 import type { FogPolygon, FogState, FogVertex } from '../types.ts';
+import { generateId } from '../utils/id.ts';
 
 export interface FogEditorMode {
   drawing: boolean;
@@ -8,12 +9,6 @@ export interface FogEditorMode {
 
 type FogChangeCallback = (fog: FogState) => void;
 type ModeChangeCallback = (mode: FogEditorMode) => void;
-
-function generateId(): string {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
-}
 
 export class FogEditor {
   private canvas: HTMLCanvasElement;

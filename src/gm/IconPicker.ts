@@ -1,5 +1,6 @@
 import { saveAsset, getAllAssets, deleteAsset } from '../storage/db.ts';
 import { getUsedIconKeys } from '../storage/assetUsage.ts';
+import { generateId } from '../utils/id.ts';
 
 const PRESET_ICONS = [
   '◆','◇','●','○','■','□','▲','△','▼','▽',
@@ -211,7 +212,7 @@ export class IconPicker {
       this._fileInput.value = '';
 
       const blob = await this._resize(file, 64);
-      const id   = crypto.randomUUID();
+      const id   = generateId();
       await saveAsset({ id, name: file.name, type: 'icon', blob, addedAt: Date.now() });
 
       const [bmp, dataUrl] = await Promise.all([

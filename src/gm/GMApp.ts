@@ -26,6 +26,7 @@ import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
 import { seedImageAssetsIfNeeded } from '../images/seedImageAssets.ts';
 import { ImageAssetModal } from '../images/ImageAssetModal.ts';
+import { generateId } from '../utils/id.ts';
 import { exportBundle, importBundleText } from '../storage/bundleIO.ts';
 import { retrofitMapScales } from '../maps/retrofitMapScales.ts';
 import { isEncryptedBundleEnvelope } from '../storage/bundleCrypto.ts';
@@ -1699,7 +1700,7 @@ export class GMApp {
       if (!src) return;
       const clone = {
         ...src,
-        id:       crypto.randomUUID(),
+        id:       generateId(),
         label:    src.label.endsWith(' - copy') ? src.label : `${src.label} - copy`,
         position: {
           x: Math.min(1, src.position.x + 0.02),

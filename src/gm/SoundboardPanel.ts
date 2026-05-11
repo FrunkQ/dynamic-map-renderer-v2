@@ -1,5 +1,6 @@
 import type { SoundboardSlot, AudioAsset, SoundboardAudioData } from '../types.ts';
 import { SOUNDBOARD_PAGE_SIZE } from '../types.ts';
+import { generateId } from '../utils/id.ts';
 
 // ── Playback mode SVG icons (14×14, single currentColor) ─────────────────────
 
@@ -347,7 +348,7 @@ export class SoundboardPanel {
 
   private _addSlot(): void {
     const newSlot: SoundboardSlot = {
-      id:      crypto.randomUUID(),
+      id:      generateId(),
       assetId: null,
       label:   '',
       loop:    false,

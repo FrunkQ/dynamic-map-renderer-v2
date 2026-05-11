@@ -6,6 +6,7 @@ import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { getUsedMapAssetIds } from '../storage/assetUsage.ts';
 import { detectMapScale, autoApplyPatch } from '../utils/detectMapScale.ts';
 import { ScaleCandidateDialog } from './ScaleCandidateDialog.ts';
+import { generateId } from '../utils/id.ts';
 
 /** Standard licence options shared with the audio editor. */
 const LICENSE_OPTIONS: string[] = [
@@ -496,7 +497,7 @@ export class MapAssetModal {
 
       const filename = _filenameFromUrl(url);
       const asset: MapAsset = {
-        id:            crypto.randomUUID(),
+        id:            generateId(),
         filename,
         source:        'web-link',
         locallyStored: false,

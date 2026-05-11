@@ -4,10 +4,7 @@ import {
 } from '../storage/db.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { generateMissingMapPlaceholder } from '../maps/placeholder.ts';
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
+import { generateId } from '../utils/id.ts';
 
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB

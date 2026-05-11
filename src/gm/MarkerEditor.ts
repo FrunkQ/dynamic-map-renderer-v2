@@ -1,6 +1,7 @@
 import type { Marker } from '../types.ts';
 import { defaultMarker } from '../types.ts';
 import { MarkerLayer } from '../rendering/MarkerLayer.ts';
+import { generateId } from '../utils/id.ts';
 
 /**
  * MarkerEditor — GM-side canvas interaction for markers.
@@ -85,7 +86,7 @@ export class MarkerEditor {
 
   /** Create a new marker at normalised map position (x, y). */
   addMarker(x = 0.5, y = 0.5): Marker {
-    const id = crypto.randomUUID();
+    const id = generateId();
     const m  = defaultMarker(id,
       Math.max(0, Math.min(1, x)),
       Math.max(0, Math.min(1, y)),
