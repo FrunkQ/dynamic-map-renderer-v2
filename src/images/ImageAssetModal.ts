@@ -19,12 +19,90 @@ const CONNECTORS: readonly ImageSourceConnector[] = [
 const ALL_CATEGORY_ID = '__all__';
 
 /** Auto-route map — when an imported icon's tags include any of these
- *  keywords, route it to the matching system category. First-match wins. */
+ *  keywords, route it to the matching system category. Order matters:
+ *  Sci-fi is checked first (its keywords are highly specific), then
+ *  Fantasy (the broadest medieval/magic bucket), then Contemporary
+ *  (modern utility), with Abstract as the fall-through.
+ *
+ *  Keyword lists are drawn from common game-icons.net slug terms — slugs
+ *  like 'lorc/dragon-head' produce tags ['dragon','head'] via the build
+ *  script's split-on-hyphens extraction, so the rule fires on any of
+ *  those parts. */
 const AUTO_CATEGORY_RULES: ReadonlyArray<{ keywords: readonly string[]; categoryId: string }> = [
-  { keywords: ['fantasy','dragon','wolf','sword','axe','knight','medieval','wizard','witch','cauldron','potion','dwarf','elf','orc','goblin','rune','spell','magic','arcane','undead','skeleton','demon','angel'], categoryId: 'sys-fantasy' },
-  { keywords: ['scifi','sci-fi','space','rocket','laser','blaster','ray','robot','cyborg','alien','starship','tech','cpu','processor','satellite','probe','plasma'],                                          categoryId: 'sys-scifi' },
-  { keywords: ['ui','interface','arrow','nav','navigation','time','clock','hourglass','tool','wrench','hammer','phone','mail','file','folder','calendar','marker','pin','flag','user','users'],          categoryId: 'sys-contemporary' },
-  { keywords: ['abstract','shape','circle','square','triangle','star','dot','geometric'],                                                                                                                  categoryId: 'sys-abstract' },
+  // Sci-fi: tech, space, future, anything obviously not medieval. Listed
+  // first so 'robot-knight' lands in scifi rather than fantasy.
+  { keywords: [
+      'scifi','sci-fi','cyber','cyborg','android','mech','robot','bot','drone',
+      'space','spaceship','starship','rocket','asteroid','planet','satellite',
+      'ufo','alien','mutant','galactic','cosmic','nebula','astronaut','spacesuit','jetpack',
+      'laser','blaster','plasma','ray','beam','photon','radiation','reactor',
+      'tech','technology','cpu','processor','chip','circuit','console','terminal','datapad',
+      'computer','server','antenna','beacon','scanner','sensor','radar','radio',
+      'futuristic','futurist','neon','retro-future',
+    ], categoryId: 'sys-scifi' },
+
+  // Fantasy: medieval, magic, creatures, classic TTRPG gear. Broadest bucket.
+  { keywords: [
+      'fantasy','medieval','knight','paladin','barbarian','druid','ranger','bard','monk','cleric','rogue',
+      // Races / creatures
+      'dwarf','dwarven','elf','elven','orc','orcish','goblin','kobold','troll','ogre','gnome','halfling',
+      'dragon','wyvern','drake','hydra','phoenix','unicorn','centaur','minotaur','beholder',
+      'wolf','bear','boar','spider','snake','serpent','viper','rat','bat','crow','raven','hawk','falcon',
+      'demon','devil','imp','succubus','undead','skeleton','zombie','ghost','wraith','lich','vampire','werewolf',
+      'fairy','fae','sprite','pixie','dryad','satyr','gnoll',
+      // Magic
+      'magic','arcane','spell','scroll','rune','sorcery','enchant','enchantment','glyph','sigil',
+      'wizard','witch','mage','sorcerer','warlock','necromancer',
+      'cauldron','potion','elixir','vial','grimoire','tome','spellbook',
+      'divine','holy','blessing','curse','hex','ritual','summon','conjure',
+      // Weapons
+      'sword','greatsword','broadsword','rapier','scimitar','katana','dagger','dirk',
+      'axe','battleaxe','halberd','poleaxe','glaive','spear','pike','lance','javelin',
+      'mace','warhammer','flail','club','quarterstaff','staff',
+      'bow','longbow','crossbow','arrow','quiver','sling',
+      // Armour / gear
+      'shield','buckler','helm','helmet','gauntlet','greaves','plate','chainmail','leather','gambeson',
+      'cloak','robe','sash','tabard','heraldry','crown','crest','banner',
+      // Places
+      'castle','keep','tower','dungeon','temple','shrine','altar','crypt','tomb','ruins',
+      'cavern','cave','mine','forge','anvil','tavern','inn','mead','brewery','manor',
+      'portal','gate','dais','obelisk',
+      // Items
+      'chest','treasure','loot','coin','gem','jewel','jewelry','ring','amulet','talisman','relic','idol',
+      'lantern','torch','candle','brazier','goblet','chalice','flagon',
+      // Elemental / themes
+      'flame','fire','frost','ice','poison','acid','blood','bone','skull',
+    ], categoryId: 'sys-fantasy' },
+
+  // Contemporary: modern UI / utility / everyday objects.
+  { keywords: [
+      'ui','interface','app','widget',
+      'arrow','arrows','cross','check','tick','info','alert','warning','error','help','question',
+      'nav','navigation','direction','compass','map','pin','marker','flag','target','crosshair',
+      'menu','hamburger','gear','settings','config','tool','tools','wrench','spanner','screwdriver','drill',
+      'time','clock','hourglass','watch','calendar','timer','stopwatch',
+      'search','magnifier','glass','eye','vision','watch','binoculars',
+      'lock','unlock','key','padlock','password','secure',
+      'phone','smartphone','mobile','laptop','tablet','desktop','monitor','screen','keyboard','mouse',
+      'mail','envelope','letter','message','chat','speech','bubble',
+      'file','folder','document','paper','pen','pencil','clipboard','book','notebook',
+      'camera','photo','image','picture','video','microphone','speaker','headphones','volume','sound',
+      'user','users','person','people','group','team','contact','profile','account',
+      'home','house','office','building',
+      'car','truck','bus','train','plane','airplane','boat','bike','motorcycle','bicycle','scooter',
+      'heart','star','bookmark','tag','label',
+      'cup','mug','glass','bottle','plate','spoon','fork','knife',
+      'sun','moon','cloud','rain','snow','umbrella',
+    ], categoryId: 'sys-contemporary' },
+
+  // Abstract: catch-all geometric / symbolic.
+  { keywords: [
+      'abstract','shape','symbol','geometric',
+      'circle','square','triangle','rectangle','hexagon','pentagon','diamond','octagon',
+      'star','starburst','dot','dots','line','lines',
+      'plus','minus','equal','asterisk','ampersand','hash',
+      'pattern','grid','dots','noise',
+    ], categoryId: 'sys-abstract' },
 ];
 
 function suggestCategoryFromTags(tags: readonly string[]): string | null {

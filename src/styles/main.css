@@ -1648,7 +1648,7 @@ option.select-option--add {
 /* Connector grid cells need a bit more vertical room for the Import button
  * below the label — shrink the icon visual so it doesn't push the label
  * + button into overlap. */
-.img-modal-cell--connector { min-height: 130px; padding-bottom: 6px; }
+.img-modal-cell--connector { min-height: 108px; padding-bottom: 6px; }
 .img-modal-cell--connector .img-modal-visual {
   width: 44px;
   height: 44px;
