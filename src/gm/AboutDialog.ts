@@ -115,32 +115,10 @@ export class AboutDialog {
     body.className = 'about-body';
     dialog.appendChild(body);
 
-    // ── Action footer ─────────────────────────────────────────────────
-    // Edit mode keeps Cancel + Save as a standalone right-aligned row;
-    // display mode tucks an OK button into the always-on Mappadux footer
-    // below (alongside the icon + links) so we don't have two stacked
-    // footer rows when the only action is "close this".
-    if (this.editing) {
-      const actionFooter = document.createElement('div');
-      actionFooter.className = 'about-actions';
-      const cancelBtn = document.createElement('button');
-      cancelBtn.type = 'button';
-      cancelBtn.className = 'btn btn--ghost';
-      cancelBtn.textContent = 'Cancel';
-      cancelBtn.addEventListener('click', () => this._resolve(null));
-      const saveBtn = document.createElement('button');
-      saveBtn.type = 'button';
-      saveBtn.className = 'btn btn--primary';
-      saveBtn.textContent = 'Save';
-      saveBtn.addEventListener('click', () => {
-        this._resolve({
-          splash: this._normaliseDraft(),
-          theme:  this._normaliseTheme(),
-        });
-      });
-      actionFooter.append(cancelBtn, saveBtn);
-      dialog.appendChild(actionFooter);
-    }
+    // Action footer is now folded into the always-on Mappadux footer
+    // below — Cancel/Save (edit mode) and OK (display mode) live in the
+    // same right-column slot alongside the duck icon and version line.
+    // Keeps the dialog from stacking two horizontal footer rows.
 
     // ── Always-on Mappadux footer (never editable) ──
     const footer = document.createElement('div');
@@ -810,11 +788,29 @@ export class AboutDialog {
 
     root.appendChild(info);
 
-    // Right column: OK button when in display mode. Edit mode keeps the
-    // standalone Cancel/Save row above; nothing here.
+    // Right column: dialog-action buttons. Edit mode → Cancel + Save;
+    // display mode → OK. Same slot in both states so the footer layout
+    // stays consistent.
     const actionCol = document.createElement('div');
     actionCol.className = 'about-mpx-action';
-    if (!this.editing) {
+    if (this.editing) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn--ghost';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', () => this._resolve(null));
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn btn--primary';
+      saveBtn.textContent = 'Save';
+      saveBtn.addEventListener('click', () => {
+        this._resolve({
+          splash: this._normaliseDraft(),
+          theme:  this._normaliseTheme(),
+        });
+      });
+      actionCol.append(cancelBtn, saveBtn);
+    } else {
       const okBtn = document.createElement('button');
       okBtn.type = 'button';
       okBtn.className = 'btn btn--primary';

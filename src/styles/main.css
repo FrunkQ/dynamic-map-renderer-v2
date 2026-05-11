@@ -2255,7 +2255,7 @@ option.select-option--add {
   align-items: center;
   text-align: center;
 }
-.about-mpx-action { display: flex; justify-content: flex-end; }
+.about-mpx-action { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 .about-mpx-version { color: var(--text-secondary); font-weight: 500; }
 .about-mpx-links { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .about-mpx-links a { color: var(--accent); text-decoration: none; }
