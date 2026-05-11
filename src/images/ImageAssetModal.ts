@@ -205,6 +205,14 @@ export class ImageAssetModal {
     title.className = 'modal-title';
     title.textContent = 'Image Library';
     header.appendChild(title);
+    // Persistent "all icons stored locally" hint sits next to the title so
+    // users grasp the consistency vs the Audio / Map libraries (which have
+    // a Stored/URL toggle per asset because blobs can be MB-large).
+    const storeHint = document.createElement('span');
+    storeHint.className = 'img-modal-store-hint';
+    storeHint.title = 'Every icon is saved into your browser as it imports. Small SVGs, no streaming, no per-icon Store toggle.';
+    storeHint.textContent = '· all stored locally';
+    header.appendChild(storeHint);
     const closeX = document.createElement('button');
     closeX.type = 'button';
     closeX.className = 'modal-close';

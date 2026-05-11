@@ -1333,6 +1333,14 @@ option.select-option--add {
   height: 720px;
   max-height: 90vh;
 }
+.img-modal-store-hint {
+  margin-left: var(--space-sm);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-weight: normal;
+  letter-spacing: 0.02em;
+  cursor: help;
+}
 .img-modal-body {
   display: flex;
   flex: 1;
