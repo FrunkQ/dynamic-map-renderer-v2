@@ -739,12 +739,30 @@ export class AboutDialog {
     root.className = 'about-mpx-footer';
 
     // Left column: small Mappadux duck icon, visually balancing the
-    // action button on the right.
+    // action button on the right. Clicking copies the canonical site URL
+    // to the clipboard — share-friendly shortcut.
     const iconCol = document.createElement('div');
     iconCol.className = 'about-mpx-icon';
     const icon = document.createElement('img');
     icon.src = '/icons/icon-192.png';
     icon.alt = '';
+    icon.title = 'Copy mappadux.com to clipboard — share with friends!';
+    icon.style.cursor = 'pointer';
+    icon.addEventListener('click', async () => {
+      const { copyText } = await import('../utils/copyText.ts');
+      const ok = await copyText(SITE_URL);
+      const originalTitle = icon.title;
+      if (ok) {
+        icon.title = 'Copied!';
+        icon.style.transform = 'scale(1.05)';
+      } else {
+        icon.title = 'Copy failed — clipboard blocked by browser';
+      }
+      setTimeout(() => {
+        icon.title = originalTitle;
+        icon.style.transform = '';
+      }, 1200);
+    });
     iconCol.appendChild(icon);
     root.appendChild(iconCol);
 

@@ -1415,6 +1415,13 @@ export class GMApp {
   private bindUIControls(): void {
     this.mapAssetModal = new MapAssetModal(this.maps, () => { /* assigned in handler below */ });
 
+    // Click the GM brand icon (top-left duck) to copy the mappadux.com URL
+    // to the clipboard. Tiny share-friendly shortcut so GMs can paste the
+    // link into Discord / a player chat without leaving the GM screen.
+    document.getElementById('gm-brand-icon')?.addEventListener('click', () => {
+      void this._copyMappaduxUrl();
+    });
+
     // Map selection — also handles the "+ Add New Map" sentinel that lives
     // at the bottom of the dropdown.
     this.mapSelect.addEventListener('change', async () => {
@@ -2249,6 +2256,20 @@ export class GMApp {
    *  At M3 this is browse-only; marker icon integration follows. */
   private async openImageLibrary(): Promise<void> {
     await new ImageAssetModal().open();
+  }
+
+  /** Copy the canonical Mappadux site URL to the clipboard — wired to the
+   *  GM brand icon (top-left duck) so creators can share the project link
+   *  in a single click. Also called from the About dialog's footer duck. */
+  private async _copyMappaduxUrl(): Promise<void> {
+    const { copyText } = await import('../utils/copyText.ts');
+    const url = 'https://www.mappadux.com/';
+    const ok = await copyText(url);
+    if (ok) {
+      this.setStatus(`Copied ${url} to clipboard — share it!`, 'ok');
+    } else {
+      this.setStatus('Copy failed — clipboard blocked by browser', 'warn');
+    }
   }
 
   /** Open the audio library (FreesoundModal) in browse-only mode — onAssign

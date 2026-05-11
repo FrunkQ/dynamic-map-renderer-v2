@@ -258,6 +258,8 @@ body.player-view #renderer-canvas {
   flex: 0 0 auto;
   border-radius: 6px;
   display: block;
+  cursor: pointer;
+  transition: transform 0.15s ease-out;
 }
 .brand-text {
   display: flex;
@@ -2247,6 +2249,11 @@ option.select-option--add {
   display: block;
   border-radius: 6px;
   opacity: 0.92;
+  transition: transform 0.15s ease-out, opacity 0.15s;
+}
+.about-mpx-icon img:hover {
+  opacity: 1;
+  transform: scale(1.04);
 }
 .about-mpx-info {
   display: flex;
