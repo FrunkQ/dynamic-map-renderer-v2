@@ -159,12 +159,12 @@ export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
     sourceUrl:   'https://fonts.google.com/specimen/Press+Start+2P',
   },
   {
-    name:        'Playwrite GB J Guides',
-    family:      'Playwrite GB J Guides',
-    vibe:        'Cursive school handwriting — diaries, polite letters',
-    attribution: 'Playwrite GB J Guides by TypeTogether',
+    name:        'Playwrite GB J',
+    family:      'Playwrite GB J',
+    vibe:        'British school cursive — diaries, polite letters',
+    attribution: 'Playwrite GB J by TypeTogether',
     license:     'SIL OFL 1.1',
-    sourceUrl:   'https://fonts.google.com/specimen/Playwrite+GB+J+Guides',
+    sourceUrl:   'https://fonts.google.com/specimen/Playwrite+GB+J',
   },
   {
     name:        'Seaweed Script',
@@ -173,5 +173,13 @@ export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
     attribution: 'Seaweed Script by Pablo Impallari',
     license:     'SIL OFL 1.1',
     sourceUrl:   'https://fonts.google.com/specimen/Seaweed+Script',
+  },
+  {
+    name:        'Whisper',
+    family:      'Whisper',
+    vibe:        'Delicate cursive — secret notes, hushed messages',
+    attribution: 'Whisper by Kimberly Geswein',
+    license:     'SIL OFL 1.1',
+    sourceUrl:   'https://fonts.google.com/specimen/Whisper',
   },
 ];
