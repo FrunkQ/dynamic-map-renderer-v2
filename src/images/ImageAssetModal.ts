@@ -876,23 +876,36 @@ export class ImageAssetModal {
     `;
     row.appendChild(meta);
 
-    // Delete affordance — only on user-added fonts; bundled ones are
-    // protected (their deterministic ids survive the seed re-run).
+    // Action buttons (top-right of the row) — only on user-added fonts;
+    // bundled ones are protected (their deterministic ids re-seed). Edit
+    // lets the user fix attribution after import (e.g. paste the
+    // "Designed by …" line they forgot at add time).
     const isBundled = font.id.startsWith('font-bundled-');
     if (!isBundled) {
+      const actions = document.createElement('div');
+      actions.className = 'img-modal-font-actions';
+
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'img-modal-font-action';
+      edit.title = 'Edit attribution';
+      edit.textContent = '✎';
+      edit.addEventListener('click', () => void this._promptEditFontAttribution(font));
+      actions.appendChild(edit);
+
       const del = document.createElement('button');
       del.type = 'button';
-      del.className = 'img-modal-del';
+      del.className = 'img-modal-font-action img-modal-font-action--danger';
       del.title = 'Delete this font';
       del.textContent = '×';
-      del.style.position = 'static';
-      del.style.opacity = '1';
       del.addEventListener('click', async () => {
         if (!confirm(`Delete font "${font.name}"? Text maps using it will revert to fallback fonts.`)) return;
         await ImageAssetStore.delete(font.id);
         await this._reload();
       });
-      row.appendChild(del);
+      actions.appendChild(del);
+
+      row.appendChild(actions);
     }
 
     return row;
@@ -940,6 +953,18 @@ export class ImageAssetModal {
       );
       return;
     }
+    // Designer credit — Google Fonts hosts a "Designed by …" line on each
+    // specimen page that we can't safely scrape (CORS), so prompt the user
+    // who's already on the page to paste the names. Leave blank for the
+    // default "via Google Fonts" fallback.
+    const designers = prompt(
+      `Designer / foundry for "${family}" (optional)\n\n` +
+      'Copy the names from the "Designed by …" line on the Google Fonts ' +
+      'specimen page. Leave blank if you\'re not sure.',
+    )?.trim() ?? '';
+    const attribution = designers
+      ? `${family} by ${designers}`
+      : `${family} via Google Fonts`;
     const asset: ImageAsset = {
       id,
       name:            family,
@@ -948,13 +973,26 @@ export class ImageAssetModal {
       tintable:        false,
       fontFamily:      family,
       license:         'SIL OFL 1.1 (per Google Fonts)',
-      attribution:     `${family} via Google Fonts`,
+      attribution,
       attributionLink: `https://fonts.google.com/specimen/${slug}`,
       sourceUrl:       `https://fonts.google.com/specimen/${slug}`,
       tags:            ['user-added'],
       addedAt:         Date.now(),
     };
     await ImageAssetStore.save(asset);
+    await this._reload();
+  }
+
+  /** Edit the attribution string on an existing user-added font — useful when
+   *  the user forgot to paste designer info at import time, or wants to
+   *  refine the wording. */
+  private async _promptEditFontAttribution(font: ImageAsset): Promise<void> {
+    const current = font.attribution ?? `${font.name} via Google Fonts`;
+    const next = prompt(`Attribution for "${font.name}":`, current);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === current) return;
+    await ImageAssetStore.update(font.id, { attribution: trimmed });
     await this._reload();
   }
 

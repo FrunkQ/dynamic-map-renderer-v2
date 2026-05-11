@@ -1673,6 +1673,36 @@ option.select-option--add {
 .img-modal-font-vibe   { font-style: italic; }
 .img-modal-font-attrib { font-size: 0.78rem; margin-top: 2px; }
 
+/* Edit + Delete buttons stacked at the top-right of a user-added font row. */
+.img-modal-font-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+}
+.img-modal-font-action {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.25);
+  color: var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+.img-modal-font-action:hover { color: var(--text); border-color: var(--accent-dim); }
+.img-modal-font-action--danger:hover {
+  color: #fff;
+  background: var(--danger, #c0392b);
+  border-color: var(--danger, #c0392b);
+}
+
 /* Footer with shared Attributions button. */
 .img-modal-footer {
   padding: var(--space-sm) var(--space-md);
