@@ -767,14 +767,16 @@ export class ImageAssetModal {
     intro.style.gridColumn = '1 / -1';
     intro.style.textAlign = 'left';
     intro.innerHTML = `
-      <p style="margin:0 0 var(--space-sm); display:flex; align-items:center; gap:var(--space-md);">
+      <p style="margin:0 0 var(--space-sm); display:flex; align-items:center; gap:var(--space-md); flex-wrap:wrap;">
         <strong>Fonts</strong> available for Text Maps (Stream C). Loaded
         on demand from Google Fonts; samples preview in their actual family.
         <button type="button" class="btn btn--primary btn--xs" id="img-modal-add-font">+ Google Font</button>
+        <a href="https://fonts.google.com" target="_blank" rel="noopener noreferrer" class="img-modal-license-chip" style="text-decoration:none;">Browse fonts.google.com ↗</a>
       </p>
       <p style="margin:0; font-size:0.85em;">
-        Bundled fonts are SIL OFL 1.1. Add any Google Fonts family by name —
-        the spelling must match the page on fonts.google.com.
+        Pick a font on Google Fonts, copy the specimen URL, then paste it
+        into <strong>+ Google Font</strong>. The family name works too if you
+        prefer typing it.
       </p>
     `;
     host.appendChild(intro);
