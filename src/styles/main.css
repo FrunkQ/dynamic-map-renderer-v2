@@ -1829,20 +1829,20 @@ option.select-option--add {
   padding: 0;
 }
 .txt-map-el-delete:hover { background: #d44e3f; }
-/* Per-element toolbar — sits between the canvas and the footer, only
-   visible when an element is selected. Carries the controls that apply
-   to that specific element (text colour, font size, font, alignment). */
-.txt-map-element-toolbar {
+/* Per-element controls — live inside the top toolbar so every editing
+   knob is in one place. Visible only when an element is selected;
+   appended after the page-level controls in the same flex row. */
+.txt-map-toolbar-element {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid var(--border);
-  background: var(--bg-panel);
-  flex-shrink: 0;
+  /* Subtle divider from the page-level controls on its left. */
+  margin-left: var(--space-md);
+  padding-left: var(--space-md);
+  border-left: 1px solid var(--border);
 }
-.txt-map-element-toolbar[hidden] { display: none; }
+.txt-map-toolbar-element[hidden] { display: none; }
 .txt-map-element-toolbar-label {
   font-size: 0.78rem;
   color: var(--text-dim);

@@ -181,7 +181,16 @@ export class TextMapEditor {
     dialog.appendChild(header);
 
     // ── Toolbar ──────────────────────────────────────────────────────────
-    dialog.appendChild(this._buildToolbar());
+    const toolbar = this._buildToolbar();
+    dialog.appendChild(toolbar);
+    // Per-element controls slot lives INSIDE the top toolbar — when an
+    // element is selected, its controls append here so everything you
+    // can change is in one place at the top of the screen.
+    const elSlot = document.createElement('div');
+    elSlot.className = 'txt-map-toolbar-element';
+    elSlot.hidden = true;
+    toolbar.appendChild(elSlot);
+    this.elementToolbarEl = elSlot;
 
     // ── Canvas wrap ──────────────────────────────────────────────────────
     const canvasWrap = document.createElement('div');
@@ -202,13 +211,6 @@ export class TextMapEditor {
     page.style.fontFamily = `'${this.cfg.fontFamily}', serif`;
     canvasWrap.appendChild(page);
     this.pageEl = page;
-
-    // ── Per-element toolbar (appears when an element is selected) ────────
-    const elToolbar = document.createElement('div');
-    elToolbar.className = 'txt-map-element-toolbar';
-    elToolbar.hidden = true;
-    dialog.appendChild(elToolbar);
-    this.elementToolbarEl = elToolbar;
 
     // ── Footer ───────────────────────────────────────────────────────────
     const footer = document.createElement('div');
@@ -300,28 +302,6 @@ export class TextMapEditor {
     });
     tb.appendChild(fontSel);
 
-    // Page-level font size — multiplier on the auto base font size
-    // computed from page width in _fitPage. Text elements can override
-    // with their own fontScale; this is the floor.
-    const scaleLabel = document.createElement('span');
-    scaleLabel.className = 'txt-map-element-toolbar-label';
-    scaleLabel.textContent = 'Size';
-    tb.appendChild(scaleLabel);
-    const scale = document.createElement('input');
-    scale.type = 'range';
-    scale.min = '0.5'; scale.max = '4'; scale.step = '0.1';
-    scale.value = String(this.cfg.fontScale);
-    scale.className = 'txt-map-element-slider';
-    scale.title = 'Default font size for the page';
-    const scaleVal = document.createElement('span');
-    scaleVal.className = 'txt-map-element-slider-val';
-    scaleVal.textContent = `${this.cfg.fontScale.toFixed(1)}×`;
-    scale.addEventListener('input', () => {
-      this.cfg.fontScale = parseFloat(scale.value);
-      scaleVal.textContent = `${this.cfg.fontScale.toFixed(1)}×`;
-      this._fitPage();
-    });
-    tb.append(scale, scaleVal);
 
     // Add Text button
     const addText = document.createElement('button');

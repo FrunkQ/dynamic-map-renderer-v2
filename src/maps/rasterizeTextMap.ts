@@ -19,7 +19,8 @@ import type { TextMapConfig, TextMapElement } from '../types.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
 import { ensureFontsLoaded } from '../images/fontCatalog.ts';
 import { ensureTextMapElements } from './textMapElements.ts';
-import { renderAssetToInlineHtml } from '../utils/resolveAssetImages.ts';
+import { cleanTintableSvg } from '../utils/resolveAssetImages.ts';
+import { ImageAssetStore } from '../images/ImageAssetStore.ts';
 
 /** Cache of @font-face rules with base64-embedded woff2 bytes, keyed by
  *  font family. The SVG document context can't reach fonts loaded by the
@@ -155,10 +156,22 @@ export async function rasterizeTextMap(
     console.warn('[rasterizeTextMap] font embedding skipped:', err);
   }
 
+  // Baseline CSS for the foreignObject document — mirrors what the
+  // editor applies on .rte-editor / .txt-map-page so list items and
+  // paragraphs don't pick up the foreignObject's default browser
+  // margins. Without this, each <li><p>N</p></li> got
+  // `p { margin: 1em 0 }` top + bottom, doubling the spacing between
+  // numbers in a list and making the rasterised map look very different
+  // from the editor.
+  const cssReset =
+    `p{margin:0 0 0.4em 0;}`
+    + `p:last-child{margin-bottom:0;}`
+    + `ul,ol{margin:0 0 0.6em 0;padding-left:1.6em;}`
+    + `li{margin:0 0 0.2em 0;}`;
+
   const buildSvg = (withFontCss: boolean): string => {
-    const styleBlock = withFontCss && fontFaceCss
-      ? `<style xmlns="http://www.w3.org/1999/xhtml">${fontFaceCss}</style>`
-      : '';
+    const styleBody = cssReset + (withFontCss && fontFaceCss ? fontFaceCss : '');
+    const styleBlock = `<style xmlns="http://www.w3.org/1999/xhtml">${styleBody}</style>`;
     return (
       `<svg xmlns="http://www.w3.org/2000/svg" `
       + `width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">`
@@ -245,24 +258,55 @@ async function renderElementsForRaster(
       const inner = sanitizeSplashHtml(el.html ?? '');
       parts.push(`<div style="${style}">${inner}</div>`);
     } else if (el.type === 'image') {
-      // Asset resolution runs in the host context (DOM available); the
-      // resulting inline-SVG / <img> markup is then dropped verbatim
-      // into the foreignObject. We don't need the editor's interactive
-      // wrap span here — strip the contenteditable=false attribute and
-      // just keep the inner SVG/img.
-      const inline = await renderAssetToInlineHtml(el.assetId, { sizeEm: 1 });
-      const body = inline ?? '';
-      // Style the OUTER positioned div as the bounding box; let the SVG
-      // inside fill the whole box via 100%/100%.
+      // Image elements get a dedicated raster-context renderer that:
+      //  - strips the 1em wrapper span (we want the SVG / img to fill
+      //    the bounding div, not size to its intrinsic ~1em);
+      //  - embeds raster blobs as base64 data: URLs because the SVG
+      //    document loaded via <img> is sandboxed and CANNOT read
+      //    blob: URLs from the host document — that's why uploaded
+      //    images were rendering as broken-image placeholders.
+      const body = await renderAssetForRaster(el.assetId);
       const style =
         box
         + (el.tint ? `color:${el.tint};` : '');
-      parts.push(`<div style="${style}" class="textmap-image-host">${body}</div>`);
+      parts.push(`<div style="${style}">${body}</div>`);
     }
   }
-  // After concatenation we wrap in a parent to ensure single-root XML
-  // when serialised. htmlToXhtml() strips that wrapper back off.
   return htmlToXhtml(parts.join(''));
+}
+
+/** Render a single image asset for the rasteriser. Returns markup
+ *  sized to 100% of its parent (the positioned bounding div). */
+async function renderAssetForRaster(assetId: string): Promise<string> {
+  const asset = await ImageAssetStore.get(assetId);
+  if (!asset) return '';
+  if (asset.svgSource) {
+    let svg = asset.svgSource;
+    if (asset.tintable) svg = cleanTintableSvg(svg);
+    svg = svg.replace(/<svg\b([^>]*)>/i, (_m, attrs: string) => {
+      const cleaned = attrs
+        .replace(/\swidth\s*=\s*"[^"]*"/gi,  '')
+        .replace(/\sheight\s*=\s*"[^"]*"/gi, '');
+      return `<svg width="100%" height="100%" preserveAspectRatio="xMidYMid meet"${cleaned}>`;
+    });
+    return svg;
+  }
+  if (asset.unicodeChar) {
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" `
+      + `width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
+      + `<text x="16" y="24" text-anchor="middle" font-size="28" fill="currentColor">`
+      + escapeXmlText(asset.unicodeChar)
+      + `</text></svg>`
+    );
+  }
+  if (asset.blob) {
+    const buf = await asset.blob.arrayBuffer();
+    const b64 = arrayBufferToBase64(buf);
+    const mime = asset.blob.type || 'image/png';
+    return `<img src="data:${mime};base64,${b64}" style="width:100%;height:100%;object-fit:contain"/>`;
+  }
+  return '';
 }
 
 /** Convert sanitised HTML5 body markup into well-formed XHTML so it can

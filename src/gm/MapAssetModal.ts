@@ -438,24 +438,12 @@ export class MapAssetModal {
     row.querySelector<HTMLButtonElement>('.map-edit-textmap-btn')?.addEventListener('click', async () => {
       const result = await new TextMapEditor().open({ existing: asset });
       if (!result) return;
-      // Carry the original asset id forward (TextMapEditor created a new
-      // one on save — we want the in-place update, not a duplicate).
-      const patch: Partial<MapAsset> = { filename: result.asset.filename };
-      if (result.asset.textMap)     patch.textMap     = result.asset.textMap;
-      if (result.asset.imageWidth)  patch.imageWidth  = result.asset.imageWidth;
-      if (result.asset.imageHeight) patch.imageHeight = result.asset.imageHeight;
-      await MapAssetStore.update(asset.id, patch);
-      // Drop the duplicate the editor created.
-      await MapAssetStore.delete(result.asset.id);
-      // Invalidate the cached rasterisation under the original id so the
-      // next load picks up the edited config instead of returning the
-      // stale PNG from before the edit.
+      // The element-canvas editor saves with the original asset id (no
+      // duplicate to clean up). Older code here deleted result.asset.id —
+      // but since that id IS asset.id now, that delete was wiping the
+      // freshly-saved handout. Bug: edit + save → handout vanished.
       MapAssetStore.invalidateRuntimeCache(asset.id);
       await this._renderLibrary();
-      // Tell the host (GMApp) the asset changed — if the currently
-      // displayed map is this one, it'll re-fetch the blob and repaint
-      // the texture. Without this the edits sit in IDB but the canvas
-      // keeps showing the pre-edit render until a manual reload.
       this.onAssetUpdated(asset.id);
     });
     // Click any of the scale pills to re-calibrate without opening the pen editor.
