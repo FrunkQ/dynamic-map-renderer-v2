@@ -84,9 +84,10 @@ export class AboutDialog {
   private _build(): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this._resolve(null);
-    });
+    // Click-outside-to-dismiss intentionally disabled — accidental clicks
+    // off the dialog edge (or drag-release on the backdrop after typing
+    // inside) would otherwise lose unsaved work. Close via Cancel / OK /
+    // × / Escape only.
 
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog about-dialog';

@@ -41,9 +41,7 @@ export class ScaleCandidateDialog {
   private _build({ detection, mapName }: ScaleDialogInputs): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this._resolve({ kind: 'cancel' });
-    });
+    // Click-outside-to-dismiss intentionally disabled — use Skip / × / Escape.
 
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog modal-dialog--sm';

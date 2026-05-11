@@ -292,9 +292,7 @@ export class ImageAssetModal {
   private _buildShell(): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this.close();
-    });
+    // Click-outside-to-dismiss intentionally disabled — use × / Escape.
 
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog img-modal-dialog';

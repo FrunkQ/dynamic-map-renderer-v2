@@ -27,23 +27,25 @@ export interface TextMapEditorResult {
   asset: MapAsset;
 }
 
-/** Aspect-ratio presets. The w/h values express the ratio only — the
- *  renderer picks an actual resolution per use case (see TextMapConfig
- *  comment in types.ts). Labels stay ratio-focused so users think in
- *  shape, not pixel count. */
+/** Aspect-ratio presets. The w/h values express the RATIO only — they're
+ *  pure ratio numerator / denominator, not a render target. A4 uses the
+ *  canonical 210:297 mm so the shape is exact (the previous 1080×1527
+ *  carried a tiny 0.024% rounding error against true √2). The renderer
+ *  picks an actual resolution per use case — see TextMapConfig comment
+ *  in types.ts. */
 const ASPECT_PRESETS: ReadonlyArray<{ label: string; w: number; h: number }> = [
-  { label: 'A4 Portrait (1 : √2)',     w: 1080, h: 1527 },
-  { label: 'A4 Landscape (√2 : 1)',    w: 1527, h: 1080 },
-  { label: '16 : 9 Landscape',         w: 1920, h: 1080 },
-  { label: '4 : 3 Landscape',          w: 1440, h: 1080 },
-  { label: 'Square (1 : 1)',           w: 1080, h: 1080 },
-  { label: '2 : 3 Tall',               w: 1080, h: 1620 },
+  { label: 'A4 Portrait (1 : √2)',     w: 210,  h: 297 },
+  { label: 'A4 Landscape (√2 : 1)',    w: 297,  h: 210 },
+  { label: '16 : 9 Landscape',         w: 16,   h: 9   },
+  { label: '4 : 3 Landscape',          w: 4,    h: 3   },
+  { label: 'Square (1 : 1)',           w: 1,    h: 1   },
+  { label: '2 : 3 Tall',               w: 2,    h: 3   },
 ];
 
 const DEFAULT_TEXT_MAP: TextMapConfig = {
   bodyHtml:        '<p>Proclamation, journal entry, ransom note, or sealed letter — your text here.</p>',
-  width:           1080,
-  height:          1527,
+  width:           210,  // A4 portrait ratio — true 1 : √2 via 210 : 297 mm
+  height:          297,
   fontFamily:      'Cinzel',
   fontScale:       1,
   backgroundColor: '#f4e9c8',
@@ -97,9 +99,7 @@ export class TextMapEditor {
   private _build(isEdit: boolean): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this._resolve(null);
-    });
+    // Click-outside-to-dismiss intentionally disabled — use Cancel / × / Escape.
 
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog txt-map-dialog';

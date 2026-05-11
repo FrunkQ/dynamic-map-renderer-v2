@@ -89,9 +89,10 @@ export class MapAssetModal {
   }
 
   private _bindEvents(): void {
-    // Close + click-outside
+    // Close via × only — click-outside-to-dismiss intentionally disabled
+    // so accidental backdrop clicks (or drag-releases outside the dialog)
+    // don't trip the modal closed mid-task.
     this.el.querySelector('#map-modal-close')?.addEventListener('click', () => this.close());
-    this.el.addEventListener('click', (e) => { if (e.target === this.el) this.close(); });
 
     // Tab switching
     this.el.querySelectorAll('.modal-tab').forEach((tab) => {

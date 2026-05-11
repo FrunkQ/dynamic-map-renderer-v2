@@ -44,9 +44,7 @@ export class SettingsDialog {
   private _build(cb: SettingsDialogCallbacks): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this._resolve();
-    });
+    // Click-outside-to-dismiss intentionally disabled — use Close / × / Escape.
 
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog';

@@ -88,11 +88,9 @@ export class FreesoundModal {
   }
 
   private _bindEvents(): void {
-    // Close
+    // Close via × only — click-outside-to-dismiss intentionally disabled
+    // so a stray backdrop click doesn't lose mid-session work.
     this.el.querySelector('#modal-close-btn')?.addEventListener('click', () => this.close());
-    this.el.addEventListener('click', (e) => {
-      if (e.target === this.el) this.close();
-    });
 
     // Tab switching
     this.el.querySelectorAll('.modal-tab').forEach((tab) => {
@@ -127,8 +125,8 @@ export class FreesoundModal {
     // Attributions modal close + click-outside (binds once at construction time)
     const attrModal = document.getElementById('attributions-modal');
     if (attrModal) {
+      // Close via × only — click-outside-to-dismiss intentionally disabled.
       attrModal.querySelector('#attr-modal-close')?.addEventListener('click', () => { attrModal.hidden = true; });
-      attrModal.addEventListener('click', (e) => { if (e.target === attrModal) attrModal.hidden = true; });
       attrModal.querySelector('#attr-copy-all-btn')?.addEventListener('click', () => void this._copyAllAttributions());
     }
 

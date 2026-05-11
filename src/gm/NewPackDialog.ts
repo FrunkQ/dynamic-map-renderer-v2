@@ -34,9 +34,7 @@ export class NewPackDialog {
   private _build(): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this._resolve(null);
-    });
+    // Click-outside-to-dismiss intentionally disabled — use Cancel / × / Escape.
 
     const dialog = document.createElement('div');
     dialog.className = 'modal-dialog modal-dialog--sm';
