@@ -42,6 +42,19 @@ etiquette.
 | Map-Griffinholm.jpg | Elven Tower Cartography | CC-BY 4.0 | https://www.elventower.com/ |
 | Rons-Moto-1979.png | kidneykid1800 | Permission granted | https://www.reddit.com/r/mothershiprpg/comments/18c71ep/8bit_map_nostromo_alien_inspired_map/ |
 
+## UI Icons
+
+The hamburger menu, library buttons, and other in-app icon affordances use
+**Lucide** (https://lucide.dev), an MIT-licensed icon set originally forked
+from Feather Icons. Individual path data is hand-extracted from the
+`lucide-static` package and inlined as monochrome SVG so the icons follow
+the current theme colour.
+
+Lucide is also exposed at runtime in the **Small Assets Library**'s
+"Browse Lucide" tab, where users can import individual icons into their
+own packs. Imports carry the same MIT attribution string via the unified
+asset-library credits modal.
+
 ## Visual Filters
 
 The following filter effects are adapted from ShaderToy shaders by **florian berger (flockaroo)**,
