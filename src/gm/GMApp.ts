@@ -2023,60 +2023,61 @@ export class GMApp {
 
     this.hamburger = new HamburgerMenu(btn, menu);
 
-    // ── File group ── Save / Load Map Pack lives at the top, matching the
-    // traditional "File" menu placement.
+    // ── Pack file group ── traditional File-menu order: New, Open, Save.
+    // All four pack-level "what bundle am I on" actions cluster together
+    // including the destructive New Map Pack.
     this.hamburger.addItem({
-      label: 'Save Map Pack…',
-      onSelect: () => { void this.saveBundle(); },
+      label: '🆕 New Map Pack…',
+      danger: true,
+      onSelect: () => { void this.newMapPack(); },
     });
     this.hamburger.addItem({
-      label: 'Save Encrypted Pack…',
-      onSelect: () => { void this.saveBundleEncrypted(); },
-    });
-    this.hamburger.addItem({
-      label: 'Load Map Pack',
+      label: '📂 Load Map Pack',
       onSelect: () => {
         const input = document.querySelector<HTMLInputElement>('#bundle-import');
         input?.click();
       },
     });
-
-    // ── Asset Libraries group ── all three first-class libraries open here.
-    // Each one lands on the library's "My Library" view.
     this.hamburger.addItem({
-      label: 'Map Asset Library…',
+      label: '💾 Save Map Pack…',
+      onSelect: () => { void this.saveBundle(); },
+    });
+    this.hamburger.addItem({
+      label: '🔒 Save Encrypted Pack…',
+      onSelect: () => { void this.saveBundleEncrypted(); },
+    });
+
+    this.hamburger.addDivider();
+
+    // ── Asset Libraries group ── all three first-class libraries.
+    this.hamburger.addItem({
+      label: '🗺 Map Asset Library…',
       onSelect: () => { this.mapAssetModal.open(() => { /* browse-only */ }); },
     });
     this.hamburger.addItem({
-      label: 'Audio Asset Library…',
+      label: '🔊 Audio Asset Library…',
       onSelect: () => { void this.openSoundLibrary(); },
     });
     this.hamburger.addItem({
-      label: 'Small Assets Library…',
+      label: '🖼 Small Assets Library…',
       onSelect: () => { void this.openImageLibrary(); },
     });
 
-    // ── Pack settings ──
+    this.hamburger.addDivider();
+
+    // ── Pack settings + app settings ──
     this.hamburger.addItem({
-      label: 'Customise pack…',
+      label: '🎨 Customise pack…',
       onSelect: () => { void this.openAboutDialog({ startInEdit: true }); },
     });
-
-    // ── System ── App-level Settings, then the destructive New-Pack action
-    // last in the main list to keep it out of muscle-memory reach.
     this.hamburger.addItem({
-      label: 'Settings…',
+      label: '⚙ Settings…',
       onSelect: () => { void this.openSettings(); },
     });
-    this.hamburger.addItem({
-      label: 'New Map Pack…',
-      danger: true,
-      onSelect: () => { void this.newMapPack(); },
-    });
 
-    // ── Footer ── About is pinned at the very bottom.
+    // ── Footer ── About pinned at the very bottom (auto-divider above).
     this.hamburger.addItem({
-      label: 'About…',
+      label: 'ℹ About…',
       footer: true,
       onSelect: () => { void this.openAboutDialog({}); },
     });

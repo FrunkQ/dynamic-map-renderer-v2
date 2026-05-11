@@ -20,10 +20,21 @@ export interface HamburgerItem {
   danger?: boolean;
 }
 
+/** Marker for an explicit divider between two top-section groups. */
+export interface HamburgerDivider {
+  divider: true;
+}
+
+export type HamburgerEntry = HamburgerItem | HamburgerDivider;
+
+function isDivider(e: HamburgerEntry): e is HamburgerDivider {
+  return (e as HamburgerDivider).divider === true;
+}
+
 export class HamburgerMenu {
   private btn: HTMLButtonElement;
   private menu: HTMLElement;
-  private items: HamburgerItem[] = [];
+  private items: HamburgerEntry[] = [];
   private isOpen = false;
 
   constructor(btn: HTMLButtonElement, menu: HTMLElement) {
@@ -44,6 +55,13 @@ export class HamburgerMenu {
 
   addItem(item: HamburgerItem): void {
     this.items.push(item);
+    this._render();
+  }
+
+  /** Explicit visual divider between two top-section groups. The auto-divider
+   *  between top and footer items is unaffected. */
+  addDivider(): void {
+    this.items.push({ divider: true });
     this._render();
   }
 
@@ -68,10 +86,10 @@ export class HamburgerMenu {
 
   private _render(): void {
     this.menu.replaceChildren();
-    const top    = this.items.filter((i) => !i.footer);
-    const bottom = this.items.filter((i) =>  i.footer);
+    const top: HamburgerEntry[]    = this.items.filter((i) => isDivider(i) || !i.footer);
+    const bottom: HamburgerItem[]  = this.items.filter((i): i is HamburgerItem => !isDivider(i) && !!i.footer);
 
-    for (const item of top) this.menu.appendChild(this._renderItem(item));
+    for (const entry of top) this.menu.appendChild(this._renderEntry(entry));
 
     if (top.length > 0 && bottom.length > 0) {
       const sep = document.createElement('div');
@@ -80,6 +98,15 @@ export class HamburgerMenu {
     }
 
     for (const item of bottom) this.menu.appendChild(this._renderItem(item));
+  }
+
+  private _renderEntry(entry: HamburgerEntry): HTMLElement {
+    if (isDivider(entry)) {
+      const sep = document.createElement('div');
+      sep.className = 'gm-menu-sep';
+      return sep;
+    }
+    return this._renderItem(entry);
   }
 
   private _renderItem(item: HamburgerItem): HTMLButtonElement {
