@@ -6,7 +6,7 @@ import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { ensureFontsLoaded } from '../images/fontCatalog.ts';
 import { generateId } from '../utils/id.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
-import { resolveAssetImages } from '../utils/resolveAssetImages.ts';
+import { resolveAssetImages, renderAssetToSrc } from '../utils/resolveAssetImages.ts';
 import { createRichTextEditor } from './RichTextEditor.ts';
 
 /**
@@ -323,10 +323,13 @@ export class TextMapEditor {
   }
 
   /** Opens the Small Assets Library in pick mode (defaulting to the
-   *  Textmap category), resolves to `<img src="asset:<id>">` HTML that the
-   *  RichTextEditor inserts at the current selection. The sanitiser
-   *  whitelist accepts asset: URLs so the inserted markup survives
-   *  the save → load round-trip. */
+   *  Textmap category). The picked icon is resolved to a data: URL at
+   *  insertion time so the editor's contentEditable can render it
+   *  immediately — the alternative (`<img src="asset:<id>">`) renders as
+   *  a broken image inside the editor since the contentEditable doesn't
+   *  run the asset resolver. The trade-off is that inline icons bloat
+   *  the saved body HTML with each icon's full SVG — acceptable for
+   *  typical handouts. */
   private async _pickInlineIcon(): Promise<string | null> {
     return new Promise<string | null>((resolve) => {
       let picked = false;
@@ -334,9 +337,20 @@ export class TextMapEditor {
       void modal.open({
         initialCategoryId: SYSTEM_CATEGORY_IDS.textmap,
         pickMode: true,
-        onPick: (asset) => {
+        onPick: async (asset) => {
           picked = true;
-          resolve(`<img src="asset:${asset.id}" alt="${this._escAttr(asset.name)}" />`);
+          const src = await renderAssetToSrc(asset.id);
+          if (!src) {
+            resolve(null);
+            return;
+          }
+          // Default to a sensible inline size; user can resize once we
+          // ship drag-handles. Width attribute is keyed to em so it
+          // scales with the surrounding text.
+          resolve(
+            `<img src="${src}" alt="${this._escAttr(asset.name)}" `
+            + `style="width: 2em; height: 2em; vertical-align: middle;" />`,
+          );
         },
       });
       // If the user closes without picking, resolve null so the editor

@@ -25,6 +25,11 @@ const ALLOWED_STYLE_PROPS = new Set([
   'font-weight',
   'font-style',
   'text-decoration',
+  // Inline image sizing — used by text-map handouts when icons are
+  // dropped into the body via the rich-text editor.
+  'width',
+  'height',
+  'vertical-align',
 ]);
 
 const ALLOWED_FONT_ATTRS = new Set(['color', 'face']);

@@ -37,7 +37,11 @@ export async function resolveAssetImages(html: string): Promise<string> {
   return container.innerHTML;
 }
 
-async function renderAssetToSrc(id: string): Promise<string | null> {
+/** Resolve a single asset id to a renderable src (data URL for SVG /
+ *  Unicode, object URL for raster). Exported so callers like the Text Map
+ *  editor can resolve at insertion time and bake the data URL into the
+ *  body HTML — avoids the editor showing a broken `asset:` reference. */
+export async function renderAssetToSrc(id: string): Promise<string | null> {
   const asset = await ImageAssetStore.get(id);
   if (!asset) return null;
   if (asset.svgSource) {
