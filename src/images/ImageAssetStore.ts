@@ -79,16 +79,32 @@ export class ImageAssetStore {
   /**
    * Attribution rows for every image asset that has a non-empty attribution
    * or licence — for the unified Attributions modal that aggregates audio +
-   * map + image credits in one place.
+   * map + image credits in one place. Unicode entries (which are all PD by
+   * definition) are collapsed into a single summary row at the top of the
+   * list when any are present, rather than one row per glyph — keeps the
+   * unified modal readable when the user has the 47 seeded presets plus
+   * their own additions.
    */
   static async getAttributions(): Promise<
     Array<{ name: string; attribution: string; license: string; pageUrl: string }>
   > {
     const all = await ImageAssetStore.getAll();
     const results: Array<{ name: string; attribution: string; license: string; pageUrl: string }> = [];
+
+    // Count the unicode entries so we can emit a single summary row.
+    const unicodeCount = all.filter((a) => a.source === 'unicode').length;
+    if (unicodeCount > 0) {
+      results.push({
+        name:        'Unicode characters',
+        attribution: `${unicodeCount} Unicode character marker icon${unicodeCount !== 1 ? 's' : ''} — all Public Domain (not listed individually)`,
+        license:     'Public Domain',
+        pageUrl:     '',
+      });
+    }
+
     for (const a of all) {
-      // Skip plain Unicode entries — they don't need attribution.
-      if (a.source === 'unicode' && !a.attribution && !a.license) continue;
+      // Skip unicode entries — already represented by the summary row above.
+      if (a.source === 'unicode') continue;
       // Skip user uploads with no attribution declared — the user knows.
       if (a.source === 'upload' && !a.attribution && !a.license) continue;
 

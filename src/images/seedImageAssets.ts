@@ -65,6 +65,12 @@ const SYSTEM_CATEGORIES: ReadonlyArray<ImageCategory> = [
   { id: SYSTEM_CATEGORY_IDS.scifi,        name: 'Sci-fi',       isSystem: true, sortOrder: 30 },
   { id: SYSTEM_CATEGORY_IDS.contemporary, name: 'Contemporary', isSystem: true, sortOrder: 40 },
   { id: SYSTEM_CATEGORY_IDS.textmap,      name: 'Textmap',      isSystem: true, sortOrder: 50 },
+  // Fonts is special-cased in the library modal — listing-only for now,
+  // pre-populated with the eight OFL fonts that Stream C (Text Maps) will
+  // bundle. Stored separately from regular ImageAssets so attribution can
+  // travel into the unified Copy attributions output even though users
+  // can't yet add fonts themselves.
+  { id: SYSTEM_CATEGORY_IDS.fonts,        name: 'Fonts',        isSystem: true, sortOrder: 60 },
 ];
 
 /** Standard licence label for built-in / user-typed Unicode glyphs. Unicode

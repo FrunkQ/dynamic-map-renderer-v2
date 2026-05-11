@@ -6,6 +6,7 @@ import { gameIconsConnector } from './connectors/gameIcons.ts';
 import { lucideConnector } from './connectors/lucide.ts';
 import { generateId } from '../utils/id.ts';
 import { UNICODE_LICENSE_LABEL } from './seedImageAssets.ts';
+import { BUNDLED_FONTS } from './fontCatalog.ts';
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
   gameIconsConnector,
@@ -510,6 +511,14 @@ export class ImageAssetModal {
   }
 
   private _renderLibraryGrid(host: HTMLElement): void {
+    // Fonts is a read-only listing for now — special-case it. Stream C
+    // (Text Maps) will wire actual font loading; until then the category
+    // exists to surface attribution and show users what's coming.
+    if (this.selectedCategoryId === SYSTEM_CATEGORY_IDS.fonts) {
+      this._renderFontsCategory(host);
+      return;
+    }
+
     const filtered = this.assets
       .filter((a) => a.categoryId === this.selectedCategoryId)
       .filter((a) => {
@@ -531,6 +540,57 @@ export class ImageAssetModal {
     for (const asset of filtered) {
       host.appendChild(this._iconCell(asset));
     }
+  }
+
+  /** Read-only render of the bundled font catalog. Each entry shows the
+   *  name in its own family for preview (loads from system font fallback
+   *  until Stream C wires the actual @font-face), the vibe hint, and the
+   *  attribution + clickable licence/source link. */
+  private _renderFontsCategory(host: HTMLElement): void {
+    const intro = document.createElement('div');
+    intro.className = 'img-modal-empty';
+    intro.style.gridColumn = '1 / -1';
+    intro.style.textAlign = 'left';
+    intro.innerHTML = `
+      <p style="margin:0 0 var(--space-sm);">
+        <strong>Fonts</strong> bundled with Mappadux ship with Stream C
+        (Text Maps). For now this is a read-only listing so creators can
+        see what's coming and verify the OFL attribution.
+      </p>
+      <p style="margin:0; font-size:0.85em;">
+        All bundled fonts are SIL OFL 1.1. Names below use the bundled
+        family when Stream C lands; for now they fall back to system fonts.
+      </p>
+    `;
+    host.appendChild(intro);
+
+    for (const font of BUNDLED_FONTS) {
+      host.appendChild(this._fontRow(font));
+    }
+  }
+
+  private _fontRow(font: typeof BUNDLED_FONTS[number]): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'img-modal-font-row';
+
+    const sample = document.createElement('div');
+    sample.className = 'img-modal-font-sample';
+    sample.style.fontFamily = `'${font.family}', sans-serif`;
+    sample.textContent = font.name;
+    row.appendChild(sample);
+
+    const meta = document.createElement('div');
+    meta.className = 'img-modal-font-meta';
+    meta.innerHTML = `
+      <div class="img-modal-font-vibe">${this._esc(font.vibe)}</div>
+      <div class="img-modal-font-attrib">
+        ${this._esc(font.attribution)} ·
+        <a href="${this._esc(font.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="img-modal-license-chip">${this._esc(font.license)}</a>
+      </div>
+    `;
+    row.appendChild(meta);
+
+    return row;
   }
 
   private _renderConnectorGrid(host: HTMLElement): void {

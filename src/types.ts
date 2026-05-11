@@ -795,6 +795,7 @@ export const SYSTEM_CATEGORY_IDS = {
   scifi:        'sys-scifi',
   contemporary: 'sys-contemporary',
   textmap:      'sys-textmap',
+  fonts:        'sys-fonts',
 } as const;
 
 export interface StoredSession {

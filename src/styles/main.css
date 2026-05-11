@@ -1593,6 +1593,30 @@ option.select-option--add {
 }
 .img-modal-target-select:focus { outline: 1px solid var(--accent); }
 
+/* Fonts category — read-only list, not a grid. */
+.img-modal-font-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.02);
+}
+.img-modal-font-sample {
+  font-size: 1.5rem;
+  min-width: 200px;
+  color: var(--text);
+}
+.img-modal-font-meta {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.img-modal-font-vibe { font-style: italic; margin-bottom: 2px; }
+.img-modal-font-attrib { font-size: 0.78rem; }
+
 /* Footer with shared Attributions button. */
 .img-modal-footer {
   padding: var(--space-sm) var(--space-md);
