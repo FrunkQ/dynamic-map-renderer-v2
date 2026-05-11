@@ -90,10 +90,12 @@ export class TextMapEditor {
   private existingAddedAt: number | null = null;
 
   private pageEl:        HTMLElement | null = null;
+  private elementToolbarEl: HTMLElement | null = null;
   private elementNodes   = new Map<string, HTMLElement>();
   private selectedId:    string | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private dragState: DragState | null = null;
+  private libraryFonts: string[] = [];
 
   private onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !this.dragState) this._resolve(null);
@@ -133,6 +135,13 @@ export class TextMapEditor {
       .filter((a) => a.source === 'font' && a.fontFamily)
       .map((a) => a.fontFamily!);
     ensureFontsLoaded(families);
+    // Cache the full library list so element-toolbar font picker pulls
+    // from the same source as the page-level default.
+    this.libraryFonts = families.length > 0 ? families : FALLBACK_FONTS.slice();
+    // Refresh the element toolbar if a text element is currently
+    // selected — the font select may have rendered before the async
+    // load resolved.
+    this._renderElementToolbar();
   }
 
   private _resolve(value: TextMapEditorResult | null): void {
@@ -193,6 +202,13 @@ export class TextMapEditor {
     page.style.fontFamily = `'${this.cfg.fontFamily}', serif`;
     canvasWrap.appendChild(page);
     this.pageEl = page;
+
+    // ── Per-element toolbar (appears when an element is selected) ────────
+    const elToolbar = document.createElement('div');
+    elToolbar.className = 'txt-map-element-toolbar';
+    elToolbar.hidden = true;
+    dialog.appendChild(elToolbar);
+    this.elementToolbarEl = elToolbar;
 
     // ── Footer ───────────────────────────────────────────────────────────
     const footer = document.createElement('div');
@@ -283,6 +299,29 @@ export class TextMapEditor {
       if (this.pageEl) this.pageEl.style.fontFamily = `'${fontSel.value}', serif`;
     });
     tb.appendChild(fontSel);
+
+    // Page-level font size — multiplier on the auto base font size
+    // computed from page width in _fitPage. Text elements can override
+    // with their own fontScale; this is the floor.
+    const scaleLabel = document.createElement('span');
+    scaleLabel.className = 'txt-map-element-toolbar-label';
+    scaleLabel.textContent = 'Size';
+    tb.appendChild(scaleLabel);
+    const scale = document.createElement('input');
+    scale.type = 'range';
+    scale.min = '0.5'; scale.max = '4'; scale.step = '0.1';
+    scale.value = String(this.cfg.fontScale);
+    scale.className = 'txt-map-element-slider';
+    scale.title = 'Default font size for the page';
+    const scaleVal = document.createElement('span');
+    scaleVal.className = 'txt-map-element-slider-val';
+    scaleVal.textContent = `${this.cfg.fontScale.toFixed(1)}×`;
+    scale.addEventListener('input', () => {
+      this.cfg.fontScale = parseFloat(scale.value);
+      scaleVal.textContent = `${this.cfg.fontScale.toFixed(1)}×`;
+      this._fitPage();
+    });
+    tb.append(scale, scaleVal);
 
     // Add Text button
     const addText = document.createElement('button');
@@ -469,6 +508,129 @@ export class TextMapEditor {
       const cur = this.elementNodes.get(id);
       cur?.classList.add('txt-map-el--selected');
     }
+    this._renderElementToolbar();
+  }
+
+  /** Rebuild the per-element toolbar based on what's selected. Hides the
+   *  bar entirely when nothing is selected so it doesn't take vertical
+   *  space. Re-runs after every selection change AND after async font
+   *  loads complete (so the font picker can fill in). */
+  private _renderElementToolbar(): void {
+    const tb = this.elementToolbarEl;
+    if (!tb) return;
+    tb.innerHTML = '';
+    if (!this.selectedId) { tb.hidden = true; return; }
+    const el = this.elements.find((x) => x.id === this.selectedId);
+    if (!el) { tb.hidden = true; return; }
+    tb.hidden = false;
+
+    if (el.type === 'text') this._buildTextElementToolbar(tb, el);
+    else if (el.type === 'image') this._buildImageElementToolbar(tb, el);
+  }
+
+  private _buildTextElementToolbar(tb: HTMLElement, el: TextMapTextElement): void {
+    // Label
+    tb.appendChild(this._toolbarLabel('Text'));
+
+    // Colour — defaults to page textColor when the element doesn't override.
+    const colour = document.createElement('input');
+    colour.type = 'color';
+    colour.className = 'txt-map-color';
+    colour.title = 'Text colour for this element';
+    colour.value = el.color ?? this.cfg.textColor;
+    colour.addEventListener('input', () => {
+      el.color = colour.value;
+      const node = this.elementNodes.get(el.id);
+      const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
+      if (body) this._applyTextStyle(body, el);
+    });
+    tb.appendChild(colour);
+
+    // Font size — slider 0.5..4 multiplier on the page-level basePx.
+    tb.appendChild(this._toolbarLabel('Size'));
+    const size = document.createElement('input');
+    size.type = 'range';
+    size.min = '0.5'; size.max = '4'; size.step = '0.1';
+    size.value = String(el.fontScale ?? 1);
+    size.className = 'txt-map-element-slider';
+    size.title = 'Font size multiplier for this element';
+    const sizeVal = document.createElement('span');
+    sizeVal.className = 'txt-map-element-slider-val';
+    sizeVal.textContent = `${(el.fontScale ?? 1).toFixed(1)}×`;
+    size.addEventListener('input', () => {
+      const v = parseFloat(size.value);
+      el.fontScale = v;
+      sizeVal.textContent = `${v.toFixed(1)}×`;
+      const node = this.elementNodes.get(el.id);
+      const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
+      if (body) this._applyTextStyle(body, el);
+    });
+    tb.append(size, sizeVal);
+
+    // Font family — pulls from the Image Library's font registry (same
+    // list as the page-level default). "Default" entry returns to the
+    // page-level font.
+    tb.appendChild(this._toolbarLabel('Font'));
+    const fontSel = document.createElement('select');
+    fontSel.className = 'txt-map-input';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = `(use page default: ${this.cfg.fontFamily})`;
+    fontSel.appendChild(defaultOpt);
+    for (const f of this.libraryFonts.length > 0 ? this.libraryFonts : FALLBACK_FONTS) {
+      const o = document.createElement('option');
+      o.value = f; o.textContent = f;
+      if (f === el.fontFamily) o.selected = true;
+      fontSel.appendChild(o);
+    }
+    if (!el.fontFamily) defaultOpt.selected = true;
+    fontSel.addEventListener('change', () => {
+      if (fontSel.value === '') delete el.fontFamily;
+      else el.fontFamily = fontSel.value;
+      const node = this.elementNodes.get(el.id);
+      const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
+      if (body) this._applyTextStyle(body, el);
+    });
+    tb.appendChild(fontSel);
+
+    // Alignment
+    tb.appendChild(this._toolbarLabel('Align'));
+    const alignWrap = document.createElement('div');
+    alignWrap.className = 'txt-map-align-group';
+    for (const a of ['left', 'center', 'right', 'justify'] as const) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn--ghost btn--sm';
+      btn.textContent = a === 'left' ? '⯇' : a === 'center' ? '═' : a === 'right' ? '⯈' : '☰';
+      btn.title = a.charAt(0).toUpperCase() + a.slice(1);
+      if (el.textAlign === a) btn.classList.add('btn--active');
+      btn.addEventListener('click', () => {
+        el.textAlign = a;
+        const node = this.elementNodes.get(el.id);
+        const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
+        if (body) this._applyTextStyle(body, el);
+        // Refresh button states.
+        alignWrap.querySelectorAll('.btn--active').forEach((b) => b.classList.remove('btn--active'));
+        btn.classList.add('btn--active');
+      });
+      alignWrap.appendChild(btn);
+    }
+    tb.appendChild(alignWrap);
+  }
+
+  private _buildImageElementToolbar(tb: HTMLElement, _el: TextMapElement): void {
+    tb.appendChild(this._toolbarLabel('Image'));
+    const hint = document.createElement('span');
+    hint.className = 'txt-map-element-hint';
+    hint.textContent = 'Drag the bottom-right corner to resize. Drag the top bar to move.';
+    tb.appendChild(hint);
+  }
+
+  private _toolbarLabel(text: string): HTMLElement {
+    const l = document.createElement('span');
+    l.className = 'txt-map-element-toolbar-label';
+    l.textContent = text;
+    return l;
   }
 
   private _editingActiveSelection(): boolean {

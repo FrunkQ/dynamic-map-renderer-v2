@@ -1763,15 +1763,23 @@ option.select-option--add {
   cursor: text;
 }
 .txt-map-el--image .txt-map-el-body {
-  display: grid;
-  place-items: center;
+  display: block;
+  padding: 0;
   cursor: grab;
-  font-size: 2em;
-  opacity: 0.85;
 }
-.txt-map-el--image .txt-map-el-body svg,
-.txt-map-el--image .txt-map-el-body span {
-  width: 100% !important;
+/* The image body's children (wrapper span + inline SVG) must FILL the
+   body, not size to their intrinsic dimensions. `display: grid +
+   place-items: center` did the latter, so a 1em wrapper span landed
+   centred at 1em x 1em regardless of the element's actual size. */
+.txt-map-el--image .txt-map-el-body > span,
+.txt-map-el--image .txt-map-el-body > svg {
+  display: block !important;
+  width:  100% !important;
+  height: 100% !important;
+}
+.txt-map-el--image .txt-map-el-body > span > svg {
+  display: block !important;
+  width:  100% !important;
   height: 100% !important;
 }
 /* Selected element: dashed accent border + visible drag bar + resize +
@@ -1821,6 +1829,47 @@ option.select-option--add {
   padding: 0;
 }
 .txt-map-el-delete:hover { background: #d44e3f; }
+/* Per-element toolbar — sits between the canvas and the footer, only
+   visible when an element is selected. Carries the controls that apply
+   to that specific element (text colour, font size, font, alignment). */
+.txt-map-element-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+.txt-map-element-toolbar[hidden] { display: none; }
+.txt-map-element-toolbar-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: var(--space-sm);
+}
+.txt-map-element-toolbar-label:first-child { margin-left: 0; }
+.txt-map-element-slider { width: 120px; }
+.txt-map-element-slider-val {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  min-width: 32px;
+  display: inline-block;
+  text-align: right;
+}
+.txt-map-element-hint {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.txt-map-align-group { display: inline-flex; gap: 2px; }
+.txt-map-align-group .btn--active {
+  background: var(--accent, #6aa3ff);
+  color: #fff;
+  border-color: var(--accent, #6aa3ff);
+}
 .txt-map-body {
   flex: 1;
   display: flex;
