@@ -304,12 +304,16 @@ export class TextMapEditor {
   }
 
   private _buildBodyTextarea(): HTMLElement {
-    // Rich-text editor shared with the About splash body. Adds an inline-
-    // icon-insert button wired to the Small Assets Library in pick mode.
+    // Rich-text editor shared with the About splash body. The page-level
+    // Font + Text-colour controls (above) are the single source of truth
+    // for those — disable the toolbar's inline pickers so they don't
+    // silently override the page settings. Bold / italic / lists /
+    // alignment / inline icon insertion stay for inline emphasis.
     return createRichTextEditor({
-      initialHtml: this.draft.bodyHtml,
-      placeholder: 'Body of the handout — proclamation, journal entry, ransom note…',
-      defaultColour: this.draft.textColor,
+      initialHtml:      this.draft.bodyHtml,
+      placeholder:      'Body of the handout — proclamation, journal entry, ransom note…',
+      showFontPicker:   false,
+      showColourPicker: false,
       onChange: (html) => {
         this.draft.bodyHtml = html;
         this._renderPreview();
