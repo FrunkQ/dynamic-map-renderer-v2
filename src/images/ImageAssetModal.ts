@@ -113,6 +113,46 @@ function suggestCategoryFromTags(tags: readonly string[]): string | null {
   return null;
 }
 
+/** Pull designer + licence metadata for a Google Fonts family by reading
+ *  the project's METADATA.pb from raw.githubusercontent.com (CORS open).
+ *  Returns null when the fetch fails or the family isn't in any of the
+ *  three licence directories the repo uses.
+ *
+ *  METADATA.pb is protobuf text format; we parse the `designer:` and
+ *  `license:` lines with regex. Some families list multiple designer
+ *  entries (one per line), others use a single comma-separated string —
+ *  both are handled. */
+async function fetchGoogleFontMetadata(
+  family: string,
+): Promise<{ designer: string; license: string } | null> {
+  // The repo slug is lowercase + spaces stripped: "Playwrite GB J" -> "playwritegbj".
+  const slug = family.toLowerCase().replace(/\s+/g, '');
+  const licenseDirs = ['ofl', 'apache', 'ufl'] as const;
+  const LICENSE_LABELS: Record<string, string> = {
+    OFL:     'SIL OFL 1.1',
+    APACHE2: 'Apache 2.0',
+    UFL:     'Ubuntu Font Licence 1.0',
+  };
+  for (const dir of licenseDirs) {
+    const url = `https://raw.githubusercontent.com/google/fonts/main/${dir}/${slug}/METADATA.pb`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const text = await res.text();
+      // Multiple `designer: "X"` lines, OR a single line with comma-joined names.
+      const designerMatches = [...text.matchAll(/^\s*designer:\s*"([^"]+)"/gm)];
+      const designer = designerMatches.map((m) => m[1]).join(', ');
+      const licenseMatch = text.match(/^\s*license:\s*"([^"]+)"/m);
+      const rawLicense = licenseMatch?.[1] ?? '';
+      const license = LICENSE_LABELS[rawLicense] ?? (rawLicense || 'See Google Fonts page');
+      return { designer, license };
+    } catch {
+      // Try the next licence dir.
+    }
+  }
+  return null;
+}
+
 /** Pull the family name from either a Google Fonts specimen URL
  *  (https://fonts.google.com/specimen/Roboto+Slab) or a raw family string.
  *  Returns null when the input is empty after parsing. */
@@ -885,6 +925,14 @@ export class ImageAssetModal {
       const actions = document.createElement('div');
       actions.className = 'img-modal-font-actions';
 
+      const refetch = document.createElement('button');
+      refetch.type = 'button';
+      refetch.className = 'img-modal-font-action';
+      refetch.title = 'Refetch designer + licence from google/fonts';
+      refetch.textContent = '↻';
+      refetch.addEventListener('click', () => void this._refetchFontAttribution(font, refetch));
+      actions.appendChild(refetch);
+
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'img-modal-font-action';
@@ -953,18 +1001,29 @@ export class ImageAssetModal {
       );
       return;
     }
-    // Designer credit — Google Fonts hosts a "Designed by …" line on each
-    // specimen page that we can't safely scrape (CORS), so prompt the user
-    // who's already on the page to paste the names. Leave blank for the
-    // default "via Google Fonts" fallback.
-    const designers = prompt(
-      `Designer / foundry for "${family}" (optional)\n\n` +
-      'Copy the names from the "Designed by …" line on the Google Fonts ' +
-      'specimen page. Leave blank if you\'re not sure.',
-    )?.trim() ?? '';
-    const attribution = designers
-      ? `${family} by ${designers}`
-      : `${family} via Google Fonts`;
+    // Try to pull designer + licence info from the google/fonts GitHub
+    // repo's METADATA.pb file — raw.githubusercontent.com serves with
+    // permissive CORS so this works straight from the browser. Falls back
+    // to a manual prompt when the fetch / parse fails (renamed families,
+    // network issues, anything we don't recognise).
+    let attribution: string;
+    let license = 'SIL OFL 1.1 (per Google Fonts)';
+    const meta = await fetchGoogleFontMetadata(family);
+    if (meta) {
+      attribution = meta.designer
+        ? `${family} by ${meta.designer}`
+        : `${family} via Google Fonts`;
+      if (meta.license) license = meta.license;
+    } else {
+      const designers = prompt(
+        `Couldn't auto-fetch designer info for "${family}".\n\n` +
+        'Paste the "Designed by …" names from the Google Fonts specimen page, ' +
+        'or leave blank for the default.',
+      )?.trim() ?? '';
+      attribution = designers
+        ? `${family} by ${designers}`
+        : `${family} via Google Fonts`;
+    }
     const asset: ImageAsset = {
       id,
       name:            family,
@@ -972,7 +1031,7 @@ export class ImageAssetModal {
       categoryId:      SYSTEM_CATEGORY_IDS.fonts,
       tintable:        false,
       fontFamily:      family,
-      license:         'SIL OFL 1.1 (per Google Fonts)',
+      license,
       attribution,
       attributionLink: `https://fonts.google.com/specimen/${slug}`,
       sourceUrl:       `https://fonts.google.com/specimen/${slug}`,
@@ -994,6 +1053,40 @@ export class ImageAssetModal {
     if (!trimmed || trimmed === current) return;
     await ImageAssetStore.update(font.id, { attribution: trimmed });
     await this._reload();
+  }
+
+  /** Refetch designer + licence from google/fonts METADATA.pb for an
+   *  existing user-added font. Useful for entries that landed before the
+   *  auto-fetch was added (or whose metadata has been updated upstream).
+   *  Briefly disables the button + shows a spinner glyph so the user knows
+   *  the network call is in flight. */
+  private async _refetchFontAttribution(font: ImageAsset, btn: HTMLButtonElement): Promise<void> {
+    const family = font.fontFamily ?? font.name;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const meta = await fetchGoogleFontMetadata(family);
+      if (!meta) {
+        alert(
+          `Couldn't find metadata for "${family}" in the google/fonts repo. ` +
+          'Either the family was renamed, the licence directory has changed, or ' +
+          'the repo path is unreachable. Edit the attribution manually with the ✎ button.',
+        );
+        return;
+      }
+      const attribution = meta.designer
+        ? `${family} by ${meta.designer}`
+        : `${family} via Google Fonts`;
+      const patch: Partial<ImageAsset> = { attribution };
+      const nextLicense = meta.license || font.license;
+      if (nextLicense) patch.license = nextLicense;
+      await ImageAssetStore.update(font.id, patch);
+      await this._reload();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
   }
 
   private _renderConnectorGrid(host: HTMLElement): void {
