@@ -153,20 +153,52 @@ async function fetchGoogleFontMetadata(
   return null;
 }
 
-/** Pull the family name from either a Google Fonts specimen URL
- *  (https://fonts.google.com/specimen/Roboto+Slab) or a raw family string.
- *  Returns null when the input is empty after parsing. */
-function extractFamilyFromInput(input: string): string | null {
+/** Pull the family name AND any tag-like metadata from either a Google
+ *  Fonts specimen URL or a raw family string. Returns null when the input
+ *  is empty after parsing.
+ *
+ *  Tags come from the URL's `categoryFilters` query parameter, which
+ *  Google Fonts uses to record the user's filter context when they share
+ *  a URL — e.g.
+ *    https://fonts.google.com/specimen/Kablammo?categoryFilters=Feeling:%2FExpressive%2FInnovative
+ *  gives us ['expressive','innovative'] which feed straight into the
+ *  asset's tags. Multiple filter groups (Feeling, Classification, Serif,
+ *  Calligraphy, etc.) are all collected. */
+function extractFamilyFromInput(input: string): { family: string; tags: string[] } | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
-  const urlMatch = trimmed.match(/fonts\.google\.com\/specimen\/([^?#/]+)/i);
+
+  const urlMatch = trimmed.match(/fonts\.google\.com\/specimen\/([^?#/]+)(\?[^#]*)?/i);
   if (urlMatch && urlMatch[1]) {
-    try { return decodeURIComponent(urlMatch[1].replace(/\+/g, ' ')); }
-    catch { return urlMatch[1].replace(/\+/g, ' '); }
+    let family: string;
+    try { family = decodeURIComponent(urlMatch[1].replace(/\+/g, ' ')); }
+    catch { family = urlMatch[1].replace(/\+/g, ' '); }
+
+    const tags: string[] = [];
+    if (urlMatch[2]) {
+      try {
+        const params = new URLSearchParams(urlMatch[2]);
+        const filters = params.get('categoryFilters');
+        if (filters) {
+          // Format: "Feeling:/Expressive/Innovative,Classification:/Display"
+          // (raw "/" is sometimes URL-escaped — URLSearchParams already decoded).
+          for (const group of filters.split(',')) {
+            const colonIdx = group.indexOf(':');
+            if (colonIdx < 0) continue;
+            const values = group.slice(colonIdx + 1).split('/').filter(Boolean);
+            for (const v of values) tags.push(v.toLowerCase());
+          }
+        }
+      } catch {
+        // Tags are nice-to-have; never let a parse error block the import.
+      }
+    }
+    return { family, tags };
   }
+
   // Not a URL — assume it's already a family name. Strip surrounding quotes
   // people sometimes paste from prose.
-  return trimmed.replace(/^["']|["']$/g, '');
+  return { family: trimmed.replace(/^["']|["']$/g, ''), tags: [] };
 }
 
 /**
@@ -971,11 +1003,12 @@ export class ImageAssetModal {
       '  or  "Roboto Slab")',
     );
     if (!raw) return;
-    const family = extractFamilyFromInput(raw.trim());
-    if (!family) {
+    const parsed = extractFamilyFromInput(raw.trim());
+    if (!parsed) {
       alert("Couldn't parse a family name from that input. Try the URL from fonts.google.com or just the family name like \"Roboto Slab\".");
       return;
     }
+    const { family, tags: urlTags } = parsed;
     const id = 'font-user-' + family.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const existing = await ImageAssetStore.get(id);
     if (existing) {
@@ -1024,6 +1057,12 @@ export class ImageAssetModal {
         ? `${family} by ${designers}`
         : `${family} via Google Fonts`;
     }
+    // Tags combine the categoryFilters from the URL (Expressive,
+    // Innovative, etc.) with a 'user-added' marker so the row makes
+    // sense if the URL didn't carry any filter context.
+    const tags = urlTags.length > 0
+      ? Array.from(new Set([...urlTags, 'user-added']))
+      : ['user-added'];
     const asset: ImageAsset = {
       id,
       name:            family,
@@ -1035,7 +1074,7 @@ export class ImageAssetModal {
       attribution,
       attributionLink: `https://fonts.google.com/specimen/${slug}`,
       sourceUrl:       `https://fonts.google.com/specimen/${slug}`,
-      tags:            ['user-added'],
+      tags,
       addedAt:         Date.now(),
     };
     await ImageAssetStore.save(asset);
