@@ -40,23 +40,42 @@ export async function resolveAssetImages(html: string): Promise<string> {
 /** Resolve a single asset id to a renderable src (data URL for SVG /
  *  Unicode, object URL for raster). Exported so callers like the Text Map
  *  editor can resolve at insertion time and bake the data URL into the
- *  body HTML — avoids the editor showing a broken `asset:` reference. */
-export async function renderAssetToSrc(id: string): Promise<string | null> {
+ *  body HTML — avoids the editor showing a broken `asset:` reference.
+ *
+ *  `tintColor` (when provided) is baked into the resulting SVG in place of
+ *  `currentColor`. This is required because an `<img src="data:image/svg+xml">`
+ *  loads the SVG in its own sandboxed document — `currentColor` there
+ *  defaults to black, regardless of the host page's text colour. The Text
+ *  Map editor passes the handout's textColor so icons take the chosen
+ *  foreground with a transparent background. */
+export async function renderAssetToSrc(id: string, tintColor?: string): Promise<string | null> {
   const asset = await ImageAssetStore.get(id);
   if (!asset) return null;
   if (asset.svgSource) {
-    // Tintable SVGs get fill="currentColor" so they pick up the surrounding
-    // text colour when inlined.
-    const svg = asset.tintable
-      ? asset.svgSource.replace(/fill\s*=\s*"[^"]*"/g, 'fill="currentColor"')
-      : asset.svgSource;
+    let svg = asset.svgSource;
+    if (asset.tintable) {
+      // Normalise tintable fills to currentColor — but leave fill="none"
+      // alone (Lucide icons are stroke-only with fill="none"; converting
+      // that to currentColor turns each icon into a solid black square)
+      // and leave fill="currentColor" alone (already correct).
+      svg = svg.replace(
+        /fill\s*=\s*"(?!none\b|currentColor\b)[^"]*"/gi,
+        'fill="currentColor"',
+      );
+    }
+    if (tintColor) {
+      // Bake the host's text colour into the SVG so the sandboxed <img>
+      // load can actually paint the icon in the requested colour.
+      svg = svg.replace(/currentColor/gi, tintColor);
+    }
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
   }
   if (asset.unicodeChar) {
     const ch = asset.unicodeChar;
+    const fill = tintColor ?? 'currentColor';
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-      '<text x="16" y="24" text-anchor="middle" font-size="28" fill="currentColor">' +
+      '<text x="16" y="24" text-anchor="middle" font-size="28" fill="' + fill + '">' +
       escapeXml(ch) +
       '</text></svg>';
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);

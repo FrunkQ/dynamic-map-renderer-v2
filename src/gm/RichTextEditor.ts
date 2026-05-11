@@ -168,6 +168,22 @@ export function createRichTextEditor(opts: RichTextEditorOptions): HTMLElement {
     const text = e.clipboardData?.getData('text/plain') ?? '';
     document.execCommand('insertText', false, text);
   });
+  // Click an inline icon to cycle its size. Drag-handle resize is the
+  // proper UX (M4) — until that lands, this gives the user a way to
+  // resize at all rather than being stuck with the 2em default.
+  const ICON_SIZE_CYCLE = ['1em', '1.5em', '2em', '3em', '4em'];
+  editor.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'IMG') return;
+    e.preventDefault();
+    const img = target as HTMLImageElement;
+    const current = img.style.width || '2em';
+    const idx = ICON_SIZE_CYCLE.indexOf(current);
+    const next = ICON_SIZE_CYCLE[(idx + 1) % ICON_SIZE_CYCLE.length];
+    img.style.width = next;
+    img.style.height = next;
+    opts.onChange(editor.innerHTML);
+  });
 
   return wrap;
 }

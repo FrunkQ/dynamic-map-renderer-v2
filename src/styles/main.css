@@ -1987,6 +1987,12 @@ option.select-option--add {
    sit at the same column as adjacent paragraphs. */
 .rte-editor ul, .rte-editor ol { margin: 0 0 0.6em 0; padding-left: 1.6em; }
 .rte-editor li { margin: 0 0 0.2em 0; }
+/* Inline icons inserted via the toolbar are clickable to cycle through
+   sizes (RichTextEditor adds the click handler). Drag-handle resize is
+   the proper UX (M4) — until then the cursor hint signposts the
+   interaction. */
+.rte-editor img { cursor: pointer; }
+.rte-editor img:hover { outline: 1px solid var(--accent, #6aa3ff); outline-offset: 1px; }
 .rte-editor:empty::before {
   content: attr(data-placeholder);
   color: var(--text-dim);

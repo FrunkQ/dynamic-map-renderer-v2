@@ -334,7 +334,13 @@ export class TextMapEditor {
    *  a broken image inside the editor since the contentEditable doesn't
    *  run the asset resolver. The trade-off is that inline icons bloat
    *  the saved body HTML with each icon's full SVG — acceptable for
-   *  typical handouts. */
+   *  typical handouts.
+   *
+   *  Passes the handout's textColor to renderAssetToSrc so the SVG bakes
+   *  that colour in. An <img src="data:image/svg+xml"> loads the SVG in
+   *  its own sandboxed document where currentColor defaults to black;
+   *  without baking, every tintable icon would render as a solid black
+   *  square instead of the chosen text colour. */
   private async _pickInlineIcon(): Promise<string | null> {
     return new Promise<string | null>((resolve) => {
       let picked = false;
@@ -344,14 +350,13 @@ export class TextMapEditor {
         pickMode: true,
         onPick: async (asset) => {
           picked = true;
-          const src = await renderAssetToSrc(asset.id);
+          const src = await renderAssetToSrc(asset.id, this.draft.textColor);
           if (!src) {
             resolve(null);
             return;
           }
-          // Default to a sensible inline size; user can resize once we
-          // ship drag-handles. Width attribute is keyed to em so it
-          // scales with the surrounding text.
+          // Default to a sensible inline size; click an inserted icon to
+          // cycle through 1em / 1.5em / 2em / 3em (see RichTextEditor).
           resolve(
             `<img src="${src}" alt="${this._escAttr(asset.name)}" `
             + `style="width: 2em; height: 2em; vertical-align: middle;" />`,
