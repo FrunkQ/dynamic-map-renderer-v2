@@ -79,6 +79,11 @@ export class ProjectorApp {
   private currentFog:        FogState           = { polygons: [] };
   private currentMarkers:    Marker[]           = [];
   private currentFilter:     FilterState | null = null;
+  /** Background colour for letterbox / pillarbox bars on the projector view.
+   *  Mirrors the per-map view.backgroundColor the GM picked for the player
+   *  view, so the projection bezel matches the player aesthetic. Defaults
+   *  to black if no view state has been received yet. */
+  private currentBackgroundColor: string         = '#000000';
   private playerIconCache    = new Map<string, ImageBitmap>();
 
   async init(): Promise<void> {
@@ -299,6 +304,7 @@ export class ProjectorApp {
         this.currentMarkers = s.markers ?? [];
         this.currentFog     = s.fog ?? { polygons: [] };
         this.currentFilter  = s.filter ?? null;
+        if (s.view?.backgroundColor) this.currentBackgroundColor = s.view.backgroundColor;
         if (s.projectorViewport) this.projectorViewport = s.projectorViewport;
         if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
         if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
@@ -319,6 +325,7 @@ export class ProjectorApp {
         // Filter belongs to the incoming map — update so we don't keep the
         // previous map's filter applied. undefined/null means "no filter".
         this.currentFilter  = msg.filter ?? null;
+        if (msg.view?.backgroundColor) this.currentBackgroundColor = msg.view.backgroundColor;
         if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
         if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
         if (msg.mapImageHeight     !== undefined) this.mapImageHeight     = msg.mapImageHeight;
@@ -398,8 +405,21 @@ export class ProjectorApp {
         window.close();
         break;
       }
-      // view_update / audio messages: intentionally ignored by the projector.
-      // View comes from our own calibration; audio plays on player / GM only.
+      case 'view_update': {
+        // The projector computes its own crop from calibration and ignores
+        // the player's centre / viewN dimensions, but the background colour
+        // (used to fill letterbox / pillarbox bars on the projection) DOES
+        // follow the GM's per-map choice so the projector bezel matches the
+        // player aesthetic. Live edits to the background colour in the GM
+        // UI propagate here without waiting for a map swap.
+        if (msg.payload.backgroundColor) {
+          const changed = this.currentBackgroundColor !== msg.payload.backgroundColor;
+          this.currentBackgroundColor = msg.payload.backgroundColor;
+          if (changed) this._applyView();
+        }
+        break;
+      }
+      // audio messages: intentionally ignored — audio plays on player / GM only.
     }
   }
 
@@ -453,7 +473,7 @@ export class ProjectorApp {
    * mode + projector calibration + map calibration.
    */
   private _computeViewState(): ViewState {
-    const bg = '#000000';
+    const bg = this.currentBackgroundColor;
     const mode = this.projectorViewport.mode;
 
     // 'full' — show the entire map fit-to-window. The renderer's letterbox
