@@ -74,13 +74,20 @@ export async function renderAssetToInlineHtml(
     if (asset.tintable) {
       svg = cleanTintableSvg(svg);
     }
-    // Force-size the root svg so it lays out at the wrapper size. Some
-    // sources ship without width / height attributes which then default
-    // to 300x150 in HTML context.
-    svg = svg.replace(
-      /<svg(\s|>)/i,
-      `<svg width="100%" height="100%"$1`,
-    );
+    // Force-size the root svg so it lays out at the wrapper size. We
+    // STRIP any existing width / height first — Lucide ships
+    // width="24" height="24" and just prepending width="100%" would
+    // leave duplicate attributes, which has undefined behaviour and
+    // (in list-item contexts) makes some browsers fall back to the
+    // SVG's intrinsic dimensions, blowing the icon out to fill the
+    // page. Sources without explicit width / height previously
+    // defaulted to 300x150 in HTML context — same fix.
+    svg = svg.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
+      const cleaned = attrs
+        .replace(/\swidth\s*=\s*"[^"]*"/gi,  '')
+        .replace(/\sheight\s*=\s*"[^"]*"/gi, '');
+      return `<svg width="100%" height="100%"${cleaned}>`;
+    });
     return `${wrapOpen}${svg}</span>`;
   }
 
