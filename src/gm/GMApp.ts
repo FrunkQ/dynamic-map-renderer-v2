@@ -25,6 +25,7 @@ import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
 import { seedImageAssetsIfNeeded } from '../images/seedImageAssets.ts';
+import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { exportBundle, importBundleText } from '../storage/bundleIO.ts';
 import { retrofitMapScales } from '../maps/retrofitMapScales.ts';
 import { isEncryptedBundleEnvelope } from '../storage/bundleCrypto.ts';
@@ -1978,6 +1979,13 @@ export class GMApp {
       onSelect: () => { void this.openAboutDialog({ startInEdit: true }); },
     });
 
+    // Image Library — third asset library alongside Maps and Audio. Currently
+    // browse-only; marker-icon integration follows in a later Stream B commit.
+    this.hamburger.addItem({
+      label: 'Image Library…',
+      onSelect: () => { void this.openImageLibrary(); },
+    });
+
     // Destructive / system entries
     this.hamburger.addItem({
       label: 'New Map Pack…',
@@ -2152,6 +2160,12 @@ export class GMApp {
     } catch (err) {
       this.setStatus(`New pack failed: ${(err as Error).message}`, 'error');
     }
+  }
+
+  /** Open the Image Library modal — browse + add icons across categories.
+   *  At M3 this is browse-only; marker icon integration follows. */
+  private async openImageLibrary(): Promise<void> {
+    await new ImageAssetModal().open();
   }
 
   /** Open the Settings dialog. Handles the Delete DB / Delete All Data

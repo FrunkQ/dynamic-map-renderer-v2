@@ -1326,6 +1326,183 @@ option.select-option--add {
 }
 .modal-dialog--sm { width: 480px; }
 
+/* ── Image Library modal ───────────────────────────────────────────────── */
+.img-modal-dialog {
+  width: 920px;
+  max-width: 95vw;
+  height: 720px;
+  max-height: 90vh;
+}
+.img-modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.img-modal-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: var(--space-md) 0;
+  overflow-y: auto;
+  background: var(--bg-deep, rgba(0,0,0,0.15));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.img-modal-sidebar-section {
+  padding: var(--space-sm) var(--space-md) 4px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.img-modal-sidebar-cat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px var(--space-md);
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.92rem;
+  text-align: left;
+  width: 100%;
+}
+.img-modal-sidebar-cat:hover { background: var(--accent-dim); }
+.img-modal-sidebar-cat.is-active {
+  background: var(--accent-dim);
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+.img-cat-count {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+}
+.img-modal-sidebar-cat.is-active .img-cat-count { color: var(--text); }
+.img-modal-sidebar-add {
+  margin: var(--space-sm) var(--space-md);
+  padding: 6px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.img-modal-sidebar-add:hover { color: var(--accent); border-color: var(--accent-dim); }
+
+.img-modal-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.img-modal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.img-modal-cat-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-right: auto;
+}
+.img-modal-search {
+  width: 220px;
+  padding: 4px 8px;
+  background: var(--bg-deep, rgba(0,0,0,0.2));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.img-modal-search:focus { outline: 1px solid var(--accent); }
+
+.img-modal-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-sm);
+  align-content: start;
+}
+.img-modal-empty {
+  grid-column: 1 / -1;
+  color: var(--text-dim);
+  text-align: center;
+  padding: var(--space-lg);
+  font-size: 0.92rem;
+}
+.img-modal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  transition: border-color 0.12s, background 0.12s;
+  min-height: 100px;
+}
+.img-modal-cell:hover {
+  border-color: var(--accent-dim);
+  background: rgba(255,255,255,0.05);
+}
+.img-modal-visual {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+.img-modal-unicode {
+  font-size: 40px;
+  line-height: 1;
+}
+.img-modal-svg { width: 64px; height: 64px; }
+.img-modal-img { max-width: 64px; max-height: 64px; object-fit: contain; }
+.img-modal-broken { font-size: 28px; color: var(--text-dim); }
+.img-modal-label {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  text-align: center;
+  max-width: 100%;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.img-modal-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(0,0,0,0.4);
+  color: var(--text);
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+  padding: 0;
+}
+.img-modal-cell:hover .img-modal-del { opacity: 1; }
+.img-modal-del:hover { background: var(--danger, #c0392b); }
+
 /* ── About / Splash dialog ─────────────────────────────────────────────── */
 .about-dialog { width: 600px; }
 
