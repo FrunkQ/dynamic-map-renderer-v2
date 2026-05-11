@@ -123,6 +123,11 @@ function cleanNode(node: Element): void {
       const filtered = filterStyle((node as HTMLElement).style.cssText);
       if (filtered.length > 0) node.setAttribute('style', filtered);
       else node.removeAttribute('style');
+    } else if (name === 'contenteditable' && attr.value === 'false') {
+      // Allow contenteditable="false" on icon wrapper spans so the
+      // rich-text editor treats them as atomic units. Any other value
+      // is dropped — we never want to opt arbitrary subtrees back
+      // INTO editability.
     } else if (tag === 'FONT' && ALLOWED_FONT_ATTRS.has(name)) {
       // Keep — bare colour / face values, no JS-loadable URLs.
     } else if (tag === 'IMG' && (name === 'src' || name === 'width' || name === 'height' || name === 'alt')) {

@@ -64,6 +64,10 @@ export async function renderAssetToInlineHtml(
     + `width:${sizeEm}em;`
     + `height:${sizeEm}em;`
     + `vertical-align:middle;`;
+  // contenteditable="false" so the rich-text editor treats the icon as
+  // an atomic unit — no caret inside the SVG, single Backspace deletes
+  // the whole thing, but click-to-resize still fires.
+  const wrapOpen = `<span contenteditable="false" style="${wrapStyle}">`;
 
   if (asset.svgSource) {
     let svg = asset.svgSource;
@@ -83,7 +87,7 @@ export async function renderAssetToInlineHtml(
       /<svg(\s|>)/i,
       `<svg width="100%" height="100%"$1`,
     );
-    return `<span style="${wrapStyle}">${svg}</span>`;
+    return `${wrapOpen}${svg}</span>`;
   }
 
   if (asset.unicodeChar) {
@@ -95,13 +99,14 @@ export async function renderAssetToInlineHtml(
       '<text x="16" y="24" text-anchor="middle" font-size="28" fill="currentColor">' +
       escapeXml(ch) +
       '</text></svg>';
-    return `<span style="${wrapStyle}">${svg}</span>`;
+    return `${wrapOpen}${svg}</span>`;
   }
 
   if (asset.blob) {
     // Raster blob — no tinting, just dimensions on the wrapper.
     const url = URL.createObjectURL(asset.blob);
-    return `<img src="${url}" alt="" style="${wrapStyle.replace('display:inline-block;', '')}" />`;
+    const imgStyle = wrapStyle.replace('display:inline-block;', '');
+    return `<img src="${url}" alt="" style="${imgStyle}" />`;
   }
 
   return null;
