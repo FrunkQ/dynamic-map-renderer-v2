@@ -1980,7 +1980,13 @@ option.select-option--add {
 .rte-editor:focus { outline: none; border-color: transparent; }
 .rte-editor p { margin: 0 0 0.6em 0; }
 .rte-editor p:last-child { margin-bottom: 0; }
-.rte-editor ul, .rte-editor ol { margin: 0 0 0.6em 1.4em; padding: 0; }
+/* Use padding-left (not margin-left) so the bullet markers AND the text
+   visibly indent as a single block. The earlier rule put padding at 0 and
+   pushed only the UL box via margin-left — with list-style-position:
+   outside, the markers rendered in the gutter and the text appeared to
+   sit at the same column as adjacent paragraphs. */
+.rte-editor ul, .rte-editor ol { margin: 0 0 0.6em 0; padding-left: 1.6em; }
+.rte-editor li { margin: 0 0 0.2em 0; }
 .rte-editor:empty::before {
   content: attr(data-placeholder);
   color: var(--text-dim);
