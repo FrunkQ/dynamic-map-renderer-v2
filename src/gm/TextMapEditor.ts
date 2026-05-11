@@ -331,15 +331,60 @@ export class TextMapEditor {
     addText.addEventListener('click', () => this._addNewText());
     tb.appendChild(addText);
 
-    // Add Image button
+    // Add Image button — picks from the Small Assets Library.
     const addImg = document.createElement('button');
     addImg.type = 'button';
     addImg.className = 'btn btn--ghost btn--sm';
     addImg.textContent = '+ Image';
+    addImg.title = 'Pick an image from the Small Assets Library';
     addImg.addEventListener('click', () => void this._addNewImage());
     tb.appendChild(addImg);
 
+    // + Upload — one-click path that loads an image file straight from
+    // disk into the Textmap category and drops it on the page. For
+    // colour raster images (photos, painted maps, etc.) — no need to
+    // round-trip through the Small Assets Library modal. The asset is
+    // saved with tintable: false so its native colours are preserved.
+    const uploadBtn = document.createElement('button');
+    uploadBtn.type = 'button';
+    uploadBtn.className = 'btn btn--ghost btn--sm';
+    uploadBtn.textContent = '+ Upload';
+    uploadBtn.title = 'Upload an image from disk and drop it on the page';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.hidden = true;
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files?.[0];
+      if (f) void this._uploadAndAddImage(f);
+      fileInput.value = ''; // allow the same file to be picked again
+    });
+    uploadBtn.addEventListener('click', () => fileInput.click());
+    tb.append(uploadBtn, fileInput);
+
     return tb;
+  }
+
+  /** Save a user-picked image file to the Image Library (Textmap
+   *  category, tintable: false so raster colour is preserved), then
+   *  drop a new image element onto the canvas pointing at it. */
+  private async _uploadAndAddImage(file: File): Promise<void> {
+    const id = `upload-${generateId()}`;
+    const asset = {
+      id,
+      name:        file.name.replace(/\.[^.]+$/, '') || 'Uploaded image',
+      source:      'upload' as const,
+      categoryId:  SYSTEM_CATEGORY_IDS.textmap,
+      tintable:    false,
+      blob:        file,
+      mimeType:    file.type || 'image/png',
+      addedAt:     Date.now(),
+    };
+    await ImageAssetStore.save(asset);
+    const el = newImageElement(id);
+    this.elements.push(el);
+    this._mountElement(el);
+    this._select(el.id);
   }
 
   private _buildColourInput(title: string, value: string, onInput: (v: string) => void): HTMLElement {
