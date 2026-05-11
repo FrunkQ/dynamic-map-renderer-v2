@@ -10,6 +10,14 @@ import { ensureFontsLoaded, pangramFor } from './fontCatalog.ts';
 import { fuzzySearch } from '../utils/fuzzySearch.ts';
 import { cleanTintableSvg } from '../utils/resolveAssetImages.ts';
 
+/** Result of the shared-attribution prompt for bulk uploads. Empty
+ *  strings mean "skip that field on this batch". */
+interface SharedAttribution {
+  attribution:     string;
+  attributionLink: string;
+  license:         string;
+}
+
 const CONNECTORS: readonly ImageSourceConnector[] = [
   gameIconsConnector,
   lucideConnector,
@@ -787,32 +795,160 @@ export class ImageAssetModal {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,image/webp,image/svg+xml';
+    // Bulk-upload: hold Ctrl / Cmd / Shift in the file picker to select
+    // many tokens at once. After selection we offer a single shared
+    // attribution that applies to all of them — way faster than
+    // uploading + attributing one-by-one for a token pack.
+    input.multiple = true;
     input.style.display = 'none';
     input.addEventListener('change', () => {
-      const file = input.files?.[0];
+      const files = Array.from(input.files ?? []);
       input.remove();
-      if (file) void this._handleUpload(file);
+      if (files.length === 0) return;
+      if (files.length === 1) {
+        const first = files[0];
+        if (first) void this._handleUpload(first);
+      } else {
+        void this._handleBulkUpload(files);
+      }
     });
     document.body.appendChild(input);
     input.click();
   }
 
   private async _handleUpload(file: File): Promise<void> {
+    await this._saveUpload(file, /* sharedAttribution */ undefined);
+    await this._reload();
+  }
+
+  /** Upload N files at once. Prompts for a single shared attribution
+   *  string that's applied to every asset in the batch, then saves
+   *  them all in parallel and re-renders. */
+  private async _handleBulkUpload(files: readonly File[]): Promise<void> {
+    const shared = await this._promptSharedAttribution(files.length);
+    if (shared === null) return; // user cancelled
+    await Promise.all(files.map((f) => this._saveUpload(f, shared)));
+    await this._reload();
+  }
+
+  /** Modal asking for one attribution string to apply to a bulk
+   *  upload. Returns null on cancel, '' when the user chose "skip
+   *  attribution", or the trimmed attribution string. */
+  private _promptSharedAttribution(count: number): Promise<SharedAttribution | null> {
+    return new Promise<SharedAttribution | null>((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog modal-dialog--sm';
+      overlay.appendChild(dialog);
+
+      const header = document.createElement('div');
+      header.className = 'modal-header';
+      const title = document.createElement('span');
+      title.className = 'modal-title';
+      title.textContent = `Attribution for ${count} uploaded tokens`;
+      header.appendChild(title);
+      const closeX = document.createElement('button');
+      closeX.type = 'button';
+      closeX.className = 'modal-close';
+      closeX.textContent = '×';
+      closeX.addEventListener('click', () => done(null));
+      header.appendChild(closeX);
+      dialog.appendChild(header);
+
+      const body = document.createElement('div');
+      body.style.padding = 'var(--space-md)';
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+      body.style.gap = 'var(--space-md)';
+      dialog.appendChild(body);
+
+      const intro = document.createElement('p');
+      intro.style.color = 'var(--text-secondary)';
+      intro.style.margin = '0';
+      intro.textContent =
+        `Apply one attribution to all ${count} tokens. This travels in the bundle's `
+        + `Copy attributions output. Leave blank to skip attribution on this batch.`;
+      body.appendChild(intro);
+
+      const attrInput = document.createElement('input');
+      attrInput.type = 'text';
+      attrInput.className = 'select-full';
+      attrInput.placeholder = 'e.g. "Token Pack X — CC-BY 4.0 by Creator Name"';
+      body.appendChild(attrInput);
+      setTimeout(() => attrInput.focus(), 0);
+
+      const linkInput = document.createElement('input');
+      linkInput.type = 'url';
+      linkInput.className = 'select-full';
+      linkInput.placeholder = 'Optional attribution link (URL)';
+      body.appendChild(linkInput);
+
+      const licInput = document.createElement('input');
+      licInput.type = 'text';
+      licInput.className = 'select-full';
+      licInput.placeholder = 'Optional licence label, e.g. "CC-BY 4.0"';
+      body.appendChild(licInput);
+
+      const footer = document.createElement('div');
+      footer.style.padding = 'var(--space-md)';
+      footer.style.borderTop = '1px solid var(--border)';
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'flex-end';
+      footer.style.gap = 'var(--space-sm)';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn--ghost';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', () => done(null));
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'btn btn--primary';
+      okBtn.textContent = `Upload ${count}`;
+      okBtn.addEventListener('click', () => done({
+        attribution:     attrInput.value.trim(),
+        attributionLink: linkInput.value.trim(),
+        license:         licInput.value.trim(),
+      }));
+      footer.append(cancelBtn, okBtn);
+      dialog.appendChild(footer);
+
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') done(null);
+        if (e.key === 'Enter' && document.activeElement?.tagName === 'INPUT') okBtn.click();
+      };
+      document.addEventListener('keydown', onKey);
+
+      function done(value: SharedAttribution | null): void {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        resolve(value);
+      }
+      document.body.appendChild(overlay);
+    });
+  }
+
+  /** Save a single uploaded file as an ImageAsset, optionally tagged
+   *  with a shared attribution / link / licence from the bulk-upload
+   *  prompt. */
+  private async _saveUpload(file: File, shared: SharedAttribution | undefined): Promise<void> {
     const name = file.name.replace(/\.[^.]+$/, '');
     const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
     const id = 'upload-' + generateId();
+    const attribution: Partial<ImageAsset> = {};
+    if (shared?.attribution)     attribution.attribution     = shared.attribution;
+    if (shared?.attributionLink) attribution.attributionLink = shared.attributionLink;
+    if (shared?.license)         attribution.license         = shared.license;
     if (isSvg) {
-      // Store SVG as text — small, fillable at render time. We don't try to
-      // detect tintability automatically (a single-fill SVG would be, but
-      // multi-colour SVGs wouldn't); user can toggle in a later edit pass.
       const svgSource = await file.text();
       const asset: ImageAsset = {
         id, name, source: 'upload',
         categoryId: this.selectedCategoryId,
-        tintable: false, // safe default for arbitrary user SVGs
+        tintable: false,
         svgSource,
         mimeType: 'image/svg+xml',
         addedAt: Date.now(),
+        ...attribution,
       };
       await ImageAssetStore.save(asset);
     } else {
@@ -823,10 +959,10 @@ export class ImageAssetModal {
         blob: file,
         mimeType: file.type,
         addedAt: Date.now(),
+        ...attribution,
       };
       await ImageAssetStore.save(asset);
     }
-    await this._reload();
   }
 
   // ─── Grid ────────────────────────────────────────────────────────────────
