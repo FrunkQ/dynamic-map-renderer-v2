@@ -133,6 +133,14 @@ export async function seedImageAssetsIfNeeded(): Promise<void> {
     }
   }
 
+  // 4a. One-shot cleanup: an early dev seed shipped a Playwrite family
+  //     name that doesn't exist on Google Fonts (Playwrite England Joined
+  //     vs the real Playwrite GB J Guides). Drop the stale entry so the
+  //     correct one below can take its place. Idempotent — no-op if the
+  //     stale id was never created.
+  const stalePlaywrite = await ImageAssetStore.get('font-bundled-playwrite-england-joined');
+  if (stalePlaywrite) await ImageAssetStore.delete('font-bundled-playwrite-england-joined');
+
   // 4. Seed the bundled Google Fonts as first-class ImageAsset entries
   //    (source='font') in the Fonts category. Deterministic ids by family
   //    name so the seed is idempotent and bundle round-trips don't

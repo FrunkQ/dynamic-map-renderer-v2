@@ -1643,29 +1643,35 @@ option.select-option--add {
 }
 .img-modal-more-status { color: var(--text-dim); font-size: 0.85rem; }
 
-/* Fonts category — read-only list, not a grid. */
+/* Fonts category — vertical stack per row (name → pangram → meta). */
 .img-modal-font-row {
   grid-column: 1 / -1;
   display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-md);
   border: 1px solid var(--border);
   border-radius: 4px;
   background: rgba(255,255,255,0.02);
+  position: relative;
 }
-.img-modal-font-sample {
-  font-size: 1.5rem;
-  min-width: 200px;
+.img-modal-font-name {
+  font-size: 0.95rem;
+  font-weight: 600;
   color: var(--text);
 }
+.img-modal-font-sample {
+  font-size: 1.6rem;
+  line-height: 1.25;
+  color: var(--text);
+  margin: 2px 0;
+}
 .img-modal-font-meta {
-  flex: 1;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--text-dim);
 }
-.img-modal-font-vibe { font-style: italic; margin-bottom: 2px; }
-.img-modal-font-attrib { font-size: 0.78rem; }
+.img-modal-font-vibe   { font-style: italic; }
+.img-modal-font-attrib { font-size: 0.78rem; margin-top: 2px; }
 
 /* Footer with shared Attributions button. */
 .img-modal-footer {

@@ -6,7 +6,7 @@ import { gameIconsConnector } from './connectors/gameIcons.ts';
 import { lucideConnector } from './connectors/lucide.ts';
 import { generateId } from '../utils/id.ts';
 import { UNICODE_LICENSE_LABEL } from './seedImageAssets.ts';
-import { ensureFontsLoaded } from './fontCatalog.ts';
+import { ensureFontsLoaded, pangramFor } from './fontCatalog.ts';
 import { fuzzySearch } from '../utils/fuzzySearch.ts';
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
@@ -111,6 +111,22 @@ function suggestCategoryFromTags(tags: readonly string[]): string | null {
     if (rule.keywords.some((kw) => lower.has(kw))) return rule.categoryId;
   }
   return null;
+}
+
+/** Pull the family name from either a Google Fonts specimen URL
+ *  (https://fonts.google.com/specimen/Roboto+Slab) or a raw family string.
+ *  Returns null when the input is empty after parsing. */
+function extractFamilyFromInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const urlMatch = trimmed.match(/fonts\.google\.com\/specimen\/([^?#/]+)/i);
+  if (urlMatch && urlMatch[1]) {
+    try { return decodeURIComponent(urlMatch[1].replace(/\+/g, ' ')); }
+    catch { return urlMatch[1].replace(/\+/g, ' '); }
+  }
+  // Not a URL — assume it's already a family name. Strip surrounding quotes
+  // people sometimes paste from prose.
+  return trimmed.replace(/^["']|["']$/g, '');
 }
 
 /**
@@ -774,12 +790,22 @@ export class ImageAssetModal {
     const row = document.createElement('div');
     row.className = 'img-modal-font-row';
 
+    // Name first — bold, theme text, easy to scan when browsing.
+    const name = document.createElement('div');
+    name.className = 'img-modal-font-name';
+    name.textContent = font.name;
+    row.appendChild(name);
+
+    // Pangram in the actual family, sitting below the name as the visual
+    // showcase. Deterministic pick keeps the sample consistent across
+    // renders so each font has its own "voice".
     const sample = document.createElement('div');
     sample.className = 'img-modal-font-sample';
     sample.style.fontFamily = `'${font.fontFamily ?? font.name}', sans-serif`;
-    sample.textContent = font.name;
+    sample.textContent = pangramFor(font.fontFamily ?? font.name);
     row.appendChild(sample);
 
+    // Extra info: vibe tags + attribution + clickable licence chip.
     const meta = document.createElement('div');
     meta.className = 'img-modal-font-meta';
     const attrib = font.attribution ?? font.name;
@@ -819,27 +845,57 @@ export class ImageAssetModal {
     return row;
   }
 
+  /** Accept either a Google Fonts specimen URL or a raw family name, then
+   *  validate by hitting the Google Fonts CSS API. The CSS endpoint returns
+   *  real `@font-face` rules when the family exists, or HTTP 400 (or empty
+   *  CSS) when it doesn't — so a positive check is both presence-of-status
+   *  AND presence-of-`@font-face` in the body. */
   private async _promptAddGoogleFont(): Promise<void> {
-    const family = prompt('Google Fonts family name (e.g. "Roboto Slab"):');
-    if (!family) return;
-    const trimmed = family.trim();
-    if (!trimmed) return;
-    const id = 'font-user-' + trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const existing = await ImageAssetStore.get(id);
-    if (existing) {
-      alert(`"${trimmed}" is already in the library.`);
+    const raw = prompt(
+      'Paste the Google Fonts specimen URL or type the family name:\n' +
+      '(e.g. "https://fonts.google.com/specimen/Roboto+Slab"\n' +
+      '  or  "Roboto Slab")',
+    );
+    if (!raw) return;
+    const family = extractFamilyFromInput(raw.trim());
+    if (!family) {
+      alert("Couldn't parse a family name from that input. Try the URL from fonts.google.com or just the family name like \"Roboto Slab\".");
       return;
     }
-    const slug = encodeURIComponent(trimmed).replace(/%20/g, '+');
+    const id = 'font-user-' + family.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const existing = await ImageAssetStore.get(id);
+    if (existing) {
+      alert(`"${family}" is already in the library.`);
+      return;
+    }
+    const slug = encodeURIComponent(family).replace(/%20/g, '+');
+    // Validate against the Google Fonts CSS API. Successful response
+    // means the family really exists and Google will serve a face for it.
+    let valid = false;
+    try {
+      const res = await fetch(`https://fonts.googleapis.com/css2?family=${slug}&display=swap`);
+      if (res.ok) {
+        const css = await res.text();
+        valid = /@font-face\s*\{/.test(css);
+      }
+    } catch (err) {
+      console.warn('[Add Google Font] validation fetch failed:', err);
+    }
+    if (!valid) {
+      alert(
+        `Google Fonts didn't recognise "${family}". Check the spelling matches the family page on fonts.google.com — case and punctuation matter (e.g. "IM Fell DW Pica" not "IM Fell").`,
+      );
+      return;
+    }
     const asset: ImageAsset = {
       id,
-      name:            trimmed,
+      name:            family,
       source:          'font',
       categoryId:      SYSTEM_CATEGORY_IDS.fonts,
       tintable:        false,
-      fontFamily:      trimmed,
-      license:         'See Google Fonts page',
-      attribution:     `${trimmed} via Google Fonts`,
+      fontFamily:      family,
+      license:         'SIL OFL 1.1 (per Google Fonts)',
+      attribution:     `${family} via Google Fonts`,
       attributionLink: `https://fonts.google.com/specimen/${slug}`,
       sourceUrl:       `https://fonts.google.com/specimen/${slug}`,
       tags:            ['user-added'],

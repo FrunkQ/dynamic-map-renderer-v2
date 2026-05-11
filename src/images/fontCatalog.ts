@@ -25,6 +25,41 @@ export interface FontCatalogEntry {
   sourceUrl:     string;
 }
 
+/** Pangrams used as font samples in the Fonts category. Each font gets a
+ *  deterministic pick from this list (hash of the family name modulo the
+ *  array length) so the sample is consistent across re-renders but varies
+ *  between fonts. All pangrams hit the full A–Z so the font's character
+ *  shows through every glyph. */
+const SAMPLE_PANGRAMS: ReadonlyArray<string> = [
+  'Sphinx of black quartz, judge my vow.',
+  "Cthulhu's big jaw vexed murky zany fops.",
+  'Warp five quaking ducks by my lazy vortex.',
+  'The five boxing wizards jump quickly.',
+  'Pack my box with five dozen liquor jugs.',
+  'Quickly zap five bad monks with my wax jar.',
+  'Glitchy cyborgs vexed a jumpy pink dwarf.',
+  'Whack five jumpy ducks over my glazing box.',
+  'Mappadux: Warp five lazy ducks by the vortex.',
+  'How quickly daft jumping zebras vex.',
+  'Big foxy wizards jump quickly, eh?',
+  "My jovial dwarf packs fix'd quartz.",
+  "Blowzy night-frumps vex'd Jack Q.",
+  'Jackdaws love my big sphinx of quartz.',
+  'Glazed nymphs jog back for quick waltz.',
+  'Waltz, bad nymph, for quick jigs vex.',
+  "Glibly, fax vex'd Mr. Jow's sphinx quartz.",
+  'Jived fox nymph grabs quick waltz.',
+  'Six big jet planes zoomed over a fuzzy quack.',
+  'Ghouls fix murky quartz by a jagged spawn.',
+];
+
+/** Deterministic pangram for a given font key (usually the family name). */
+export function pangramFor(key: string): string {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
+  return SAMPLE_PANGRAMS[Math.abs(h) % SAMPLE_PANGRAMS.length]!;
+}
+
 /** Lazy-load font families via the Google Fonts CSS API. Each call replaces
  *  the previous <link> so newly-added user fonts are picked up without a
  *  reload. Pass the live list of families from the imageAssets store —
@@ -124,12 +159,12 @@ export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
     sourceUrl:   'https://fonts.google.com/specimen/Press+Start+2P',
   },
   {
-    name:        'Playwrite England Joined',
-    family:      'Playwrite England Joined',
+    name:        'Playwrite GB J Guides',
+    family:      'Playwrite GB J Guides',
     vibe:        'Cursive school handwriting — diaries, polite letters',
-    attribution: 'Playwrite England Joined by TypeTogether',
+    attribution: 'Playwrite GB J Guides by TypeTogether',
     license:     'SIL OFL 1.1',
-    sourceUrl:   'https://fonts.google.com/specimen/Playwrite+England+Joined',
+    sourceUrl:   'https://fonts.google.com/specimen/Playwrite+GB+J+Guides',
   },
   {
     name:        'Seaweed Script',
