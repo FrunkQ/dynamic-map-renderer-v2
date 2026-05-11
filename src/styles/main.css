@@ -1802,11 +1802,15 @@ option.select-option--add {
 .txt-map-page {
   /* Dimensions are set in JS to fit the wrap while keeping the chosen
    * aspect ratio — see TextMapEditor._fitPage. Font changes never alter
-   * size that way. */
+   * size that way. Line-height matches the rasteriser's foreignObject
+   * style so multi-line blocks pack at the same density in the preview
+   * and the rasterised map — without this the rasteriser's 1.45
+   * line-height made paragraphs look proportionally taller. */
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
   display: block;
   overflow: hidden;
   position: relative;
+  line-height: 1.45;
 }
 .txt-map-page-content {
   width: 100%;

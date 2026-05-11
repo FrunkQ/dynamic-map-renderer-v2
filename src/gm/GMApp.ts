@@ -19,7 +19,7 @@ import { TransitionPanel } from '../transitions/TransitionPanel.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode } from '../p2p/roomCode.ts';
-import { saveSession, loadSession, getAllMaps, deleteMap, clearAssetLibraries, clearEverything } from '../storage/db.ts';
+import { saveSession, loadSession, getAllMaps, getMap, deleteMap, clearAssetLibraries, clearEverything } from '../storage/db.ts';
 import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY } from '../storage/localSettings.ts';
 import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
@@ -1413,7 +1413,24 @@ export class GMApp {
   }
 
   private bindUIControls(): void {
-    this.mapAssetModal = new MapAssetModal(this.maps, () => { /* assigned in handler below */ });
+    this.mapAssetModal = new MapAssetModal(
+      this.maps,
+      () => { /* onPick is assigned per-open call below */ },
+      // When an asset is edited (currently: text-map handout edits), reload
+      // the active map if it points at this asset — without this the GM
+      // canvas keeps showing the pre-edit rasterisation until a manual
+      // reload. The MapAssetModal already invalidated the rasterisation
+      // cache, so loadMap re-fetches from MapAssetStore and the rasteriser
+      // produces a fresh PNG with the new config.
+      async (assetId: string) => {
+        const currentId = this.state.snapshot().map?.id;
+        if (!currentId) return;
+        const storedMap = await getMap(currentId);
+        if (storedMap?.mapAssetId === assetId) {
+          await this.loadMap(storedMap);
+        }
+      },
+    );
 
     // Click the GM brand icon (top-left duck) to copy the mappadux.com URL
     // to the clipboard. Tiny share-friendly shortcut so GMs can paste the

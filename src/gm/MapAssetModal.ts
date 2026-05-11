@@ -45,6 +45,7 @@ type MapPickedCallback = (map: StoredMap) => void;
 export class MapAssetModal {
   private el!: HTMLElement;
   private onPick: MapPickedCallback;
+  private onAssetUpdated: (assetId: string) => void;
   private maps: MapManager;
   private uploadFile: File | null = null;
   /** assetId → object URL for hover-preview thumbnails. Created lazily on
@@ -52,9 +53,14 @@ export class MapAssetModal {
   private previewUrlCache = new Map<string, string>();
   private previewPopover: HTMLElement | null = null;
 
-  constructor(maps: MapManager, onPick: MapPickedCallback) {
+  constructor(
+    maps: MapManager,
+    onPick: MapPickedCallback,
+    onAssetUpdated: (assetId: string) => void = () => {},
+  ) {
     this.maps   = maps;
     this.onPick = onPick;
+    this.onAssetUpdated = onAssetUpdated;
     this._buildDOM();
     this._bindEvents();
   }
@@ -446,6 +452,11 @@ export class MapAssetModal {
       // stale PNG from before the edit.
       MapAssetStore.invalidateRuntimeCache(asset.id);
       await this._renderLibrary();
+      // Tell the host (GMApp) the asset changed — if the currently
+      // displayed map is this one, it'll re-fetch the blob and repaint
+      // the texture. Without this the edits sit in IDB but the canvas
+      // keeps showing the pre-edit render until a manual reload.
+      this.onAssetUpdated(asset.id);
     });
     // Click any of the scale pills to re-calibrate without opening the pen editor.
     row.querySelector<HTMLElement>('.map-recal-pill')?.addEventListener('click', (e) => { e.stopPropagation(); void openCalibration(); });
