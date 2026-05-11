@@ -1705,10 +1705,10 @@ option.select-option--add {
 
 /* ── Text Map editor (Stream C) ──────────────────────────────────────── */
 .txt-map-dialog {
-  width: 1100px;
-  max-width: 95vw;
-  height: 760px;
-  max-height: 92vh;
+  /* Edge-to-edge — handouts get all the screen real estate we can spare.
+   * Borderless feel; the modal-overlay backdrop is what frames it. */
+  width: 96vw;
+  height: 94vh;
 }
 .txt-map-body {
   flex: 1;
@@ -1777,32 +1777,29 @@ option.select-option--add {
 }
 .txt-map-preview-wrap {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   background: rgba(0,0,0,0.25);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: var(--space-md);
   min-height: 0;
+  min-width:  0;
   overflow: hidden;
 }
 .txt-map-preview {
-  max-width: 100%;
-  max-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .txt-map-page {
-  max-width: 100%;
-  max-height: 100%;
-  width: 100%;
+  /* Dimensions are set in JS to fit the wrap while keeping the chosen
+   * aspect ratio — see TextMapEditor._fitPage. Font changes never alter
+   * size that way. */
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  display: block;
   overflow: hidden;
+  position: relative;
 }
 .txt-map-page-content {
   width: 100%;

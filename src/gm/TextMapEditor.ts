@@ -47,6 +47,7 @@ export class TextMapEditor {
   private resolver: ((value: TextMapEditorResult | null) => void) | null = null;
   private draft:    TextMapConfig = { ...DEFAULT_TEXT_MAP };
   private name:     string = 'New Handout';
+  private resizeObserver: ResizeObserver | null = null;
   private onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') this._resolve(null);
   };
@@ -74,6 +75,10 @@ export class TextMapEditor {
   }
 
   private _resolve(value: TextMapEditorResult | null): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     if (this.overlay) this.overlay.remove();
     this.overlay = null;
     document.removeEventListener('keydown', this.onKey);
@@ -307,17 +312,19 @@ export class TextMapEditor {
     return ta;
   }
 
-  /** Render the right-hand preview at intrinsic dimensions, then scale to
-   *  fit the preview area. Sanitised HTML lives inside a flex-centered
-   *  content div; the outer div carries aspect ratio + background. */
+  /** Render the preview. The page element's pixel dimensions are computed
+   *  in `_fitPage()` from the container size + chosen aspect ratio, so
+   *  changing fonts / colours / body text never shifts the canvas size —
+   *  only the wrap's available room does (handled by ResizeObserver).
+   *  Sanitised body HTML lives inside an inner scroll container. */
   private _renderPreview(): void {
     const host = this.overlay?.querySelector<HTMLElement>('#txt-map-preview');
-    if (!host) return;
+    const wrap = this.overlay?.querySelector<HTMLElement>('.txt-map-preview-wrap');
+    if (!host || !wrap) return;
     host.innerHTML = '';
 
     const page = document.createElement('div');
     page.className = 'txt-map-page';
-    page.style.aspectRatio = `${this.draft.width} / ${this.draft.height}`;
     page.style.backgroundColor = this.draft.backgroundColor;
     page.style.color = this.draft.textColor;
     page.style.fontFamily = `'${this.draft.fontFamily}', sans-serif`;
@@ -329,6 +336,32 @@ export class TextMapEditor {
     page.appendChild(content);
 
     host.appendChild(page);
+    this._fitPage();
+
+    // Set up the resize observer once — re-fit when the wrap changes size
+    // (dialog resize, viewport resize). Idempotent across renders.
+    if (!this.resizeObserver) {
+      this.resizeObserver = new ResizeObserver(() => this._fitPage());
+      this.resizeObserver.observe(wrap);
+    }
+  }
+
+  /** Compute pixel width/height for the page so it fits inside the wrap
+   *  while honouring the chosen aspect ratio. The page's dimensions are
+   *  then independent of content — font changes don't reshape it. */
+  private _fitPage(): void {
+    const page = this.overlay?.querySelector<HTMLElement>('.txt-map-page');
+    const wrap = this.overlay?.querySelector<HTMLElement>('.txt-map-preview-wrap');
+    if (!page || !wrap) return;
+    const cw = wrap.clientWidth - 8;
+    const ch = wrap.clientHeight - 8;
+    if (cw <= 0 || ch <= 0) return;
+    const aspect = this.draft.width / this.draft.height;
+    let w = cw;
+    let h = w / aspect;
+    if (h > ch) { h = ch; w = h * aspect; }
+    page.style.width  = `${Math.round(w)}px`;
+    page.style.height = `${Math.round(h)}px`;
   }
 
   private async _onSave(): Promise<void> {
