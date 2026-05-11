@@ -2052,7 +2052,7 @@ export class GMApp {
       onSelect: () => { void this.openSoundLibrary(); },
     });
     this.hamburger.addItem({
-      label: 'Image Library…',
+      label: 'Small Assets Library…',
       onSelect: () => { void this.openImageLibrary(); },
     });
 

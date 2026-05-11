@@ -27,6 +27,24 @@ export interface FontCatalogEntry {
   sourceUrl:     string;
 }
 
+/** Lazy-load the catalog's font files via the Google Fonts CSS API so the
+ *  library can render samples in the actual font instead of system sans.
+ *  Runs once per page lifetime; Stream C will replace this with bundled
+ *  self-hosted woff2 + an @font-face block so the fonts work offline. */
+let _fontsLoaded = false;
+export function ensureFontsLoaded(): void {
+  if (_fontsLoaded) return;
+  _fontsLoaded = true;
+  const families = BUNDLED_FONTS
+    .map((f) => f.family.replace(/ /g, '+'))
+    .map((f) => `family=${f}`)
+    .join('&');
+  const link = document.createElement('link');
+  link.rel  = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+  document.head.appendChild(link);
+}
+
 export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
   {
     name:        'Cinzel',

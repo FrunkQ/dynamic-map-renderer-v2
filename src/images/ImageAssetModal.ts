@@ -6,7 +6,7 @@ import { gameIconsConnector } from './connectors/gameIcons.ts';
 import { lucideConnector } from './connectors/lucide.ts';
 import { generateId } from '../utils/id.ts';
 import { UNICODE_LICENSE_LABEL } from './seedImageAssets.ts';
-import { BUNDLED_FONTS } from './fontCatalog.ts';
+import { BUNDLED_FONTS, ensureFontsLoaded } from './fontCatalog.ts';
 import { fuzzySearch } from '../utils/fuzzySearch.ts';
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
@@ -131,7 +131,11 @@ export interface ImageAssetModalOptions {
 
 export class ImageAssetModal {
   private overlay: HTMLElement | null = null;
-  private selectedCategoryId: string  = SYSTEM_CATEGORY_IDS.unicode;
+  // Opens on "All" by default so users land on a full view of their library
+  // rather than seeing only the Unicode presets. Callers can override via
+  // ImageAssetModalOptions.initialCategoryId (e.g. text-map editor opening
+  // straight to the Textmap category).
+  private selectedCategoryId: string  = ALL_CATEGORY_ID;
   private searchQuery: string         = '';
   private categories: ImageCategory[] = [];
   private assets: ImageAsset[]        = [];
@@ -203,7 +207,7 @@ export class ImageAssetModal {
     header.className = 'modal-header';
     const title = document.createElement('span');
     title.className = 'modal-title';
-    title.textContent = 'Image Library';
+    title.textContent = 'Small Assets Library';
     header.appendChild(title);
     // "Stored" pill — same look as the per-row Stored tag on the Audio and
     // Map libraries, but pinned to the modal header because every icon in
@@ -733,6 +737,9 @@ export class ImageAssetModal {
    *  until Stream C wires the actual @font-face), the vibe hint, and the
    *  attribution + clickable licence/source link. */
   private _renderFontsCategory(host: HTMLElement): void {
+    // Pull the Google Fonts CSS on first view so the samples render in
+    // their actual family. Stream C will replace this with bundled woff2.
+    ensureFontsLoaded();
     const intro = document.createElement('div');
     intro.className = 'img-modal-empty';
     intro.style.gridColumn = '1 / -1';

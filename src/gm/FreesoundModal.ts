@@ -660,11 +660,20 @@ export class FreesoundModal {
     const modal = document.getElementById('attributions-modal');
     if (!modal) return;
     const { ImageAssetStore } = await import('../images/ImageAssetStore.ts');
+    const { BUNDLED_FONTS }   = await import('../images/fontCatalog.ts');
     const [audioList, mapList, imageList] = await Promise.all([
       AudioAssetStore.getAttributions(),
       MapAssetStore.getAttributions(),
       ImageAssetStore.getAttributions(),
     ]);
+    // Fonts are always part of every pack (bundled with the app); list them
+    // verbatim so the OFL attribution requirement is always satisfied.
+    const fontList = BUNDLED_FONTS.map((f) => ({
+      name:        f.name,
+      attribution: f.attribution,
+      license:     f.license,
+      pageUrl:     f.sourceUrl,
+    }));
     const bodyEl = modal.querySelector('#attr-list')!;
     bodyEl.innerHTML = '';
 
@@ -674,6 +683,7 @@ export class FreesoundModal {
       this._appendAttrSection(bodyEl, 'Audio assets', audioList);
       this._appendAttrSection(bodyEl, 'Map assets',   mapList);
       this._appendAttrSection(bodyEl, 'Image assets', imageList);
+      this._appendAttrSection(bodyEl, 'Fonts',        fontList);
     }
     const status = modal.querySelector<HTMLElement>('#attr-copy-status');
     if (status) status.textContent = '';
@@ -709,11 +719,18 @@ export class FreesoundModal {
     const modal  = document.getElementById('attributions-modal');
     const status = modal?.querySelector<HTMLElement>('#attr-copy-status') ?? null;
     const { ImageAssetStore } = await import('../images/ImageAssetStore.ts');
+    const { BUNDLED_FONTS }   = await import('../images/fontCatalog.ts');
     const [audioList, mapList, imageList] = await Promise.all([
       AudioAssetStore.getAttributions(),
       MapAssetStore.getAttributions(),
       ImageAssetStore.getAttributions(),
     ]);
+    const fontList = BUNDLED_FONTS.map((f) => ({
+      name:        f.name,
+      attribution: f.attribution,
+      license:     f.license,
+      pageUrl:     f.sourceUrl,
+    }));
     if (audioList.length === 0 && mapList.length === 0 && imageList.length === 0) {
       if (status) status.textContent = 'Nothing to copy.';
       return;
@@ -742,9 +759,14 @@ export class FreesoundModal {
     if (imageList.length > 0) {
       lines.push('Image assets used in map pack:', '');
       for (const item of imageList) lines.push(formatRow(item, 'Icon'));
+      lines.push('');
+    }
+    if (fontList.length > 0) {
+      lines.push('Fonts bundled with Mappadux (Stream C / Text Maps):', '');
+      for (const item of fontList) lines.push(formatRow(item, 'Font'));
     }
     const text = lines.join('\n').trimEnd();
-    const total = audioList.length + mapList.length + imageList.length;
+    const total = audioList.length + mapList.length + imageList.length + fontList.length;
     try {
       await navigator.clipboard.writeText(text);
       if (status) status.textContent = `Copied ${total} entr${total === 1 ? 'y' : 'ies'} to clipboard.`;
