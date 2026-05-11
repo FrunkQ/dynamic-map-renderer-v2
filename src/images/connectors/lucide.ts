@@ -6,12 +6,19 @@ import type { ImageSourceConnector, ConnectorManifestEntry } from './types.ts';
  * Excellent for UI / interface / utility markers (clock, key, marker pin,
  * compass, info badge, etc).
  *
- * SVGs are served via jsDelivr from the lucide-static npm package. v2.11
- * ships a curated starter manifest of ~30 entries; the full Lucide set is
- * ~1,500 icons and can grow over time.
+ * SVGs are served via jsDelivr from the lucide-static npm package. On first
+ * browse the connector fetches `tags.json` from the same CDN — Lucide
+ * publishes a complete name→tags index there (~1,500 entries). The starter
+ * manifest below is a fallback for when the network fetch fails and a hint
+ * of what to expect; once tags.json loads, search runs across the entire
+ * catalog.
  */
 
-const SVG_BASE = 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons';
+const SVG_BASE      = 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons';
+const TAGS_INDEX_URL = 'https://cdn.jsdelivr.net/npm/lucide-static@latest/tags.json';
+
+// In-memory cache so repeated tab switches don't re-fetch the index.
+let cachedManifest: ConnectorManifestEntry[] | null = null;
 
 const STARTER_MANIFEST: ConnectorManifestEntry[] = [
   // ── Navigation / location ─────────────────────────────────────────────
@@ -61,7 +68,36 @@ export const lucideConnector: ImageSourceConnector = {
   tintable:    true,
 
   async loadManifest(): Promise<ConnectorManifestEntry[]> {
-    return STARTER_MANIFEST;
+    if (cachedManifest) return cachedManifest;
+    // Try the full upstream index first. Lucide ships tags.json with the
+    // shape { "icon-slug": ["tag1","tag2",...], ... } — perfect for our
+    // search-by-tag flow.
+    try {
+      const res = await fetch(TAGS_INDEX_URL);
+      if (res.ok) {
+        const data = await res.json() as Record<string, unknown>;
+        const entries: ConnectorManifestEntry[] = [];
+        for (const [slug, raw] of Object.entries(data)) {
+          if (!slug) continue;
+          const tags = Array.isArray(raw) ? raw.filter((t): t is string => typeof t === 'string') : [];
+          entries.push({
+            slug,
+            name: humaniseSlug(slug),
+            tags,
+          });
+        }
+        if (entries.length > 0) {
+          cachedManifest = entries.sort((a, b) => a.name.localeCompare(b.name));
+          return cachedManifest;
+        }
+      }
+    } catch (err) {
+      console.warn('[Lucide] tags.json fetch failed; falling back to bundled starter manifest:', err);
+    }
+    // Network failed or response was empty — surface the curated subset so
+    // browsing still works offline / behind aggressive firewalls.
+    cachedManifest = STARTER_MANIFEST.slice();
+    return cachedManifest;
   },
 
   buildUrl(entry: ConnectorManifestEntry): string {
@@ -78,3 +114,11 @@ export const lucideConnector: ImageSourceConnector = {
     return await res.text();
   },
 };
+
+/** Turn 'arrow-up-right' into 'Arrow Up Right' for display. */
+function humaniseSlug(slug: string): string {
+  return slug
+    .split('-')
+    .map((part) => part.length === 0 ? '' : part[0]!.toUpperCase() + part.slice(1))
+    .join(' ');
+}

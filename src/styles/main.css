@@ -2178,7 +2178,11 @@ option.select-option--add {
 .fs-api-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
 .fs-api-link:hover { color: var(--accent-hover); }
 
-/* Attributions modal */
+/* Attributions modal sits on top of any other open library modal. The
+ *  Image Library spawns dynamically and would land later in the DOM,
+ *  out-stacking the static #attributions-modal at the same z-index. Bump
+ *  it explicitly so the rollup always appears in front. */
+#attributions-modal { z-index: 1100; }
 .attr-intro { font-size: var(--font-size-sm); color: var(--text-secondary); }
 .attr-list { display: flex; flex-direction: column; gap: 6px; margin-top: var(--space-xs); }
 .attr-row {
