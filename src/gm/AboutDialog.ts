@@ -115,12 +115,13 @@ export class AboutDialog {
     body.className = 'about-body';
     dialog.appendChild(body);
 
-    // ── Edit action footer (only in edit mode) — Cancel + Save at the
-    //    bottom-right where dialog actions are conventionally found. Hidden
-    //    in display mode.
+    // ── Action footer — bottom-right buttons.
+    //    Edit mode: Cancel + Save.
+    //    Display mode: OK (close). The × in the header still works too, but
+    //    a discoverable OK button at the bottom matches user expectations.
+    const actionFooter = document.createElement('div');
+    actionFooter.className = 'about-actions';
     if (this.editing) {
-      const actionFooter = document.createElement('div');
-      actionFooter.className = 'about-actions';
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
       cancelBtn.className = 'btn btn--ghost';
@@ -137,8 +138,15 @@ export class AboutDialog {
         });
       });
       actionFooter.append(cancelBtn, saveBtn);
-      dialog.appendChild(actionFooter);
+    } else {
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'btn btn--primary';
+      okBtn.textContent = 'OK';
+      okBtn.addEventListener('click', () => this._resolve(null));
+      actionFooter.appendChild(okBtn);
     }
+    dialog.appendChild(actionFooter);
 
     // ── Always-on Mappadux footer (never editable) ──
     const footer = document.createElement('div');
