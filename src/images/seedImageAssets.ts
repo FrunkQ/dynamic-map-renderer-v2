@@ -1,6 +1,7 @@
 import type { ImageAsset, ImageCategory } from '../types.ts';
 import { SYSTEM_CATEGORY_IDS } from '../types.ts';
 import { ImageAssetStore } from './ImageAssetStore.ts';
+import { BUNDLED_FONTS } from './fontCatalog.ts';
 
 /**
  * First-run seeding for the Image Assets library.
@@ -131,4 +132,37 @@ export async function seedImageAssetsIfNeeded(): Promise<void> {
       await ImageAssetStore.update(a.id, { license: UNICODE_LICENSE_LABEL });
     }
   }
+
+  // 4. Seed the bundled Google Fonts as first-class ImageAsset entries
+  //    (source='font') in the Fonts category. Deterministic ids by family
+  //    name so the seed is idempotent and bundle round-trips don't
+  //    duplicate. User-added Google Fonts go in alongside them with
+  //    different id prefixes.
+  for (const font of BUNDLED_FONTS) {
+    const id = bundledFontId(font.family);
+    const existing = await ImageAssetStore.get(id);
+    if (existing) continue;
+    const asset: ImageAsset = {
+      id,
+      name:            font.name,
+      source:          'font',
+      categoryId:      SYSTEM_CATEGORY_IDS.fonts,
+      tintable:        false, // fonts are coloured by the rendering context
+      fontFamily:      font.family,
+      license:         font.license,
+      attribution:     font.attribution,
+      attributionLink: font.sourceUrl,
+      sourceUrl:       font.sourceUrl,
+      tags:            font.vibe.toLowerCase().split(/[ ,/—-]+/).filter(Boolean),
+      addedAt:         Date.now(),
+    };
+    await ImageAssetStore.save(asset);
+  }
+}
+
+/** Deterministic ImageAsset id for a bundled font family. Stable across
+ *  app versions and across the bundle round-trip so re-seeding never
+ *  duplicates a font the user already has. */
+export function bundledFontId(family: string): string {
+  return 'font-bundled-' + family.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }

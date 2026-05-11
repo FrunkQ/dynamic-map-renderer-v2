@@ -105,6 +105,9 @@ export class ImageAssetStore {
     for (const a of all) {
       // Skip unicode entries — already represented by the summary row above.
       if (a.source === 'unicode') continue;
+      // Skip fonts — they have their own dedicated section in the rollup
+      // via getFontAttributions().
+      if (a.source === 'font') continue;
       // Skip user uploads with no attribution declared — the user knows.
       if (a.source === 'upload' && !a.attribution && !a.license) continue;
 
@@ -116,6 +119,27 @@ export class ImageAssetStore {
         attribution: a.attribution || fallback,
         license,
         pageUrl,
+      });
+    }
+    return results;
+  }
+
+  /** Attribution rows for fonts only — kept separate from getAttributions so
+   *  the unified Attributions modal can render a dedicated "Fonts" section.
+   *  Walks both bundled defaults and user-added Google Fonts via the same
+   *  source='font' filter. */
+  static async getFontAttributions(): Promise<
+    Array<{ name: string; attribution: string; license: string; pageUrl: string }>
+  > {
+    const all = await ImageAssetStore.getAll();
+    const results: Array<{ name: string; attribution: string; license: string; pageUrl: string }> = [];
+    for (const a of all) {
+      if (a.source !== 'font') continue;
+      results.push({
+        name:        a.name,
+        attribution: a.attribution || `${a.name} via Google Fonts`,
+        license:     a.license ?? 'See Google Fonts page',
+        pageUrl:     a.attributionLink ?? a.sourceUrl ?? '',
       });
     }
     return results;

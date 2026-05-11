@@ -660,24 +660,16 @@ export class FreesoundModal {
     const modal = document.getElementById('attributions-modal');
     if (!modal) return;
     const { ImageAssetStore } = await import('../images/ImageAssetStore.ts');
-    const { BUNDLED_FONTS }   = await import('../images/fontCatalog.ts');
-    const [audioList, mapList, imageList] = await Promise.all([
+    const [audioList, mapList, imageList, fontList] = await Promise.all([
       AudioAssetStore.getAttributions(),
       MapAssetStore.getAttributions(),
       ImageAssetStore.getAttributions(),
+      ImageAssetStore.getFontAttributions(),
     ]);
-    // Fonts are always part of every pack (bundled with the app); list them
-    // verbatim so the OFL attribution requirement is always satisfied.
-    const fontList = BUNDLED_FONTS.map((f) => ({
-      name:        f.name,
-      attribution: f.attribution,
-      license:     f.license,
-      pageUrl:     f.sourceUrl,
-    }));
     const bodyEl = modal.querySelector('#attr-list')!;
     bodyEl.innerHTML = '';
 
-    if (audioList.length === 0 && mapList.length === 0 && imageList.length === 0) {
+    if (audioList.length === 0 && mapList.length === 0 && imageList.length === 0 && fontList.length === 0) {
       bodyEl.innerHTML = '<p class="attr-empty">No assets in library yet.</p>';
     } else {
       this._appendAttrSection(bodyEl, 'Audio assets', audioList);
@@ -719,19 +711,13 @@ export class FreesoundModal {
     const modal  = document.getElementById('attributions-modal');
     const status = modal?.querySelector<HTMLElement>('#attr-copy-status') ?? null;
     const { ImageAssetStore } = await import('../images/ImageAssetStore.ts');
-    const { BUNDLED_FONTS }   = await import('../images/fontCatalog.ts');
-    const [audioList, mapList, imageList] = await Promise.all([
+    const [audioList, mapList, imageList, fontList] = await Promise.all([
       AudioAssetStore.getAttributions(),
       MapAssetStore.getAttributions(),
       ImageAssetStore.getAttributions(),
+      ImageAssetStore.getFontAttributions(),
     ]);
-    const fontList = BUNDLED_FONTS.map((f) => ({
-      name:        f.name,
-      attribution: f.attribution,
-      license:     f.license,
-      pageUrl:     f.sourceUrl,
-    }));
-    if (audioList.length === 0 && mapList.length === 0 && imageList.length === 0) {
+    if (audioList.length === 0 && mapList.length === 0 && imageList.length === 0 && fontList.length === 0) {
       if (status) status.textContent = 'Nothing to copy.';
       return;
     }
@@ -762,7 +748,7 @@ export class FreesoundModal {
       lines.push('');
     }
     if (fontList.length > 0) {
-      lines.push('Fonts bundled with Mappadux (Stream C / Text Maps):', '');
+      lines.push('Fonts (bundled + user-added Google Fonts):', '');
       for (const item of fontList) lines.push(formatRow(item, 'Font'));
     }
     const text = lines.join('\n').trimEnd();

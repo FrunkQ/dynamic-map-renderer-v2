@@ -6,7 +6,7 @@ import { gameIconsConnector } from './connectors/gameIcons.ts';
 import { lucideConnector } from './connectors/lucide.ts';
 import { generateId } from '../utils/id.ts';
 import { UNICODE_LICENSE_LABEL } from './seedImageAssets.ts';
-import { BUNDLED_FONTS, ensureFontsLoaded } from './fontCatalog.ts';
+import { ensureFontsLoaded } from './fontCatalog.ts';
 import { fuzzySearch } from '../utils/fuzzySearch.ts';
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
@@ -735,58 +735,118 @@ export class ImageAssetModal {
     }
   }
 
-  /** Read-only render of the bundled font catalog. Each entry shows the
-   *  name in its own family for preview (loads from system font fallback
-   *  until Stream C wires the actual @font-face), the vibe hint, and the
-   *  attribution + clickable licence/source link. */
+  /** Render the Fonts category from the imageAssets store (source='font').
+   *  Both bundled defaults and user-added Google Fonts live here; each
+   *  shows a large sample in its own family, the licence chip, and a ×
+   *  delete affordance on user-added entries. The "+ Google Font" button
+   *  at the top lets users add more by family name. */
   private _renderFontsCategory(host: HTMLElement): void {
-    // Pull the Google Fonts CSS on first view so the samples render in
-    // their actual family. Stream C will replace this with bundled woff2.
-    ensureFontsLoaded();
+    const fonts = this.assets.filter((a) => a.source === 'font');
+    // Trigger CSS load for whatever families are in the library now —
+    // includes user-added entries that the bundled link wouldn't cover.
+    ensureFontsLoaded(fonts.map((f) => f.fontFamily).filter((f): f is string => !!f));
+
     const intro = document.createElement('div');
     intro.className = 'img-modal-empty';
     intro.style.gridColumn = '1 / -1';
     intro.style.textAlign = 'left';
     intro.innerHTML = `
-      <p style="margin:0 0 var(--space-sm);">
-        <strong>Fonts</strong> bundled with Mappadux ship with Stream C
-        (Text Maps). For now this is a read-only listing so creators can
-        see what's coming and verify the OFL attribution.
+      <p style="margin:0 0 var(--space-sm); display:flex; align-items:center; gap:var(--space-md);">
+        <strong>Fonts</strong> available for Text Maps (Stream C). Loaded
+        on demand from Google Fonts; samples preview in their actual family.
+        <button type="button" class="btn btn--primary btn--xs" id="img-modal-add-font">+ Google Font</button>
       </p>
       <p style="margin:0; font-size:0.85em;">
-        All bundled fonts are SIL OFL 1.1. Names below use the bundled
-        family when Stream C lands; for now they fall back to system fonts.
+        Bundled fonts are SIL OFL 1.1. Add any Google Fonts family by name —
+        the spelling must match the page on fonts.google.com.
       </p>
     `;
     host.appendChild(intro);
+    intro.querySelector<HTMLButtonElement>('#img-modal-add-font')
+      ?.addEventListener('click', () => void this._promptAddGoogleFont());
 
-    for (const font of BUNDLED_FONTS) {
+    for (const font of fonts) {
       host.appendChild(this._fontRow(font));
     }
   }
 
-  private _fontRow(font: typeof BUNDLED_FONTS[number]): HTMLElement {
+  private _fontRow(font: ImageAsset): HTMLElement {
     const row = document.createElement('div');
     row.className = 'img-modal-font-row';
 
     const sample = document.createElement('div');
     sample.className = 'img-modal-font-sample';
-    sample.style.fontFamily = `'${font.family}', sans-serif`;
+    sample.style.fontFamily = `'${font.fontFamily ?? font.name}', sans-serif`;
     sample.textContent = font.name;
     row.appendChild(sample);
 
     const meta = document.createElement('div');
     meta.className = 'img-modal-font-meta';
+    const attrib = font.attribution ?? font.name;
+    const licenseLabel = font.license ?? 'SIL OFL 1.1';
+    const link = font.sourceUrl ?? font.attributionLink ?? '#';
+    const tagsLine = (font.tags ?? []).length > 0
+      ? `<div class="img-modal-font-vibe">${this._esc((font.tags ?? []).join(' · '))}</div>`
+      : '';
     meta.innerHTML = `
-      <div class="img-modal-font-vibe">${this._esc(font.vibe)}</div>
+      ${tagsLine}
       <div class="img-modal-font-attrib">
-        ${this._esc(font.attribution)} ·
-        <a href="${this._esc(font.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="img-modal-license-chip">${this._esc(font.license)}</a>
+        ${this._esc(attrib)} ·
+        <a href="${this._esc(link)}" target="_blank" rel="noopener noreferrer" class="img-modal-license-chip">${this._esc(licenseLabel)}</a>
       </div>
     `;
     row.appendChild(meta);
 
+    // Delete affordance — only on user-added fonts; bundled ones are
+    // protected (their deterministic ids survive the seed re-run).
+    const isBundled = font.id.startsWith('font-bundled-');
+    if (!isBundled) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'img-modal-del';
+      del.title = 'Delete this font';
+      del.textContent = '×';
+      del.style.position = 'static';
+      del.style.opacity = '1';
+      del.addEventListener('click', async () => {
+        if (!confirm(`Delete font "${font.name}"? Text maps using it will revert to fallback fonts.`)) return;
+        await ImageAssetStore.delete(font.id);
+        await this._reload();
+      });
+      row.appendChild(del);
+    }
+
     return row;
+  }
+
+  private async _promptAddGoogleFont(): Promise<void> {
+    const family = prompt('Google Fonts family name (e.g. "Roboto Slab"):');
+    if (!family) return;
+    const trimmed = family.trim();
+    if (!trimmed) return;
+    const id = 'font-user-' + trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const existing = await ImageAssetStore.get(id);
+    if (existing) {
+      alert(`"${trimmed}" is already in the library.`);
+      return;
+    }
+    const slug = encodeURIComponent(trimmed).replace(/%20/g, '+');
+    const asset: ImageAsset = {
+      id,
+      name:            trimmed,
+      source:          'font',
+      categoryId:      SYSTEM_CATEGORY_IDS.fonts,
+      tintable:        false,
+      fontFamily:      trimmed,
+      license:         'See Google Fonts page',
+      attribution:     `${trimmed} via Google Fonts`,
+      attributionLink: `https://fonts.google.com/specimen/${slug}`,
+      sourceUrl:       `https://fonts.google.com/specimen/${slug}`,
+      tags:            ['user-added'],
+      addedAt:         Date.now(),
+    };
+    await ImageAssetStore.save(asset);
+    await this._reload();
   }
 
   private _renderConnectorGrid(host: HTMLElement): void {

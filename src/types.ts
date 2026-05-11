@@ -737,7 +737,8 @@ export type ImageAssetSource =
   | 'unicode'    // Built-in or user-added Unicode glyph (no blob/SVG needed)
   | 'upload'     // User-uploaded PNG / SVG file
   | 'game-icons' // Imported from game-icons.net via the source connector
-  | 'lucide';    // Imported from Lucide via the source connector
+  | 'lucide'     // Imported from Lucide via the source connector
+  | 'font';      // Google Font reference — fontFamily set, no blob/SVG/glyph
 
 export interface ImageAsset {
   id:           string;
@@ -762,6 +763,9 @@ export interface ImageAsset {
   blob?:        Blob;
   /** MIME type when blob is present (image/png, image/webp, image/svg+xml). */
   mimeType?:    string;
+  /** For source='font' — the CSS font-family string. Used to construct the
+   *  Google Fonts CSS request that loads the family at runtime. */
+  fontFamily?:  string;
   license?:         string;
   attribution?:     string;
   attributionLink?: string;

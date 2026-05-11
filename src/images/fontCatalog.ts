@@ -1,21 +1,19 @@
 /**
- * Read-only catalog of the OFL fonts that Stream C (Text Maps) will bundle.
+ * Bundled-font catalog — the seed list for the Small Assets Library's Fonts
+ * category. Each entry becomes an ImageAsset with source='font' on first
+ * run, after which the actual library is the source of truth and users
+ * can add more Google Fonts on top.
  *
- * Listed in the Image Library's Fonts category so users can see what's
- * coming, browse the licence terms, and have the attribution surface in
- * the unified Copy attributions output. No font files are loaded by this
- * module — the bundled font files (woff2) land alongside Stream C and
- * the catalog gets wired to actual <link rel="preload"> + CSS @font-face
- * directives at that point.
- *
- * The Image Library's Attributions rollup reads from this list whenever
- * a font from here ends up referenced by a text-map asset (Stream C).
+ * Fonts are loaded at runtime via the Google Fonts CSS API (no woff2 files
+ * shipped in the app bundle yet) — Stream C will eventually swap to
+ * bundled self-hosted faces, at which point this list still drives the
+ * seed but the @font-face source changes.
  */
 
 export interface FontCatalogEntry {
   /** Display name shown in the Fonts category. */
   name:          string;
-  /** Family string used in CSS font-family (post Stream C). */
+  /** Family string used in CSS font-family. */
   family:        string;
   /** Short usage hint shown under the name. */
   vibe:          string;
@@ -27,22 +25,37 @@ export interface FontCatalogEntry {
   sourceUrl:     string;
 }
 
-/** Lazy-load the catalog's font files via the Google Fonts CSS API so the
- *  library can render samples in the actual font instead of system sans.
- *  Runs once per page lifetime; Stream C will replace this with bundled
- *  self-hosted woff2 + an @font-face block so the fonts work offline. */
-let _fontsLoaded = false;
-export function ensureFontsLoaded(): void {
-  if (_fontsLoaded) return;
-  _fontsLoaded = true;
-  const families = BUNDLED_FONTS
-    .map((f) => f.family.replace(/ /g, '+'))
-    .map((f) => `family=${f}`)
+/** Lazy-load font families via the Google Fonts CSS API. Each call replaces
+ *  the previous <link> so newly-added user fonts are picked up without a
+ *  reload. Pass the live list of families from the imageAssets store —
+ *  source of truth lives there once seeding has run. Stream C will swap
+ *  this for bundled self-hosted woff2 + @font-face so the fonts work
+ *  offline. */
+let _fontsLinkEl: HTMLLinkElement | null = null;
+let _loadedFamiliesKey = '';
+export function ensureFontsLoaded(families: readonly string[]): void {
+  // Stable cache key so we skip the DOM churn when nothing changed.
+  const unique = Array.from(new Set(families.map((f) => f.trim()).filter(Boolean))).sort();
+  const key = unique.join('|');
+  if (key === _loadedFamiliesKey) return;
+  _loadedFamiliesKey = key;
+
+  if (unique.length === 0) {
+    if (_fontsLinkEl) { _fontsLinkEl.remove(); _fontsLinkEl = null; }
+    return;
+  }
+
+  const params = unique
+    .map((f) => `family=${encodeURIComponent(f).replace(/%20/g, '+')}`)
     .join('&');
-  const link = document.createElement('link');
-  link.rel  = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
-  document.head.appendChild(link);
+  const href = `https://fonts.googleapis.com/css2?${params}&display=swap`;
+
+  if (!_fontsLinkEl) {
+    _fontsLinkEl = document.createElement('link');
+    _fontsLinkEl.rel = 'stylesheet';
+    document.head.appendChild(_fontsLinkEl);
+  }
+  _fontsLinkEl.href = href;
 }
 
 export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
@@ -109,5 +122,21 @@ export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
     attribution: 'Press Start 2P by CodeMan38',
     license:     'SIL OFL 1.1',
     sourceUrl:   'https://fonts.google.com/specimen/Press+Start+2P',
+  },
+  {
+    name:        'Playwrite England Joined',
+    family:      'Playwrite England Joined',
+    vibe:        'Cursive school handwriting — diaries, polite letters',
+    attribution: 'Playwrite England Joined by TypeTogether',
+    license:     'SIL OFL 1.1',
+    sourceUrl:   'https://fonts.google.com/specimen/Playwrite+England+Joined',
+  },
+  {
+    name:        'Seaweed Script',
+    family:      'Seaweed Script',
+    vibe:        'Brush-script signage — taverns, beach huts, posters',
+    attribution: 'Seaweed Script by Pablo Impallari',
+    license:     'SIL OFL 1.1',
+    sourceUrl:   'https://fonts.google.com/specimen/Seaweed+Script',
   },
 ];
