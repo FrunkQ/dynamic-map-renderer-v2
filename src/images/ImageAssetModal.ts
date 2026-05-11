@@ -1406,8 +1406,15 @@ export class ImageAssetModal {
         e.stopPropagation();
         this._hidePreview();
         const cb = this.onPickCallback;
-        this.close();
+        // Fire the pick callback BEFORE close() so async callers can flip
+        // their "picked" sentinel synchronously. Callers that override
+        // modal.close (e.g. TextMapEditor._pickInlineIcon) use that
+        // sentinel to distinguish a real pick from a cancel — if we
+        // closed first, their override would resolve the cancel branch
+        // and the subsequent pick resolve would be a no-op (Promise
+        // settles once).
         cb?.(asset);
+        this.close();
       });
     }
 

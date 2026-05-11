@@ -138,9 +138,16 @@ export function createRichTextEditor(opts: RichTextEditorOptions): HTMLElement {
   if (opts.onInsertIcon) {
     tb.appendChild(sep());
     const iconBtn = mkBtn('🖼', 'Insert icon from Small Assets Library', async () => {
+      // Save the caret position BEFORE opening the picker — the modal
+      // steals focus and wipes the editor's selection, so we can't rely
+      // on it surviving the round trip. If there was no selection yet,
+      // fall back to a Range at the end of the editor so the icon still
+      // lands somewhere visible.
+      const saved = _saveEditorRange(editor);
       const html = await opts.onInsertIcon!();
       if (!html) return;
       editor.focus();
+      _restoreRange(saved, editor);
       // execCommand insertHTML lays the HTML at the current selection.
       document.execCommand('insertHTML', false, html);
       opts.onChange(editor.innerHTML);
@@ -163,4 +170,28 @@ export function createRichTextEditor(opts: RichTextEditorOptions): HTMLElement {
   });
 
   return wrap;
+}
+
+/** Capture the current selection range IF it lives inside the editor. */
+function _saveEditorRange(editor: HTMLElement): Range | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  return editor.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
+}
+
+/** Restore a previously saved Range, or fall back to a collapsed Range
+ *  at the end of the editor so insertHTML still has somewhere to land. */
+function _restoreRange(saved: Range | null, editor: HTMLElement): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  sel.removeAllRanges();
+  if (saved && editor.contains(saved.commonAncestorContainer)) {
+    sel.addRange(saved);
+    return;
+  }
+  const tail = document.createRange();
+  tail.selectNodeContents(editor);
+  tail.collapse(false);
+  sel.addRange(tail);
 }
