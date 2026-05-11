@@ -1333,12 +1333,11 @@ option.select-option--add {
   height: 720px;
   max-height: 90vh;
 }
-.img-modal-store-hint {
+/* Stored pill in the Image Library header — mirrors the per-row Stored
+ *  tag on Map / Sound libraries but pinned at the top because every icon
+ *  is stored locally on import. */
+.img-modal-store-tag {
   margin-left: var(--space-sm);
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  font-weight: normal;
-  letter-spacing: 0.02em;
   cursor: help;
 }
 .img-modal-body {
