@@ -534,20 +534,39 @@ export class ImageAssetModal {
     });
     host.appendChild(search);
 
-    // Add buttons
-    const addGlyph = document.createElement('button');
-    addGlyph.type = 'button';
-    addGlyph.className = 'btn btn--ghost btn--xs';
-    addGlyph.textContent = '+ Unicode glyph';
-    addGlyph.addEventListener('click', () => void this._promptAddUnicode());
-    host.appendChild(addGlyph);
+    // Add buttons — Fonts category swaps in font-specific actions; every
+    // other category exposes the Unicode-glyph and Upload-image flows.
+    if (this.selectedCategoryId === SYSTEM_CATEGORY_IDS.fonts) {
+      const addFont = document.createElement('button');
+      addFont.type = 'button';
+      addFont.className = 'btn btn--primary btn--xs';
+      addFont.textContent = '+ Google Font';
+      addFont.addEventListener('click', () => void this._promptAddGoogleFont());
+      host.appendChild(addFont);
 
-    const addUpload = document.createElement('button');
-    addUpload.type = 'button';
-    addUpload.className = 'btn btn--primary btn--xs';
-    addUpload.textContent = '+ Upload image';
-    addUpload.addEventListener('click', () => this._promptUpload());
-    host.appendChild(addUpload);
+      const browseFonts = document.createElement('a');
+      browseFonts.className = 'btn btn--ghost btn--xs';
+      browseFonts.href = 'https://fonts.google.com';
+      browseFonts.target = '_blank';
+      browseFonts.rel = 'noopener noreferrer';
+      browseFonts.textContent = 'Browse fonts.google.com ↗';
+      browseFonts.style.textDecoration = 'none';
+      host.appendChild(browseFonts);
+    } else {
+      const addGlyph = document.createElement('button');
+      addGlyph.type = 'button';
+      addGlyph.className = 'btn btn--ghost btn--xs';
+      addGlyph.textContent = '+ Unicode glyph';
+      addGlyph.addEventListener('click', () => void this._promptAddUnicode());
+      host.appendChild(addGlyph);
+
+      const addUpload = document.createElement('button');
+      addUpload.type = 'button';
+      addUpload.className = 'btn btn--primary btn--xs';
+      addUpload.textContent = '+ Upload image';
+      addUpload.addEventListener('click', () => this._promptUpload());
+      host.appendChild(addUpload);
+    }
   }
 
   private _renderConnectorToolbar(host: HTMLElement): void {
@@ -762,27 +781,8 @@ export class ImageAssetModal {
     // includes user-added entries that the bundled link wouldn't cover.
     ensureFontsLoaded(fonts.map((f) => f.fontFamily).filter((f): f is string => !!f));
 
-    const intro = document.createElement('div');
-    intro.className = 'img-modal-empty';
-    intro.style.gridColumn = '1 / -1';
-    intro.style.textAlign = 'left';
-    intro.innerHTML = `
-      <p style="margin:0 0 var(--space-sm); display:flex; align-items:center; gap:var(--space-md); flex-wrap:wrap;">
-        <strong>Fonts</strong> available for Text Maps (Stream C). Loaded
-        on demand from Google Fonts; samples preview in their actual family.
-        <button type="button" class="btn btn--primary btn--xs" id="img-modal-add-font">+ Google Font</button>
-        <a href="https://fonts.google.com" target="_blank" rel="noopener noreferrer" class="img-modal-license-chip" style="text-decoration:none;">Browse fonts.google.com ↗</a>
-      </p>
-      <p style="margin:0; font-size:0.85em;">
-        Pick a font on Google Fonts, copy the specimen URL, then paste it
-        into <strong>+ Google Font</strong>. The family name works too if you
-        prefer typing it.
-      </p>
-    `;
-    host.appendChild(intro);
-    intro.querySelector<HTMLButtonElement>('#img-modal-add-font')
-      ?.addEventListener('click', () => void this._promptAddGoogleFont());
-
+    // No body intro — the + Google Font / Browse buttons live in the
+    // toolbar above, freeing the grid for the actual font samples.
     for (const font of fonts) {
       host.appendChild(this._fontRow(font));
     }
