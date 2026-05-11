@@ -356,17 +356,44 @@ export class ImageAssetModal {
     if (!host) return;
     host.innerHTML = '';
 
-    // "All" pseudo-row — shows every asset across every category. Pinned
-    // above the system section so it's always the first option.
+    // "All" pseudo-row — shows every icon/marker asset across every
+    // category (fonts excluded; they live in their own Special section
+    // and aren't visually browseable as icons).
     host.appendChild(this._allRow());
 
-    // System category section
-    const sysHeader = document.createElement('div');
-    sysHeader.className = 'img-modal-sidebar-section';
-    sysHeader.textContent = 'System';
-    host.appendChild(sysHeader);
-    for (const cat of this.categories.filter((c) => c.isSystem)) {
+    // Icons & Markers — the icon-style system categories.
+    const iconsHeader = document.createElement('div');
+    iconsHeader.className = 'img-modal-sidebar-section';
+    iconsHeader.textContent = 'Icons & Markers';
+    host.appendChild(iconsHeader);
+    const iconCategoryIds = new Set<string>([
+      SYSTEM_CATEGORY_IDS.unicode,
+      SYSTEM_CATEGORY_IDS.abstract,
+      SYSTEM_CATEGORY_IDS.fantasy,
+      SYSTEM_CATEGORY_IDS.scifi,
+      SYSTEM_CATEGORY_IDS.contemporary,
+      SYSTEM_CATEGORY_IDS.uncategorised,
+    ]);
+    for (const cat of this.categories.filter((c) => c.isSystem && iconCategoryIds.has(c.id))) {
       host.appendChild(this._categoryRow(cat));
+    }
+
+    // Special — non-icon system categories (Fonts is text-style; Textmap
+    // is the auto-fill destination for inline icons added via the Text
+    // Map editor in Stream C).
+    const specialCategoryIds = new Set<string>([
+      SYSTEM_CATEGORY_IDS.fonts,
+      SYSTEM_CATEGORY_IDS.textmap,
+    ]);
+    const specialCats = this.categories.filter((c) => c.isSystem && specialCategoryIds.has(c.id));
+    if (specialCats.length > 0) {
+      const specialHeader = document.createElement('div');
+      specialHeader.className = 'img-modal-sidebar-section';
+      specialHeader.textContent = 'Special';
+      host.appendChild(specialHeader);
+      for (const cat of specialCats) {
+        host.appendChild(this._categoryRow(cat));
+      }
     }
 
     // User category section
@@ -395,7 +422,9 @@ export class ImageAssetModal {
     row.type = 'button';
     row.className = 'img-modal-sidebar-cat';
     if (this.selectedCategoryId === ALL_CATEGORY_ID) row.classList.add('is-active');
-    const total = this.assets.length;
+    // Fonts excluded — they're not visually browseable as icons and have
+    // their own dedicated Special section.
+    const total = this.assets.filter((a) => a.source !== 'font').length;
     row.innerHTML = `<span class="img-cat-name"><strong>All</strong></span><span class="img-cat-count">${total}</span>`;
     row.addEventListener('click', () => {
       this.selectedCategoryId = ALL_CATEGORY_ID;
@@ -746,7 +775,7 @@ export class ImageAssetModal {
     }
 
     const inCategory = this.selectedCategoryId === ALL_CATEGORY_ID
-      ? this.assets
+      ? this.assets.filter((a) => a.source !== 'font') // All hides fonts
       : this.assets.filter((a) => a.categoryId === this.selectedCategoryId);
     const filtered = this.searchQuery
       ? fuzzySearch(
@@ -776,14 +805,36 @@ export class ImageAssetModal {
    *  delete affordance on user-added entries. The "+ Google Font" button
    *  at the top lets users add more by family name. */
   private _renderFontsCategory(host: HTMLElement): void {
-    const fonts = this.assets.filter((a) => a.source === 'font');
+    const allFonts = this.assets.filter((a) => a.source === 'font');
     // Trigger CSS load for whatever families are in the library now —
     // includes user-added entries that the bundled link wouldn't cover.
-    ensureFontsLoaded(fonts.map((f) => f.fontFamily).filter((f): f is string => !!f));
+    ensureFontsLoaded(allFonts.map((f) => f.fontFamily).filter((f): f is string => !!f));
+
+    // Filter by the toolbar search box — matches font name, family, tags.
+    const filtered = this.searchQuery
+      ? fuzzySearch(
+          allFonts.map((a) => ({
+            slug: a.fontFamily ?? a.name,
+            name: a.name,
+            tags: a.tags ?? [],
+          })),
+          this.searchQuery,
+        ).map((r) => allFonts.find((a) => (a.fontFamily ?? a.name) === r.entry.slug)!).filter(Boolean)
+      : allFonts;
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'img-modal-empty';
+      empty.textContent = this.searchQuery
+        ? 'No fonts match that search.'
+        : 'No fonts in the library yet — use + Google Font in the toolbar to add one.';
+      host.appendChild(empty);
+      return;
+    }
 
     // No body intro — the + Google Font / Browse buttons live in the
     // toolbar above, freeing the grid for the actual font samples.
-    for (const font of fonts) {
+    for (const font of filtered) {
       host.appendChild(this._fontRow(font));
     }
   }
