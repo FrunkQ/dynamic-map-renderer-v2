@@ -2378,7 +2378,8 @@ export class GMApp {
       for (const m of existing) await deleteMap(m.id);
       await clearAssetLibraries();
       const { added } = await importBundleText(plainJson);
-      await seedAudioAssets(); // re-seed built-in tracker pings (CC0)
+      await seedAudioAssets();           // re-seed built-in tracker pings (CC0)
+      await seedImageAssetsIfNeeded();   // re-pin system image categories + Unicode presets if missing
       this.state.resetForImport();
       await this.iconPicker.reload();
       await this.populateMapList();
