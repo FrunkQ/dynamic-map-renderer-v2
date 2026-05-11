@@ -402,7 +402,9 @@ export class TextMapEditor {
     page.style.backgroundColor = this.draft.backgroundColor;
     page.style.color = this.draft.textColor;
     page.style.fontFamily = `'${this.draft.fontFamily}', sans-serif`;
-    page.style.fontSize = `${this.draft.fontScale}em`;
+    // font-size is set by _fitPage() in pixels anchored to page width —
+    // matches the rasteriser. The previous `${fontScale}em` left it
+    // inheriting from the modal, decoupling preview scale from map scale.
 
     const content = document.createElement('div');
     content.className = 'txt-map-page-content';
@@ -432,7 +434,14 @@ export class TextMapEditor {
 
   /** Compute pixel width/height for the page so it fits inside the wrap
    *  while honouring the chosen aspect ratio. The page's dimensions are
-   *  then independent of content — font changes don't reshape it. */
+   *  then independent of content — font changes don't reshape it. Also
+   *  anchors the base font-size to the page width using the exact same
+   *  formula the rasteriser uses (pageWidth / 60 × fontScale), so the
+   *  editor preview and the rasterised map render at matching scale —
+   *  previously the preview inherited the browser default ~16px
+   *  regardless of page size while the rasteriser used a width-relative
+   *  size, so text in the map looked roughly twice as big as in the
+   *  preview when the preview pane was wide. */
   private _fitPage(): void {
     const page = this.overlay?.querySelector<HTMLElement>('.txt-map-page');
     const wrap = this.overlay?.querySelector<HTMLElement>('.txt-map-preview-wrap');
@@ -446,6 +455,8 @@ export class TextMapEditor {
     if (h > ch) { h = ch; w = h * aspect; }
     page.style.width  = `${Math.round(w)}px`;
     page.style.height = `${Math.round(h)}px`;
+    const basePx = Math.max(1, Math.round((w / 60) * this.draft.fontScale));
+    page.style.fontSize = `${basePx}px`;
   }
 
   private async _onSave(): Promise<void> {

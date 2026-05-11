@@ -93,7 +93,12 @@ export interface RasterizeOpts {
   longSidePx?: number;
 }
 
-export const DEFAULT_LONG_SIDE = 1080;
+// 2048 px on the long side gives crisp text on a typical 1440p / 4K GM
+// canvas without upscaling artefacts. 1080 was too low — the GM canvas
+// often displays the handout at 1500–1900 px wide, which forced a
+// 1.4–1.7x upscale and produced the "magnified, lo-res" look the user
+// reported (text looking ~2x its proper size and visibly soft).
+export const DEFAULT_LONG_SIDE = 2048;
 
 /** Predict the pixel dimensions the rasteriser would produce for this
  *  config at the default long-side. Used by the editor save path so the
