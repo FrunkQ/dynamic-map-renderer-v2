@@ -94,14 +94,17 @@ export async function seedImageAssetsIfNeeded(): Promise<void> {
   }
 
   // 2. Migrate Unicode presets exactly once. Detect by looking for any
-  //    imageAsset with source='unicode' in the Unicode category — if even
-  //    one exists, assume migration ran (the user may have deleted some
-  //    presets since; we don't want to re-seed them on every load).
+  //    seeded preset id anywhere in the library — not just the Unicode
+  //    category, since users can drag-and-drop them into Abstract / their
+  //    own categories. If even one preset id is present we treat the
+  //    migration as done (the user may have deleted some since; we don't
+  //    want to re-seed every load and never want to double-seed because
+  //    presets were moved out of Unicode).
   const allAssets = await ImageAssetStore.getAll();
-  const hasAnyUnicode = allAssets.some(
-    (a) => a.source === 'unicode' && a.categoryId === SYSTEM_CATEGORY_IDS.unicode,
+  const hasAnyUnicodePreset = allAssets.some(
+    (a) => a.id.startsWith('unicode-preset-'),
   );
-  if (!hasAnyUnicode) {
+  if (!hasAnyUnicodePreset) {
     const now = Date.now();
     let i = 0;
     for (const preset of UNICODE_PRESETS) {
