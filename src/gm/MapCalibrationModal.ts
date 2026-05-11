@@ -266,6 +266,11 @@ export class MapCalibrationModal {
           bx: this.b.x, by: this.b.y,
           squares,
         },
+        // User drew the line themselves — top-trust calibration; the auto-
+        // detector will skip this asset on retrofit passes.
+        scaleConfidence: 'manual',
+        // Re-calibrating a map clears any prior "no grid" opt-out.
+        noGrid: false,
       });
       this.close();
     });

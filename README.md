@@ -34,6 +34,7 @@ Players connect over peer-to-peer (PeerJS); no server infrastructure beyond stat
 ## Features
 
 - **Map library** — add `.png`, `.jpg`, `.jpeg`, `.webp` images by upload, paste-by-URL, or pick from your existing library. One map image asset can back multiple named maps with their own fog / markers / audio / tracker config — handy for re-using the same battlemap across encounters. Hover for thumbnail preview, rename live, **Clone Map** for instant copies (image shared, settings duplicated independently). Missing or broken asset URLs render a placeholder so fog and marker positions stay sensible until you click **⚠ Fix Missing Map**.
+- **Auto-scale on import** — Mappadux guesses each map's 1″ grid from filename hints (`[40x30]`), embedded image DPI (PNG `pHYs` / JPEG JFIF), and the greatest common factor of the image dimensions (assuming square cells). High-confidence detections apply silently and badge the map **Scaled** (yellow); best-guess matches badge **AutoScaled** (orange); ambiguous imports prompt a small radio dialog with the top candidates. Maps that have no grid (handouts, world maps, stat blocks) can be opted out with one toggle. Legacy packs get the same pass on load, so older bundles upgrade themselves automatically.
 - **Fog of War** — draw arbitrary polygons to hide areas from players; click to select and delete.
 - **Visual filters** — full-screen post-processing effects applied to the player view only:
 

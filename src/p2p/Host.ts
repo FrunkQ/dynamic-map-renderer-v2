@@ -25,6 +25,11 @@ export interface HostEvents {
  */
 export class Host {
   private peer: Peer | null = null;
+  /** The peer ID we asked PeerJS to register. Set synchronously in start();
+   *  used as the roomCode fallback before peer.on('open') has fired so the
+   *  projector window can launch (over BroadcastChannel) without waiting on
+   *  the broker handshake — which on production HTTPS is a noticeable delay. */
+  private requestedRoomCode: string | null = null;
   private connections = new Map<string, DataConnection>();
   private local: LocalChannel;
   private events: HostEvents;
@@ -51,6 +56,7 @@ export class Host {
 
   /** Start the host. Pass a previously persisted peerId to attempt resumption. */
   start(peerId?: string): void {
+    this.requestedRoomCode = peerId ?? null;
     const peer = peerId ? new Peer(peerId) : new Peer();
     this.peer = peer;
 
@@ -108,7 +114,11 @@ export class Host {
   }
 
   get roomCode(): string | null {
-    return this.peer?.id ?? null;
+    // Prefer the PeerJS-confirmed id, but fall back to the requested code so
+    // the GM-side projector / player launchers don't have to wait on the
+    // broker handshake (which is noticeably slower on production HTTPS than
+    // localhost dev). Same-browser BC connections work immediately either way.
+    return this.peer?.id || this.requestedRoomCode;
   }
 
   get connectedCount(): number {

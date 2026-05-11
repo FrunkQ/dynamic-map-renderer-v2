@@ -847,14 +847,15 @@ export class AboutDialog {
       '<p>I wanted VTT features for the table I actually game at — players around real wood, a screen showing the map. I kept cobbling together half a dozen tools, and prep was eating most of my evening before anyone arrived. I wanted <em>one</em> thing: fast to set up, easy to use without breaking the flow of play.</p>' +
       '<p>So Mappadux:</p>' +
       '<ul>' +
-      '<li>Sets up in <strong>minutes</strong>, not hours.</li>' +
+      '<li>Setup any map with tokens, filters, scaling &amp; audio in <strong>minutes</strong>, not hours.</li>' +
       '<li>Shows maps on a second screen for players, or projects at true 1″ / 25 mm scale onto an under-table screen.</li>' +
       '<li>Handles fog of war, markers, motion trackers, atmospheric audio, and visual filters — without hunting through menus mid-scene.</li>' +
       '</ul>' +
+      '<p><span style="color: #e0a040;"><strong>Tip:</strong> A PC is recommended for the GM side — your players can use mobile devices just fine.</span></p>' +
       '<p>It tries to feel <em>immersive</em>: parchment, hand-drawn, and CRT-phosphor filters; smooth map transitions; positional and motion-tracker audio.</p>' +
       '<p>And it’s built to <strong>share</strong>. Whole packs — maps, audio, splash, theme — travel in a single <code>.mappadux</code> file, so a session you built can reach your players, your Patreon, or the wider community as easily as forwarding an email.</p>' +
-      '<p>One ask: <strong>credit the creators</strong> whose work you use. Every map and sound in Mappadux carries its licence, source, and creator; the asset library has a <em>Copy attributions</em> action that produces a ready-to-paste credits block. The community that supplies free, high-quality assets only keeps going if we keep crediting it.</p>' +
-      '<p>Open <em>Customise pack…</em> from the menu to make this About your own.</p>'
+      '<p>One ask: <strong>credit the creators</strong> whose work you use. Every map and sound in Mappadux carries its licence, source, and creator; the asset library has a <em>Copy attributions</em> action that produces a ready-to-paste credits block. The community that supplies free, high-quality assets only keeps going if we keep acknowledging &amp; supporting it.</p>' +
+      '<p>Open <em>Customise pack…</em> from the menu to make this &lsquo;About&rsquo; box your own.</p>'
     );
   }
 }

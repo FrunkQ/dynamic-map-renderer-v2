@@ -51,6 +51,10 @@ interface StoredMapAssetEntry {
   /** Last calibration-line endpoints + typed-squares value, so re-opening the
    *  calibration UI starts from where the user left off rather than centred. */
   calibrationLine?: MapAsset['calibrationLine'];
+  /** Confidence behind pxPerSquare — drives the library badge colour. */
+  scaleConfidence?: MapAsset['scaleConfidence'];
+  /** User opted this map out of grid calibration (handout, world map, etc.). */
+  noGrid?: boolean;
 }
 
 /** Map asset known only by URL — metadata travels, blob does not. */
@@ -246,6 +250,8 @@ export async function exportBundle(opts?: { password?: string }): Promise<Export
         attributionLink:  asset.attributionLink,
         pixelsPerSquare:  asset.pixelsPerSquare,
         calibrationLine:  asset.calibrationLine,
+        scaleConfidence:  asset.scaleConfidence,
+        noGrid:           asset.noGrid,
       }) as StoredMapAssetEntry);
     } else if (asset.source === 'web-link') {
       const { blob: _b, ...metaOnly } = asset;
@@ -427,6 +433,8 @@ export async function importBundleText(
           attributionLink: e.attributionLink,
           pixelsPerSquare: e.pixelsPerSquare,
           calibrationLine: e.calibrationLine,
+          scaleConfidence: e.scaleConfidence,
+          noGrid:          e.noGrid,
           addedAt:         e.addedAt,
         }) as MapAsset;
         await saveMapAsset(asset);

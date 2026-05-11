@@ -4,6 +4,8 @@ import { downloadAsset } from '../utils/downloadAsset.ts';
 import { MapManager } from './MapManager.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { getUsedMapAssetIds } from '../storage/assetUsage.ts';
+import { detectMapScale, autoApplyPatch } from '../utils/detectMapScale.ts';
+import { ScaleCandidateDialog } from './ScaleCandidateDialog.ts';
 
 /** Standard licence options shared with the audio editor. */
 const LICENSE_OPTIONS: string[] = [
@@ -250,7 +252,15 @@ export class MapAssetModal {
     const tags: string[] = [];
     if (asset.source === 'web-link') tags.push('<span class="sound-tag sound-tag--url">URL</span>');
     if (asset.locallyStored)         tags.push('<span class="sound-tag sound-tag--local">Stored</span>');
-    if (asset.pixelsPerSquare)       tags.push('<span class="sound-tag sound-tag--scaled map-recal-pill" title="Click to re-calibrate" role="button" tabindex="0">Scaled</span>');
+    // Scale badge — driven by scaleConfidence + noGrid, in priority order.
+    if (asset.noGrid) {
+      tags.push('<span class="sound-tag sound-tag--no-grid map-nogrid-pill" title="Marked as having no grid — click to clear and calibrate" role="button" tabindex="0">No grid</span>');
+    } else if (asset.pixelsPerSquare && asset.scaleConfidence === 'auto-scaled') {
+      tags.push('<span class="sound-tag sound-tag--auto-scaled map-autoscaled-pill" title="Auto-detected best-guess — click to re-calibrate" role="button" tabindex="0">AutoScaled</span>');
+    } else if (asset.pixelsPerSquare) {
+      // 'manual', 'scaled', or undefined (legacy) — all treated as high confidence.
+      tags.push('<span class="sound-tag sound-tag--scaled map-recal-pill" title="Click to re-calibrate" role="button" tabindex="0">Scaled</span>');
+    }
     const tagsHtml = tags.join('');
 
     const storeBtnHtml = asset.locallyStored
@@ -259,7 +269,8 @@ export class MapAssetModal {
     const downloadBtnHtml = asset.locallyStored
       ? `<button class="btn btn--ghost btn--xs map-download-btn" title="Download this map image">⬇</button>`
       : '';
-    const scaleBtnHtml = asset.pixelsPerSquare
+    // Scale button hidden when calibrated OR explicitly opted out of grids.
+    const scaleBtnHtml = (asset.pixelsPerSquare || asset.noGrid)
       ? ''
       : `<button class="btn btn--ghost btn--xs map-scale-btn" title="Calibrate map scale (pixels per 5' square)">Scale</button>`;
 
@@ -291,10 +302,19 @@ export class MapAssetModal {
       <div class="sound-row-edit" hidden>
         <div class="sound-edit-row">
           <label>Calibration</label>
-          <span class="map-edit-calibration-state">${asset.pixelsPerSquare
-            ? `${asset.pixelsPerSquare.toFixed(1)} px per 5&prime; square`
-            : 'Not yet calibrated'}</span>
+          <span class="map-edit-calibration-state">${asset.noGrid
+            ? '<em>No grid — opted out</em>'
+            : asset.pixelsPerSquare
+              ? `${asset.pixelsPerSquare.toFixed(1)} px per 5&prime; square`
+              : 'Not yet calibrated'}</span>
           <button class="btn btn--ghost btn--xs map-edit-calibrate">Calibrate…</button>
+        </div>
+        <div class="sound-edit-row">
+          <label>No grid</label>
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" class="map-edit-nogrid" ${asset.noGrid ? 'checked' : ''} />
+            <span style="font-size:0.9em; color:var(--text-dim);">For handouts / world maps / stat blocks — hides the calibration prompt and the auto-detector won't touch this map.</span>
+          </label>
         </div>
         <div class="sound-edit-row">
           <label>Licence</label>
@@ -369,8 +389,21 @@ export class MapAssetModal {
     };
     row.querySelector<HTMLButtonElement>('.map-scale-btn')?.addEventListener('click', openCalibration);
     row.querySelector<HTMLButtonElement>('.map-edit-calibrate')?.addEventListener('click', openCalibration);
-    // Click the Scaled pill to re-calibrate without opening the pen editor.
+    // Click any of the scale pills to re-calibrate without opening the pen editor.
     row.querySelector<HTMLElement>('.map-recal-pill')?.addEventListener('click', (e) => { e.stopPropagation(); void openCalibration(); });
+    row.querySelector<HTMLElement>('.map-autoscaled-pill')?.addEventListener('click', (e) => { e.stopPropagation(); void openCalibration(); });
+    // Click the "No grid" pill to clear the opt-out and start calibration.
+    row.querySelector<HTMLElement>('.map-nogrid-pill')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await MapAssetStore.update(asset.id, { noGrid: false });
+      await openCalibration();
+    });
+    // "No grid" toggle inside the edit panel — flip immediately, re-render row.
+    row.querySelector<HTMLInputElement>('.map-edit-nogrid')?.addEventListener('change', async (e) => {
+      const checked = (e.currentTarget as HTMLInputElement).checked;
+      await MapAssetStore.update(asset.id, { noGrid: checked });
+      await this._renderLibrary();
+    });
 
     row.querySelector<HTMLButtonElement>('.map-edit-save')?.addEventListener('click', async () => {
       const license     = row.querySelector<HTMLSelectElement>('.map-edit-license')?.value ?? asset.license;
@@ -474,6 +507,16 @@ export class MapAssetModal {
       };
       try {
         await MapAssetStore.saveMetadataOnly(asset);
+        // Detect scale silently — no dialog in the batch flow. Without the
+        // blob we only have filename + GCD signals, so this only fires for
+        // confidently named files (e.g. "Stockade [32x44].png").
+        const detection = await detectMapScale({
+          nameHints:   [filename],
+          imageWidth:  probe.width,
+          imageHeight: probe.height,
+        });
+        const patch = autoApplyPatch(detection);
+        if (patch) await MapAssetStore.update(asset.id, patch);
         row.className   = 'weblinks-result weblinks-result--ok';
         row.textContent = `✓ ${filename} — added (${probe.width}×${probe.height})`;
         added++;
@@ -536,10 +579,44 @@ export class MapAssetModal {
         await _saveMap({ ...map, name });
         map.name = name;
       }
+      // Auto-detect grid scale from filename + DPI + GCD. Auto-apply on high
+      // confidence; prompt with the candidate dialog when ambiguous; skip
+      // entirely when no signals fit (user can still calibrate manually).
+      await this._runScaleDetectForUpload(map);
       this.onPick(map);
       this.close();
     } catch (err) {
       alert((err as Error).message);
+    }
+  }
+
+  /** Single-import path: detect, auto-apply, or open dialog when ambiguous. */
+  private async _runScaleDetectForUpload(map: StoredMap): Promise<void> {
+    const asset = await MapAssetStore.get(map.mapAssetId);
+    if (!asset || !asset.imageWidth || !asset.imageHeight) return;
+    const blob = await MapAssetStore.getBlob(asset);
+    const detection = await detectMapScale({
+      nameHints:   [asset.filename, map.name],
+      imageWidth:  asset.imageWidth,
+      imageHeight: asset.imageHeight,
+      ...(blob ? { blob } : {}),
+    });
+    const patch = autoApplyPatch(detection);
+    if (patch) {
+      await MapAssetStore.update(asset.id, patch);
+      return;
+    }
+    if (detection.needsConfirmation && detection.alternates.length > 0) {
+      const result = await new ScaleCandidateDialog().open({ detection, mapName: map.name });
+      if (result.kind === 'candidate') {
+        await MapAssetStore.update(asset.id, {
+          pixelsPerSquare: result.candidate.pixelsPerSquare,
+          scaleConfidence: 'auto-scaled',
+        });
+      } else if (result.kind === 'no-grid') {
+        await MapAssetStore.update(asset.id, { noGrid: true });
+      }
+      // 'cancel' leaves the map uncalibrated; user can use Calibrate later.
     }
   }
 

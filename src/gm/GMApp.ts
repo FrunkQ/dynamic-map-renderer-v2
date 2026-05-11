@@ -25,6 +25,7 @@ import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
 import { exportBundle, importBundleText } from '../storage/bundleIO.ts';
+import { retrofitMapScales } from '../maps/retrofitMapScales.ts';
 import { isEncryptedBundleEnvelope } from '../storage/bundleCrypto.ts';
 import { gunzipToString, startsWithGzipMagic } from '../storage/bundleCompression.ts';
 import { EncryptSaveDialog } from './EncryptSaveDialog.ts';
@@ -2315,7 +2316,16 @@ export class GMApp {
       // Re-apply theme so any creator-supplied look from the bundle takes effect.
       const importedSession = await loadSession();
       applyTheme(importedSession?.theme);
-      this.setStatus(`Loaded — ${added} map${added !== 1 ? 's' : ''} imported`, 'ok');
+
+      // Retrofit pass — auto-detect grid scale on any map in the loaded pack
+      // that doesn't already carry one. Manually-calibrated maps and no-grid
+      // opt-outs are skipped. Ambiguous maps stay uncalibrated; the creator
+      // can resolve them per-asset later.
+      const retro = await retrofitMapScales();
+      const retroMsg = retro.applied > 0 || retro.ambiguous > 0
+        ? ` · Auto-scaled ${retro.applied}` + (retro.ambiguous > 0 ? `, ${retro.ambiguous} need a look` : '')
+        : '';
+      this.setStatus(`Loaded — ${added} map${added !== 1 ? 's' : ''} imported${retroMsg}`, 'ok');
 
       // Auto-open the About dialog so the user immediately sees the splash
       // for the pack they just loaded — whether it's creator-branded or just

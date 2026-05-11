@@ -2146,7 +2146,9 @@ option.select-option--add {
   pointer-events: none;
 }
 
-/* "No map yet" — centred message overlay shown when the GM hasn't loaded a map. */
+/* "No map yet" — centred message overlay shown when the GM hasn't loaded a map.
+ *  Fades out after a few seconds since the GM already sees this status on
+ *  their side; the projector window doesn't need to keep nagging. */
 .projector-overlay-msg {
   position: fixed; inset: 0;
   z-index: 45;
@@ -2157,9 +2159,13 @@ option.select-option--add {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 1s ease-out;
 }
+.projector-overlay-msg.is-faded { opacity: 0; }
 
-/* Uncalibrated-map warning banner — pinned to top, stays out of the way. */
+/* Uncalibrated-map warning banner — pinned to top, fades out after a few
+ *  seconds since the GM already shows a persistent warning on their side. */
 .projector-warn-banner {
   position: fixed;
   top: 12px; left: 50%;
@@ -2173,7 +2179,10 @@ option.select-option--add {
   font-size: 0.8rem;
   letter-spacing: 0.04em;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 1s ease-out;
 }
+.projector-warn-banner.is-faded { opacity: 0; }
 
 /* Black-out overlay — covers everything when state.projectorViewport.mode === 'black'. */
 .projector-blackout {
@@ -2473,9 +2482,15 @@ option.select-option--add {
 .sound-tag--freesound { color: #22c55e; border-color: rgba(34, 197, 94, 0.4); }
 .sound-tag--url       { color: #3b82f6; border-color: rgba(59, 130, 246, 0.4); }
 .sound-tag--local     { color: #94a3b8; border-color: rgba(148, 163, 184, 0.4); }
-.sound-tag--scaled    { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
-.map-recal-pill { cursor: pointer; transition: background 0.15s; }
-.map-recal-pill:hover { background: rgba(251, 191, 36, 0.15); }
+.sound-tag--scaled       { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
+.sound-tag--auto-scaled  { color: #f97316; border-color: rgba(249, 115, 22, 0.4); }
+.sound-tag--no-grid      { color: #94a3b8; border-color: rgba(148, 163, 184, 0.4); }
+.map-recal-pill         { cursor: pointer; transition: background 0.15s; }
+.map-recal-pill:hover   { background: rgba(251, 191, 36, 0.15); }
+.map-autoscaled-pill        { cursor: pointer; transition: background 0.15s; }
+.map-autoscaled-pill:hover  { background: rgba(249, 115, 22, 0.15); }
+.map-nogrid-pill            { cursor: pointer; transition: background 0.15s; }
+.map-nogrid-pill:hover      { background: rgba(148, 163, 184, 0.15); }
 
 /* Unused-asset chip — shown next to library rows / icons that aren't referenced anywhere. */
 .sound-unused {

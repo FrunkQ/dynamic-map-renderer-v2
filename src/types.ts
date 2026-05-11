@@ -694,6 +694,26 @@ export interface MapAsset {
     bx: number; by: number;
     squares: number;
   };
+  /**
+   * Provenance + confidence behind `pixelsPerSquare`. Drives the library
+   * badge and retrofit behaviour:
+   *   • 'manual'      — user calibrated by hand via the two-endpoint flow.
+   *                     Highest trust; never overridden by the auto-detector.
+   *   • 'scaled'      — auto-detector confident (multiple signals aligned).
+   *                     Auto-applied without prompting.
+   *   • 'auto-scaled' — auto-detector best-guess, or user picked from the
+   *                     candidate dialog. Lower confidence — orange badge.
+   *   undefined on a calibrated asset that predates this field — treated as
+   *   'manual' for benefit-of-the-doubt and rendered the same green badge.
+   */
+  scaleConfidence?: 'manual' | 'scaled' | 'auto-scaled';
+  /**
+   * User explicitly opted this map out of scaling — it has no grid (a
+   * handout, world map, stat block, etc.). The auto-detector skips it on
+   * retrofit passes, and the library shows a "No grid" badge instead of
+   * prompting for calibration.
+   */
+  noGrid?: boolean;
   addedAt:       number;
 }
 

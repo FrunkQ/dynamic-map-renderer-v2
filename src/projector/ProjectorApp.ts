@@ -63,6 +63,12 @@ export class ProjectorApp {
   private fsUnbind:         (() => void) | null = null;
   private fsBtn:            HTMLElement | null = null;
   private idleTimer:        ReturnType<typeof setTimeout> | null = null;
+  // Per-warning fade state — both noMap and uncal banners fade after 5s
+  // since the GM has the equivalent warning persistently on their side.
+  private noMapShowing  = false;
+  private noMapFadeTimer:  ReturnType<typeof setTimeout> | null = null;
+  private uncalShowing  = false;
+  private uncalFadeTimer:  ReturnType<typeof setTimeout> | null = null;
 
   // Cached pieces of state needed to compute our viewport.
   private mapBlob:           ArrayBuffer | null = null;
@@ -310,6 +316,9 @@ export class ProjectorApp {
       case 'map_change': {
         this.currentMarkers = msg.markers ?? [];
         this.currentFog     = msg.fog ?? { polygons: [] };
+        // Filter belongs to the incoming map — update so we don't keep the
+        // previous map's filter applied. undefined/null means "no filter".
+        this.currentFilter  = msg.filter ?? null;
         if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
         if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
         if (msg.mapImageHeight     !== undefined) this.mapImageHeight     = msg.mapImageHeight;
@@ -320,6 +329,7 @@ export class ProjectorApp {
         if (msg.iconData?.length) void this._decodeIconData(msg.iconData);
         this._renderMarkers();
         this._applyView();
+        this._applyFilter();
         break;
       }
       case 'fog_update': {
@@ -500,13 +510,64 @@ export class ProjectorApp {
    *     uncalibrated, and monitors don't care since they mirror primary).
    */
   private _refreshErrorStates(): void {
-    const noMap = !this.mapBlob;
-    this.noMapEl.hidden = !noMap || this.projectorViewport.mode === 'black';
-    const uncal = !!this.mapBlob
-                  && this.role !== 'monitor'
-                  && this.projectorViewport.mode === 'scaled'
-                  && (!this.mapPixelsPerSquare || !this.setup);
-    this.uncalWarnEl.hidden = !uncal || this.projectorViewport.mode === 'black';
+    const blacked = this.projectorViewport.mode === 'black';
+    const noMap   = !this.mapBlob && !blacked;
+    const uncal   = !!this.mapBlob
+                    && !blacked
+                    && this.role !== 'monitor'
+                    && this.projectorViewport.mode === 'scaled'
+                    && (!this.mapPixelsPerSquare || !this.setup);
+
+    this._setFadingWarning(
+      this.noMapEl,
+      noMap,
+      () => this.noMapShowing,
+      (v) => { this.noMapShowing = v; },
+      () => this.noMapFadeTimer,
+      (v) => { this.noMapFadeTimer = v; },
+    );
+    this._setFadingWarning(
+      this.uncalWarnEl,
+      uncal,
+      () => this.uncalShowing,
+      (v) => { this.uncalShowing = v; },
+      () => this.uncalFadeTimer,
+      (v) => { this.uncalFadeTimer = v; },
+    );
+  }
+
+  /** Common transition logic for projector overlay warnings: show on the
+   *  rising edge, then add the `is-faded` class after 5s so CSS fades it
+   *  out. Hide immediately on the falling edge. The GM has the equivalent
+   *  warning on their UI persistently, so the projector window can let go
+   *  of the message rather than blocking the visible projection area. */
+  private _setFadingWarning(
+    el: HTMLElement,
+    shouldShow: boolean,
+    getShowing: () => boolean,
+    setShowing: (v: boolean) => void,
+    getTimer: () => ReturnType<typeof setTimeout> | null,
+    setTimer: (v: ReturnType<typeof setTimeout> | null) => void,
+  ): void {
+    const showing = getShowing();
+    if (shouldShow && !showing) {
+      el.hidden = false;
+      el.classList.remove('is-faded');
+      const existing = getTimer();
+      if (existing !== null) clearTimeout(existing);
+      setTimer(setTimeout(() => {
+        el.classList.add('is-faded');
+        setTimer(null);
+      }, 5000));
+      setShowing(true);
+    } else if (!shouldShow && showing) {
+      const existing = getTimer();
+      if (existing !== null) clearTimeout(existing);
+      setTimer(null);
+      el.hidden = true;
+      el.classList.remove('is-faded');
+      setShowing(false);
+    }
   }
 
   /**

@@ -1,5 +1,67 @@
 # Changelog
 
+## v2.10.5 — 2026-05-11
+
+Feature:
+- **Map scale auto-detect + legacy retrofit** — on import (Upload and Web
+  Links tabs) Mappadux now guesses each map's grid size and 1″ scale from
+  a stack of three signals: any `[WxH]` pattern in the filename or map
+  name (range [5, 200]); embedded image DPI parsed from PNG `pHYs` or
+  JPEG JFIF density (clipped to a [50, 600] px/sq range); and the GCD of
+  the image dimensions, assuming square cells. Candidates are scored
+  with bonuses for standard DPIs (75/150/300 most, 72/100/200 next),
+  signal alignment, and "nice" round numbers.
+  - **Scaled** (yellow badge, auto-applied) when at least one strong
+    external signal (DPI or filename) confirms a standard-DPI candidate.
+  - **AutoScaled** (orange badge) when the detector picked a best guess
+    but the score gap is narrow, or when the user picked an option from
+    the new candidate dialog.
+  - **No grid** (grey badge) when the user explicitly opted a map out
+    of scaling — handouts, world maps, stat blocks, etc. Also offered as
+    the bottom row in the candidate dialog.
+  - Ambiguous imports (multiple candidates tied, no tiebreaker) open a
+    small radio-list dialog showing the top three options plus the
+    no-grid opt-out. Skip leaves the map uncalibrated for manual work.
+  - A new **retrofit pass** runs every time a `.mappadux` (or legacy
+    `.json`) pack loads — quietly auto-detects scale on any map in the
+    pack that lacks it, so older packs upgrade themselves on first
+    open. Status bar reports the count: *"Auto-scaled 4, 2 need a look"*.
+  - The Calibrate flow now stamps `scaleConfidence: 'manual'` so the
+    auto-detector treats hand-calibrated maps as authoritative and
+    never overrides them.
+  - Per-asset "No grid" toggle in the library editor flips the opt-out
+    immediately; clicking the No-grid pill on a map clears the opt-out
+    and opens the manual Calibrate modal.
+
+Fix:
+- **Projection View** — Open Projector / Open Projector Monitor buttons
+  no longer fail with "Waiting for P2P… try again in a moment." on cold
+  load. The buttons gated on `Host.roomCode`, which only became available
+  after the PeerJS broker handshake completed — fast on localhost dev,
+  noticeably slower on production HTTPS, so clicks that came in early
+  hit the warning branch and never reached `window.open`. `Host` now
+  tracks the requested peer ID synchronously inside `start()` and the
+  `roomCode` getter returns it immediately, so the projector window
+  launches right away and connects to the same-browser GM over
+  BroadcastChannel without waiting on the broker. Remote-projector /
+  remote-player PeerJS paths unchanged.
+
+Fix:
+- **Projector kept the previous map's filter on map swap** — the
+  projector's `map_change` handler updated markers, fog, and dimensions
+  but never re-read `msg.filter`, so swapping to a map with "none"
+  selected left the prior map's filter applied until the user toggled
+  the dropdown off and back on. Now mirrors the player path: pulls the
+  incoming filter from `map_change` and re-applies.
+
+Polish:
+- **Projector overlay warnings fade** — the "Waiting for GM to load a
+  map…" and "Map not calibrated…" messages now fade out 5 seconds after
+  first appearing. The GM-side UI still shows these conditions
+  persistently, so the projection window doesn't need to keep nagging
+  over what's being shown. Re-fires (and re-fades) on the next
+  transition into the warning state.
+
 ## v2.10.4 — 2026-05-10
 
 Docs:
