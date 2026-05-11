@@ -1465,6 +1465,14 @@ option.select-option--add {
   border-color: var(--accent-dim);
   background: rgba(255,255,255,0.05);
 }
+.img-modal-cell[draggable="true"]            { cursor: grab; }
+.img-modal-cell[draggable="true"]:active     { cursor: grabbing; }
+.img-modal-cell.is-dragging                  { opacity: 0.35; }
+.img-modal-sidebar-cat.is-drop-target {
+  background: var(--accent-dim);
+  border: 1px dashed var(--accent);
+  color: var(--accent-hover);
+}
 .img-modal-visual {
   width: 64px;
   height: 64px;

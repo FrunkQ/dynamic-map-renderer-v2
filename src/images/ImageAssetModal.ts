@@ -407,7 +407,43 @@ export class ImageAssetModal {
         void this._confirmDeleteCategory(cat);
       });
     }
+    // Drop target — accept dragged icons to recategorise. Fonts is read-only
+    // (it's a virtual catalog, not a real IDB category), so skip it.
+    if (cat.id !== SYSTEM_CATEGORY_IDS.fonts) {
+      this._wireDropTarget(row, cat.id);
+    }
     return row;
+  }
+
+  /** Make the given element a drop target for drag-from-grid icon moves.
+   *  On drop, updates the asset's categoryId and re-renders both the
+   *  sidebar (counts shift) and the grid (asset disappears from the
+   *  current view if it left this category). */
+  private _wireDropTarget(el: HTMLElement, targetCategoryId: string): void {
+    el.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer) return;
+      const types = e.dataTransfer.types;
+      if (!types.includes('application/x-mappadux-image-asset')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('is-drop-target');
+    });
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('is-drop-target');
+    });
+    el.addEventListener('drop', async (e) => {
+      el.classList.remove('is-drop-target');
+      if (!e.dataTransfer) return;
+      const assetId = e.dataTransfer.getData('application/x-mappadux-image-asset');
+      if (!assetId) return;
+      e.preventDefault();
+      const asset = this.assets.find((a) => a.id === assetId);
+      if (!asset || asset.categoryId === targetCategoryId) return;
+      await ImageAssetStore.update(assetId, { categoryId: targetCategoryId });
+      this.assets = await ImageAssetStore.getAll();
+      this._renderSidebar();
+      this._renderGrid();
+    });
   }
 
   private async _promptNewCategory(): Promise<void> {
@@ -1009,6 +1045,23 @@ export class ImageAssetModal {
     const cell = document.createElement('div');
     cell.className = 'img-modal-cell';
     cell.title = asset.name;
+
+    // Drag source — let the user drag any icon onto a sidebar category to
+    // move it. dataTransfer payload is the asset id; the dragover/drop
+    // handlers on category rows do the actual update.
+    cell.draggable = true;
+    cell.addEventListener('dragstart', (e) => {
+      if (!e.dataTransfer) return;
+      e.dataTransfer.setData('application/x-mappadux-image-asset', asset.id);
+      e.dataTransfer.effectAllowed = 'move';
+      // Hide the hover preview while a drag is in flight — it'd otherwise
+      // follow the cursor and obscure the drop targets.
+      this._hidePreview();
+      cell.classList.add('is-dragging');
+    });
+    cell.addEventListener('dragend', () => {
+      cell.classList.remove('is-dragging');
+    });
 
     const visual = document.createElement('div');
     visual.className = 'img-modal-visual';
