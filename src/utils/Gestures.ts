@@ -21,6 +21,10 @@ export interface GestureDragEvent {
   dx: number;
   dy: number;
   phase: 'start' | 'move' | 'end';
+  /** Pointer source — 'mouse', 'touch', 'pen'. Consumers can filter
+   *  (e.g. accept mouse-only drag and let single-touch fall through to
+   *  other handlers). Set from the originating pointerdown event. */
+  pointerType: string;
 }
 
 export interface GestureTwoFingerEvent {
@@ -72,11 +76,11 @@ export function attachGestures(
   const prevTouchAction = el.style.touchAction;
   el.style.touchAction = 'none';
 
-  interface TrackedPointer { x: number; y: number }
+  interface TrackedPointer { x: number; y: number; type: string }
   const pointers = new Map<number, TrackedPointer>();
 
   let mode: 'idle' | 'drag' | 'two-finger' = 'idle';
-  let dragStart = { x: 0, y: 0 };
+  let dragStart = { x: 0, y: 0, type: 'mouse' };
   let twoStartMid = { x: 0, y: 0 };
   let twoStartDist = 1;
 
@@ -86,6 +90,7 @@ export function attachGestures(
       dx: clientX - dragStart.x,
       dy: clientY - dragStart.y,
       phase: 'end',
+      pointerType: dragStart.type,
     });
   };
 
@@ -102,14 +107,15 @@ export function attachGestures(
 
   const onPointerDown = (e: PointerEvent) => {
     if (handlers.shouldStart && !handlers.shouldStart(e)) return;
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
 
     if (pointers.size === 1) {
       mode = 'drag';
-      dragStart = { x: e.clientX, y: e.clientY };
+      dragStart = { x: e.clientX, y: e.clientY, type: e.pointerType };
       handlers.onDrag?.({
         clientX: e.clientX, clientY: e.clientY,
         dx: 0, dy: 0, phase: 'start',
+        pointerType: e.pointerType,
       });
     } else if (pointers.size === 2) {
       if (mode === 'drag') dispatchDragEnd(e.clientX, e.clientY);
@@ -130,6 +136,7 @@ export function attachGestures(
         dx: e.clientX - dragStart.x,
         dy: e.clientY - dragStart.y,
         phase: 'move',
+        pointerType: dragStart.type,
       });
     } else if (mode === 'two-finger' && pointers.size >= 2) {
       const [p1, p2] = [...pointers.values()];
@@ -165,10 +172,11 @@ export function attachGestures(
       if (pointers.size === 1) {
         const [remaining] = [...pointers.values()];
         mode = 'drag';
-        dragStart = { x: remaining.x, y: remaining.y };
+        dragStart = { x: remaining.x, y: remaining.y, type: remaining.type };
         handlers.onDrag?.({
           clientX: remaining.x, clientY: remaining.y,
           dx: 0, dy: 0, phase: 'start',
+          pointerType: remaining.type,
         });
       } else {
         mode = 'idle';
