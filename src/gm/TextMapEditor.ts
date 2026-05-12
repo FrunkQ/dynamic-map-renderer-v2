@@ -554,10 +554,15 @@ export class TextMapEditor {
     dialog.className = 'modal-dialog modal-dialog--sm';
     overlay.appendChild(dialog);
 
-    // Working copy — committed back to cfg.animation on Save.
+    // Working copy — committed back to cfg.animation on Save. The
+    // master Enable lives on the toolbar's Animation row now, so we
+    // mirror its state in `cur.enabled` but don't render a checkbox
+    // for it inside this modal. autoReveal defaults OFF — the GM
+    // usually wants to click Start themselves rather than have the
+    // reveal fire the moment the map loads.
     const cur: TextMapAnimation = this.cfg.animation
       ? { ...this.cfg.animation, params: { ...this.cfg.animation.params } }
-      : { enabled: false, autoReveal: true, transitionId: 'written_reveal', params: {} };
+      : { enabled: true, autoReveal: false, transitionId: 'written_reveal', params: {} };
 
     // Header
     const header = document.createElement('div');
@@ -600,14 +605,10 @@ export class TextMapEditor {
     body.style.gap = 'var(--space-md)';
     dialog.appendChild(body);
 
-    // Master switch
-    const enable = document.createElement('label');
-    enable.className = 'txt-map-toolbar-checkbox';
-    const enableCheck = document.createElement('input');
-    enableCheck.type = 'checkbox';
-    enableCheck.checked = cur.enabled;
-    enable.append(enableCheck, document.createTextNode(' Reveal animation enabled'));
-    body.appendChild(enable);
+    // (The master "Reveal animation enabled" checkbox is intentionally
+    //  not rendered here — it's externalised to the toolbar's
+    //  Animation row. The modal preserves the existing enabled state
+    //  on save so opening + saving doesn't flip the master switch.)
 
     // Auto / manual trigger
     const auto = document.createElement('label');
@@ -712,9 +713,6 @@ export class TextMapEditor {
     }
     renderParams();
 
-    enableCheck.addEventListener('change', () => {
-      cur.enabled = enableCheck.checked;
-    });
     autoCheck.addEventListener('change', () => {
       cur.autoReveal = autoCheck.checked;
     });

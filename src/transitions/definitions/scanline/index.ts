@@ -11,7 +11,7 @@ export default {
       id: 'duration',
       label: 'Duration',
       min: 500,
-      max: 6000,
+      max: 20000,
       step: 100,
       default: 2000,
       unit: 'ms',
