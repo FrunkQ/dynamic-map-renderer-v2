@@ -769,7 +769,12 @@ export class GMApp {
           payload: freshBroadcast,
           ...(freshIconData.length > 0 ? { iconData: freshIconData } : {}),
         });
-        // GM canvas also redraws now that the bitmap exists.
+        // GM marker canvas + icon-button preview both need redrawing
+        // now that the per-(asset, colour) bitmap has landed in cache —
+        // otherwise the canvas stays on the fallback circle and the
+        // preview button shows the stale (or empty) image.
+        this.markerEditor.redraw();
+        this.updateMarkerPanel();
         this.renderer.markDirty();
       });
     }
