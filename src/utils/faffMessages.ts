@@ -25,6 +25,17 @@ export const FAFF_MESSAGES: readonly string[] = [
   'A wild Rules Lawyer appears!',
   'Looking up that obscure spell you cast.',
   'Adjusting the encounter difficulty. Quietly.',
+  // ── Sci-fi ────────────────────────────────────────────────────────────────
+  'Recalibrating the warp coil. Standard procedure.',
+  'Hold on — sensors detect something off-screen.',
+  'Just venting plasma. Everything’s fine.',
+  'Reticulating splines.',
+  'Hailing frequencies open. No one’s answering.',
+  'Reactor at 102 %. Probably fine.',
+  // ── Cthulhu ───────────────────────────────────────────────────────────────
+  'SAN check pending. Please hold.',
+  'The stars are nearly right.',
+  'Something stirs in the basement…',
 ];
 
 let _lastIndex = -1;
