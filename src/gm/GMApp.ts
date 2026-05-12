@@ -212,11 +212,6 @@ export class GMApp {
   private filterSelect!:            HTMLSelectElement;
   private filterParamsContainer!:   HTMLElement;
   private viewBgColour!:           HTMLInputElement;
-  private viewDefaultActions!:     HTMLElement;
-  private editViewportBtn!:        HTMLButtonElement;
-  private editViewportActions!:    HTMLElement;
-  private fogDrawBtn!:             HTMLButtonElement;
-  private fogDeleteBtn!:           HTMLButtonElement;
   private roomCodeEl!:             HTMLElement;
   private qrContainer!:            HTMLElement;
   private playerCountEl!:          HTMLElement;
@@ -526,6 +521,11 @@ export class GMApp {
    * Pass null to deselect. Deselecting also clears any pending snap-undo
    * state — per the spec, "if the marker is unselected it resets and the
    * 16:9 icon will be back."
+   *
+   * A8.5 — when the projector rect is deselected, auto-collapse the
+   * Projection View side panel. Selecting it doesn't auto-expand
+   * (deliberate: the GM might be working with the rect on the canvas
+   * and not need the panel's deeper config every time).
    */
   private _selectViewport(kind: 'player' | 'projector' | null): void {
     if (this._selectedViewport === kind) return;
@@ -533,6 +533,14 @@ export class GMApp {
     this._selectedViewport = kind;
     if (prev !== null) this._clearSnapUndo(prev);
     if (kind !== null) this.markerEditor?.selectById(null);
+    if (kind === null && prev === 'projector') {
+      const body  = document.querySelector<HTMLElement>('#projection-panel .panel-body');
+      const title = document.querySelector<HTMLElement>('#projection-panel .panel-title');
+      if (body && !body.hidden) {
+        body.hidden = true;
+        title?.setAttribute('aria-expanded', 'false');
+      }
+    }
     this._refreshRectOverlays();
   }
 
@@ -920,9 +928,10 @@ export class GMApp {
     // Grey out the broadcast toggles on the side-panel headers when nothing
     // of that type is currently receiving. CSS handles the visual fade; the
     // toggle stays clickable so the GM can pre-set state before joining
-    // players / projectors arrive. Player toggle uses TOTAL players (a
-    // single local player is enough to undgrey it).
-    document.querySelector('#view-panel .panel-header')
+    // players / projectors arrive. Player toggle (now in the Session
+    // header) uses TOTAL players (a single local player is enough to
+    // undgrey it).
+    document.querySelector('#session-panel .panel-header')
       ?.classList.toggle('panel-header--no-connection', totalPlayers === 0);
     document.querySelector('#projection-panel .panel-header')
       ?.classList.toggle('panel-header--no-connection', projTotal === 0);
@@ -1761,11 +1770,6 @@ export class GMApp {
     this.filterSelect               = q<HTMLSelectElement>('#filter-select');
     this.filterParamsContainer = q('#filter-params');
     this.viewBgColour          = q<HTMLInputElement>('#view-bg-colour');
-    this.viewDefaultActions    = q('#view-default-actions');
-    this.editViewportBtn       = q<HTMLButtonElement>('#edit-viewport-btn');
-    this.editViewportActions   = q('#edit-viewport-actions');
-    this.fogDrawBtn            = q<HTMLButtonElement>('#fog-draw-btn');
-    this.fogDeleteBtn          = q<HTMLButtonElement>('#fog-delete-btn');
     this.roomCodeEl            = q('#room-code');
     this.qrContainer           = q('#qr-container');
     this.playerCountEl         = q('#player-count');
@@ -2194,6 +2198,12 @@ export class GMApp {
   }
 
   private bindViewportEditor(): void {
+    // The marching-ants outline + drag handles live on the GM canvas via
+    // ViewportEditor; the editable chrome (move / resize / aspect-lock /
+    // maximise) lives on the HTML overlay (A8). The old Player View
+    // side panel — and its Edit / OK / Cancel / Reset buttons — was
+    // retired in v2.11/A8.5 because every action is now a single click
+    // on the rect itself.
     const canvas = document.querySelector<HTMLCanvasElement>('#viewport-canvas')!;
     this.viewportEditor = new ViewportEditor(canvas);
     this.viewportEditor.setRenderer(this.renderer);
@@ -2202,61 +2212,6 @@ export class GMApp {
     this.viewportEditor.onChange((view) => {
       this.state.setView(view);
       this._refreshRectOverlays();
-    });
-
-    // Click outside the viewport canvas / OK-Cancel buttons implicitly
-    // commits the player viewport edit — same UX as the projection editor.
-    const autoCommitView = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest('#viewport-canvas'))       return; // dragging the rect
-      if (t.closest('#edit-viewport-actions')) return; // OK / Cancel
-      this.viewportEditor.commitEdit();
-    };
-
-    // Toggle edit-mode UI
-    this.viewportEditor.onEditMode((editing) => {
-      this.viewDefaultActions.hidden  =  editing;
-      this.editViewportActions.hidden = !editing;
-      // Disable fog tools while editing viewport so they don't conflict
-      this.fogDrawBtn.disabled   = editing;
-      this.fogDeleteBtn.disabled = editing;
-      if (editing && this.fogDrawing) {
-        this.fogDrawing = false;
-        this.fogEditor.disable();
-        this.fogDrawBtn.classList.remove('active');
-      }
-      this.markerEditor?.setPointerCapture(!editing);
-      // Wire / unwire the auto-commit listener as edit-mode flips. Defer
-      // attaching by a tick so the click that started the edit doesn't
-      // itself trigger an immediate commit.
-      if (editing) {
-        setTimeout(() => document.addEventListener('click', autoCommitView, true), 0);
-      } else {
-        document.removeEventListener('click', autoCommitView, true);
-      }
-    });
-
-    this.editViewportBtn.addEventListener('click', () => {
-      this.viewportEditor.startEdit();
-      // Expand the panel if it's collapsed
-      const panel = document.querySelector('#view-panel .panel-body') as HTMLElement | null;
-      const title = document.querySelector('#view-panel .panel-title') as HTMLElement | null;
-      if (panel?.hidden) {
-        panel.hidden = false;
-        title?.setAttribute('aria-expanded', 'true');
-      }
-    });
-
-    document.querySelector('#viewport-ok-btn')?.addEventListener('click', () => {
-      this.viewportEditor.commitEdit();
-    });
-
-    document.querySelector('#viewport-cancel-btn')?.addEventListener('click', () => {
-      this.viewportEditor.cancelEdit();
-    });
-
-    document.querySelector('#reset-viewport-btn')?.addEventListener('click', () => {
-      this.viewportEditor.resetToFullMap();
     });
   }
 

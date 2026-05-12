@@ -28,7 +28,14 @@
     </div>
 
     <section class="panel" id="session-panel">
-      <button type="button" class="panel-title" aria-expanded="true">Session</button>
+      <div class="panel-header">
+        <button type="button" class="panel-title" aria-expanded="true">Player Connection</button>
+        <span class="panel-toggle-icon" aria-hidden="true" title="Visual bypass"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Broadcast to players. Off = show placeholder (the GM is faffing)">
+          <input type="checkbox" id="player-broadcast-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <div class="panel-body">
         <!-- Hidden source-of-truth for the room code; rendered as a tooltip on the QR. -->
         <span id="room-code" hidden>…</span>
@@ -336,31 +343,6 @@
           </div>
         </div>
 
-      </div>
-    </section>
-
-    <section class="panel" id="view-panel">
-      <div class="panel-header">
-        <button type="button" class="panel-title" aria-expanded="false">Player View</button>
-        <span class="panel-toggle-icon" aria-hidden="true" title="Visual bypass"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
-        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Broadcast to players. Off = show placeholder (the GM is faffing)">
-          <input type="checkbox" id="player-broadcast-toggle" checked />
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="panel-body" hidden>
-        <p class="view-hint">The orange outline on the map shows what players currently see.</p>
-        <div id="view-default-actions" class="viewport-actions">
-          <button id="edit-viewport-btn"  class="btn btn--primary btn--full">Edit Player View</button>
-          <button id="reset-viewport-btn" class="btn btn--ghost   btn--full">Reset to Full Map</button>
-        </div>
-        <div id="edit-viewport-actions" class="viewport-actions" hidden>
-          <p class="view-hint view-hint--editing">Drag the rectangle to move · Drag a corner to resize</p>
-          <div class="btn-row">
-            <button id="viewport-ok-btn"     class="btn btn--primary btn--sm">OK</button>
-            <button id="viewport-cancel-btn" class="btn btn--ghost   btn--sm">Cancel</button>
-          </div>
-        </div>
       </div>
     </section>
 
