@@ -742,6 +742,30 @@ export class GMApp {
         transitionRegistry.getOrFallback(newId),
         this.allTransitionParams[newId] ?? transitionRegistry.defaultParams(newId),
       );
+
+      // Map loads bring their markers along, but loadForMap only emits a
+      // ['map', 'view', 'filter', 'fog'] notify — no 'markers' — so the
+      // pre-render below won't fire from the markers branch. Kick off
+      // libAsset bitmap rendering here too, otherwise tintable icons
+      // (which are colour-dependent and not in the preload pass) draw as
+      // fallback circles until the user nudges the marker.
+      void this._ensureLibIcons(broadcastMarkers).then((added) => {
+        if (!added) return;
+        this.markerEditor.redraw();
+        this.updateMarkerPanel();
+        // Players don't have these markers in iconData yet either — push
+        // a fresh marker_update with the now-rendered bitmaps in tow.
+        const freshState = this.state.getState();
+        const freshVisible = freshState.markers.filter((m) => !m.hidden);
+        const freshBroadcast = freshState.markers.filter((m) =>
+          !m.hidden || m.roles.audio === 'source' || m.roles.motion === 'source');
+        const freshIconData = this._collectIconData(freshVisible);
+        this.host.broadcast({
+          type: 'marker_update',
+          payload: freshBroadcast,
+          ...(freshIconData.length > 0 ? { iconData: freshIconData } : {}),
+        });
+      });
     }
 
     if (changed.includes('markers')) {
