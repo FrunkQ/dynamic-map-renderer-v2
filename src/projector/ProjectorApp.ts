@@ -349,6 +349,20 @@ export class ProjectorApp {
         this._applyFilter();
         break;
       }
+      case 'handout_reveal': {
+        // Projector currently lacks a TransitionEngine + overlay canvas
+        // (player has them; projector goes straight from blob → texture).
+        // For now the projector cuts to the FINAL frame instantly on
+        // reveal — the player view shows the full animation, the
+        // projector just updates the displayed handout. Follow-up:
+        // mirror the player's transition path on the projector by
+        // adding an overlay canvas + TransitionEngine.
+        if (blob) {
+          this.mapBlob = blob;
+          void this.renderer.loadMap(blob, this.currentFog);
+        }
+        break;
+      }
       case 'fog_update': {
         this.currentFog = msg.payload;
         this.renderer.updateFog(msg.payload);

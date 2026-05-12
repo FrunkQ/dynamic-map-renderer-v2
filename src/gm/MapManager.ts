@@ -164,6 +164,19 @@ export class MapManager {
     return placeholder.arrayBuffer();
   }
 
+  /** Rasterise the STARTING FRAME for a handout map — background +
+   *  elements flagged noAnimate. Used by the reveal animation flow to
+   *  initialise the player + projector at the "before" state. Returns
+   *  null when the map isn't a handout or has no animation. */
+  async getStartingFrameBlob(id: string): Promise<ArrayBuffer | null> {
+    const map = await getMap(id);
+    if (!map) return null;
+    const asset = await MapAssetStore.get(map.mapAssetId);
+    if (!asset || asset.source !== 'text-map') return null;
+    const blob = await MapAssetStore.getStartingFrameBlob(asset);
+    return blob ? blob.arrayBuffer() : null;
+  }
+
   /**
    * True when the map's underlying asset blob isn't available — the asset
    * was deleted, the web-link is broken, or the user is offline without a

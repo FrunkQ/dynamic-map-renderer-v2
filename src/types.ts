@@ -612,12 +612,44 @@ export interface MsgMapMetaUpdate {
   mapImageHeight?:     number;
 }
 
+/**
+ * Triggers a handout reveal animation on the player + projector. Sent
+ * by the GM after a text-map has been loaded — either automatically
+ * (autoReveal=true, fired a moment after map_change) or manually (GM
+ * clicks Start Animation).
+ *
+ * The receiver:
+ *   1. Captures the current frame (which is the handout's STARTING
+ *      frame — sent earlier via map_change for this map).
+ *   2. Loads `mapBlob` (the FINAL frame, full handout) as the new
+ *      texture underneath.
+ *   3. Runs the configured transition.
+ *
+ * Both the starting frame (already on screen) and the final frame
+ * are rendered through the live filter pipeline, so the reveal is
+ * subject to whatever effect the player has on at the moment.
+ */
+export interface MsgHandoutReveal {
+  type: 'handout_reveal';
+  /** Which map this reveal applies to. Receiver guards on
+   *  mapId === currentMapId to defend against late-arriving messages
+   *  after the GM has switched maps. */
+  mapId: string;
+  /** Transition picked in the editor — must be one tagged forHandout. */
+  transition: TransitionConfig;
+  /** FINAL frame bytes — gets chunked over the wire via the same
+   *  mapBlob pathway as MsgMapChange. The receiver pulls this in via
+   *  the second arg of handleMessage(msg, mapBlob). */
+  mapBlob: ArrayBuffer;
+}
+
 export type GMMessage =
   | MsgFullState
   | MsgViewUpdate
   | MsgFogUpdate
   | MsgFilterUpdate
   | MsgMapChange
+  | MsgHandoutReveal
   | MsgMarkerUpdate
   | MsgAudioUpdate
   | MsgSoundboardPlay

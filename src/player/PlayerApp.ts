@@ -272,6 +272,32 @@ export class PlayerApp {
         break;
       }
 
+      case 'handout_reveal': {
+        // Reveal animation for a handout. The starting frame is
+        // already on the renderer (set by an earlier map_change for
+        // this mapId); the GM is sending us the FINAL frame as
+        // mapBlob plus the transition config. We snapshot the current
+        // (starting) frame, swap the texture to final, and run the
+        // transition — same code path as a map switch but inside one
+        // map id.
+        if (!mapBlob) break;
+        if (msg.mapId !== this.currentMapId) break; // stale message
+        const finalBlob = mapBlob;
+        const fog    = this.lastFog;
+        const filter = this.lastFilter;
+        const view   = this.lastView;
+        this.lastMapBlob = finalBlob;
+        void this.runTransition(msg.transition, async () => {
+          await this.renderer.loadMap(finalBlob, fog);
+          if (filter) this.renderer.setFilter(filter);
+          if (view) {
+            this.renderer.setView(view);
+            this.markerTexture.setViewHeight(view.viewNH);
+          }
+        });
+        break;
+      }
+
       case 'filter_update': {
         this.lastFilter = msg.payload;
         this.renderer.setFilter(msg.payload);

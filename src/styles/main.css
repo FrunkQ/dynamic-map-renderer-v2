@@ -1766,6 +1766,26 @@ option.select-option--add {
   letter-spacing: 0.04em;
   margin-right: 4px;
 }
+/* Handout reveal progress bar — shown on the GM side after clicking
+   Start Animation. The GM doesn't see the actual reveal transition
+   (player + projector run it); this bar empties over the configured
+   duration so the GM knows the animation is in flight + when it's
+   complete. */
+.reveal-progress {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.reveal-progress[hidden] { display: none; }
+.reveal-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--accent, #6aa3ff);
+  transition: width 1s linear;
+}
+
 /* Cut / Copy / Paste cluster — sits next to the add buttons in the
    left section. Thin vertical divider in front of it so the icon
    buttons feel separate from the labelled +Text/+Image/+Upload group. */

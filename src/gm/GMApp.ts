@@ -126,6 +126,9 @@ export class GMApp {
   private mapSelect!:               HTMLSelectElement;
   private mapNameInput!:            HTMLInputElement;
   private editTextMapBtn!:          HTMLButtonElement;
+  private startAnimationBtn!:       HTMLButtonElement;
+  private revealProgressEl!:        HTMLElement;
+  private revealProgressBarEl!:     HTMLElement;
   private packNameInput!:           HTMLInputElement;
   /** Debounce timer for the in-panel pack-name input. */
   private _packNameSaveTimer: number | null = null;
@@ -702,6 +705,68 @@ export class GMApp {
     }
   }
 
+  /** Kick off the handout reveal animation on every connected player +
+   *  projector. The GM's own canvas already shows the FINAL frame so
+   *  no local texture swap is needed — we just broadcast and show a
+   *  progress bar that empties over the configured duration so the GM
+   *  knows the animation is in flight. */
+  private async _triggerHandoutReveal(): Promise<void> {
+    const currentId = this.state.snapshot().map?.id;
+    if (!currentId) return;
+    const storedMap = await getMap(currentId);
+    if (!storedMap) return;
+    const asset = await MapAssetStore.get(storedMap.mapAssetId);
+    if (!asset || asset.source !== 'text-map' || !asset.textMap?.animation?.enabled) return;
+
+    const finalBlob = await this.maps.getBlob(currentId);
+    if (!finalBlob) return;
+
+    const anim = asset.textMap.animation;
+    const transitionDef = transitionRegistry.getOrFallback(anim.transitionId);
+    const transition: TransitionConfig = {
+      transitionId: anim.transitionId,
+      params: { ...transitionDef.params.reduce<Record<string, number | string>>((acc, p) => {
+        acc[p.id] = p.default; return acc;
+      }, {}), ...anim.params },
+    };
+    // Pull a duration from the picked transition's params for the local
+    // progress bar — every handout-suitable transition exposes a
+    // `duration` param in ms. Falls back to a sensible default if the
+    // picked transition omits it.
+    const durationMs = typeof transition.params['duration'] === 'number'
+      ? transition.params['duration'] as number
+      : 2000;
+
+    this.host.broadcast({
+      type: 'handout_reveal',
+      mapId: currentId,
+      transition,
+      mapBlob: finalBlob,
+    });
+    this._showRevealProgress(durationMs);
+  }
+
+  /** Show the GM-side progress bar for the reveal animation. The bar
+   *  width animates from 100% → 0% over `durationMs`, then the whole
+   *  overlay hides. Purely informational — Alex's spec: GM doesn't
+   *  see the reveal itself, just a progress indicator. */
+  private _showRevealProgress(durationMs: number): void {
+    if (!this.revealProgressEl || !this.revealProgressBarEl) return;
+    this.revealProgressEl.hidden = false;
+    const bar = this.revealProgressBarEl;
+    // Reset bar to 100% width with no transition, then animate to 0%
+    // over the configured duration on the next frame.
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    requestAnimationFrame(() => {
+      bar.style.transition = `width ${durationMs}ms linear`;
+      bar.style.width = '0%';
+    });
+    setTimeout(() => {
+      if (this.revealProgressEl) this.revealProgressEl.hidden = true;
+    }, durationMs + 50);
+  }
+
   /** Open the Text Map editor for the currently displayed handout.
    *  Wired to the inline Edit button next to the Name field — only
    *  visible when the active map is a text-map (set in loadMap below).
@@ -745,11 +810,26 @@ export class GMApp {
     // text-map handout — gives a one-click route into the editor without
     // hunting through the Add Map library.
     const mapAssetForButton = await MapAssetStore.get(map.mapAssetId);
-    if (this.editTextMapBtn) this.editTextMapBtn.hidden = mapAssetForButton?.source !== 'text-map';
-    const blob = await this.maps.getBlob(map.id);
-    if (!blob) { this.setStatus('Map blob not found', 'error'); return; }
-
-    this.currentMapBlob = blob;
+    const isTextMap = mapAssetForButton?.source === 'text-map';
+    const hasReveal = isTextMap && mapAssetForButton?.textMap?.animation?.enabled === true;
+    if (this.editTextMapBtn) this.editTextMapBtn.hidden = !isTextMap;
+    // Show the Start Animation button only when this handout has a
+    // reveal animation configured. Hidden in every other case.
+    if (this.startAnimationBtn) this.startAnimationBtn.hidden = !hasReveal;
+    const finalBlob = await this.maps.getBlob(map.id);
+    if (!finalBlob) { this.setStatus('Map blob not found', 'error'); return; }
+    // For animated handouts the player + projector receive the STARTING
+    // frame initially (background + noAnimate elements). They wait at
+    // that state until the GM clicks Start Animation, at which point
+    // we broadcast a handout_reveal carrying the final frame. The GM's
+    // own canvas always loads the FINAL frame — Alex's spec: GM
+    // doesn't need to see the transition; a progress bar at trigger
+    // time indicates animation is in flight.
+    const broadcastBlob: ArrayBuffer = hasReveal
+      ? (await this.maps.getStartingFrameBlob(map.id) ?? finalBlob)
+      : finalBlob;
+    const blob = finalBlob; // for local renderer.loadMap below
+    this.currentMapBlob = broadcastBlob;
 
     // Clear old-map fog immediately so it never appears on the new map's
     // texture, even during the async decode window.  The correct fog for the
@@ -760,7 +840,11 @@ export class GMApp {
     // correct when the texture callback fires and recreates the FogCompositor.
     // Note: _notify(['map','view','filter','fog']) fires here, but onStateChange
     // deliberately skips fog_update broadcasts when 'map' is in changed (above).
-    await this.state.loadForMap({ id: map.id, name: map.name }, blob);
+    // Pass the BROADCAST blob (start frame for animated handouts; final
+    // frame otherwise) so player + projector display the correct
+    // initial state. The GM's local renderer.loadMap below uses the
+    // FINAL blob so the GM canvas shows the end state directly.
+    await this.state.loadForMap({ id: map.id, name: map.name }, broadcastBlob);
 
     // Auto-sample the top-left pixel of the map image and use it as the
     // background colour whenever there is no saved preference (i.e. still black).
@@ -798,6 +882,16 @@ export class GMApp {
     this.renderer.loadMap(blob, fog);
 
     this.setStatus(map.name, 'ok');
+
+    // Auto-reveal: if this handout has the reveal animation set to
+    // autoReveal, fire it once after the map_change message has had a
+    // chance to settle on the receivers. 350 ms is enough for the
+    // chunked mapBlob to arrive over WebRTC + the receiver's
+    // renderer.loadMap to complete. Manual reveal (autoReveal=false)
+    // waits for the GM to click Start Animation.
+    if (hasReveal && mapAssetForButton?.textMap?.animation?.autoReveal === true) {
+      setTimeout(() => { void this._triggerHandoutReveal(); }, 350);
+    }
 
     // Show / hide the Fix Missing Map button based on whether the asset blob
     // actually came back. The placeholder is rendered at this point if not.
@@ -863,6 +957,10 @@ export class GMApp {
     this.mapNameInput               = q<HTMLInputElement>('#map-name-input');
     this.editTextMapBtn             = q<HTMLButtonElement>('#edit-textmap-btn');
     this.editTextMapBtn.addEventListener('click', () => void this._editCurrentTextMap());
+    this.startAnimationBtn          = q<HTMLButtonElement>('#start-animation-btn');
+    this.startAnimationBtn.addEventListener('click', () => void this._triggerHandoutReveal());
+    this.revealProgressEl           = q<HTMLElement>('#reveal-progress');
+    this.revealProgressBarEl        = q<HTMLElement>('#reveal-progress-bar');
     this.packNameInput              = q<HTMLInputElement>('#pack-name-input');
     this.transitionSelect           = q<HTMLSelectElement>('#transition-select');
     this.transitionParamsContainer  = q('#transition-params');

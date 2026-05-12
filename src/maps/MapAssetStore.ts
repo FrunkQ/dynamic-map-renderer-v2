@@ -120,6 +120,34 @@ export class MapAssetStore {
    *  next render goes through the rasteriser again. */
   static invalidateRuntimeCache(id: string): void {
     MapAssetStore.runtimeBlobs.delete(id);
+    // Also drop any associated starting-frame cache — both frames go
+    // stale together when the handout config is edited.
+    MapAssetStore.runtimeBlobs.delete(`start-${id}`);
+  }
+
+  /** Rasterise just the STARTING FRAME of a handout — the background
+   *  plus elements flagged `noAnimate: true`. Used as the "before" state
+   *  for handout reveal animations on the player + projector. Cached
+   *  per asset id in the runtime blob map (under a `start-` prefix) so
+   *  repeat reveals don't re-rasterise.
+   *
+   *  Returns null for non-handout assets or when rasterisation fails. */
+  static async getStartingFrameBlob(asset: MapAsset): Promise<Blob | null> {
+    if (asset.source !== 'text-map' || !asset.textMap) return null;
+    const cacheKey = `start-${asset.id}`;
+    const cached = MapAssetStore.runtimeBlobs.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const blob = await rasterizeTextMap(asset.textMap, { staticOnly: true });
+      MapAssetStore.runtimeBlobs.set(cacheKey, blob);
+      return blob;
+    } catch (err) {
+      console.error(
+        `[MapAssetStore] starting-frame rasterisation failed for ${asset.id}:`,
+        err,
+      );
+      return null;
+    }
   }
 
   /**
