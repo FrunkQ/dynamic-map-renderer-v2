@@ -1,4 +1,5 @@
 import type { ViewState } from '../types.ts';
+import type { Renderer } from '../rendering/Renderer.ts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,10 @@ export class ViewportEditor {
   private onChangeFn:   ViewChangeCallback | null = null;
   private onEditModeFn: EditModeCallback   | null = null;
 
+  /** Optional Renderer reference — when wired, mapBounds rides the live
+   *  camera (pan/zoom) instead of falling back to the static letterbox. */
+  private renderer: Renderer | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -91,6 +96,17 @@ export class ViewportEditor {
     this.mapAspect = ratio;
     this.hasMap    = true;
     this.startMarch();   // always animate once a map is loaded
+    this.redraw();
+  }
+
+  /** Wire a Renderer so mapBounds tracks the live GM camera transform. */
+  setRenderer(renderer: Renderer): void {
+    this.renderer = renderer;
+  }
+
+  /** Re-render — call when an external state change (camera pan/zoom)
+   *  needs the rectangle re-positioned without altering ViewState. */
+  redrawExternal(): void {
     this.redraw();
   }
 
@@ -232,9 +248,24 @@ export class ViewportEditor {
 
   // ─── Coordinate conversion ───────────────────────────────────────────────────
 
+  /**
+   * Returns the rendered-map rectangle (CSS px) on this canvas. Uses the
+   * Renderer's live camera (worldToScreen) when wired, falling back to
+   * the static letterbox math otherwise — so the editor tracks GM
+   * workspace pan/zoom from v2.11/A4 onward without breaking pre-A4 paths.
+   */
+  private liveMapBounds(): MapBounds {
+    if (this.renderer) {
+      const tl = this.renderer.mapNormToCanvasCss(0, 0);
+      const br = this.renderer.mapNormToCanvasCss(1, 1);
+      if (tl && br) return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+    }
+    return mapBounds(this.drawW, this.drawH, this.mapAspect);
+  }
+
   /** ViewState → rectangle in CSS pixels on this canvas. */
   private viewToRect(): Rect {
-    const b  = mapBounds(this.drawW, this.drawH, this.mapAspect);
+    const b  = this.liveMapBounds();
     const rw = this.view.viewNW * b.w;
     const rh = this.view.viewNH * b.h;
     const rx = b.x + this.view.centerX * b.w - rw / 2;
@@ -244,7 +275,7 @@ export class ViewportEditor {
 
   /** Rectangle in CSS pixels → ViewState. */
   private rectToView(rect: Rect): ViewState {
-    const b     = mapBounds(this.drawW, this.drawH, this.mapAspect);
+    const b     = this.liveMapBounds();
     const viewNW  = rect.w / b.w;
     const viewNH  = rect.h / b.h;
     const centerX = (rect.x - b.x + rect.w / 2) / b.w;
@@ -334,7 +365,7 @@ export class ViewportEditor {
 
   private handleDrag(p: { x: number; y: number }): void {
     if (this.dragType === 'move') {
-      const b   = mapBounds(this.drawW, this.drawH, this.mapAspect);
+      const b   = this.liveMapBounds();
       const sr  = this.dragStartRect!;
       const sp  = this.dragStartPx!;
       const dx  = p.x - sp.x;

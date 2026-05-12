@@ -1,5 +1,6 @@
 import type { FogPolygon, FogState, FogVertex } from '../types.ts';
 import { generateId } from '../utils/id.ts';
+import type { Renderer } from '../rendering/Renderer.ts';
 
 export interface FogEditorMode {
   drawing: boolean;
@@ -27,6 +28,14 @@ export class FogEditor {
   private drawW = 1;
   private drawH = 1;
   private mapAspect = 1;
+  /**
+   * Optional Renderer reference — when set, getMapBounds + canvasPxToMapNorm
+   * route their math through the live camera (worldToScreen / screenToWorld)
+   * so the fog overlay tracks GM workspace pan/zoom. Identity transform
+   * matches the original letterbox math, so existing behaviour is preserved
+   * for any caller that never wires a renderer.
+   */
+  private renderer: Renderer | null = null;
 
   private dashOffset = 0;
   private marchAnimId: number | null = null;
@@ -78,6 +87,11 @@ export class FogEditor {
   setMapAspect(ratio: number): void {
     this.mapAspect = ratio;
     this.redraw();
+  }
+
+  /** Wire a Renderer so coord conversions ride the live camera transform. */
+  setRenderer(renderer: Renderer): void {
+    this.renderer = renderer;
   }
 
   loadState(fog: FogState): void {
@@ -291,7 +305,7 @@ export class FogEditor {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  private redraw(): void {
+  redraw(): void {
     this.ctx.clearRect(0, 0, this.drawW, this.drawH);
 
     for (const poly of this.polygons) {
@@ -421,6 +435,14 @@ export class FogEditor {
   }
 
   private canvasPxToMapNorm(px: number, py: number, canvasW: number, canvasH: number): FogVertex {
+    // When a Renderer is wired we route through its camera projection so
+    // pan/zoom is honoured automatically. Otherwise fall back to the
+    // legacy letterbox math (identity transform — what's always been
+    // there pre-v2.11/A4).
+    if (this.renderer) {
+      const m = this.renderer.canvasCssToMapNorm(px, py);
+      if (m) return { x: Math.max(0, Math.min(1, m.x)), y: Math.max(0, Math.min(1, m.y)) };
+    }
     const b = this.getMapBounds(canvasW, canvasH);
     return {
       x: Math.max(0, Math.min(1, (px - b.x) / b.w)),
@@ -428,7 +450,20 @@ export class FogEditor {
     };
   }
 
+  /**
+   * Returns the rectangle (in canvas CSS px) that the rendered map occupies
+   * right now. When a Renderer is wired, the rectangle reflects the live
+   * camera pan/zoom (so it pans / scales with the workspace). Otherwise
+   * falls back to the static letterbox derived from canvas + map aspect.
+   */
   private getMapBounds(canvasW: number, canvasH: number): { x: number; y: number; w: number; h: number } {
+    if (this.renderer) {
+      const tl = this.renderer.mapNormToCanvasCss(0, 0);
+      const br = this.renderer.mapNormToCanvasCss(1, 1);
+      if (tl && br) {
+        return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+      }
+    }
     const screenAspect = canvasW / Math.max(canvasH, 1);
     if (screenAspect > this.mapAspect) {
       const mapW = canvasH * this.mapAspect;

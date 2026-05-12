@@ -508,14 +508,74 @@ export class Renderer {
    * CSS pixels per world-unit on each axis at the current camera + canvas
    * size. Used by the marker overlay to convert icon half-extents
    * (expressed in world units) to screen px for handle positioning.
+   * Accounts for camera.zoom — denser pixels-per-world when zoomed in.
    */
   worldToScreenScale(): { pxPerWorldX: number; pxPerWorldY: number } {
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return { pxPerWorldX: 0, pxPerWorldY: 0 };
+    const zoom = this.camera.zoom || 1;
     return {
-      pxPerWorldX: rect.width  / Math.max(0.0001, this.camera.right - this.camera.left),
-      pxPerWorldY: rect.height / Math.max(0.0001, this.camera.top   - this.camera.bottom),
+      pxPerWorldX: rect.width  * zoom / Math.max(0.0001, this.camera.right - this.camera.left),
+      pxPerWorldY: rect.height * zoom / Math.max(0.0001, this.camera.top   - this.camera.bottom),
     };
+  }
+
+  /**
+   * Inverse of worldToScreen — a CSS-pixel coord (relative to canvas
+   * top-left) → world coord using the current camera. The GM-side editors
+   * use this to map clicks back into world / map-normalised space when the
+   * camera has been panned / zoomed away from the default fit.
+   */
+  screenToWorld(cssX: number, cssY: number): { x: number; y: number } | null {
+    const canvas = this.renderer.domElement;
+    const rect   = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const ndcX = (cssX / rect.width)  * 2 - 1;
+    const ndcY = -((cssY / rect.height) * 2 - 1);
+    this._projVec.set(ndcX, ndcY, 0);
+    this._projVec.unproject(this.camera);
+    return { x: this._projVec.x, y: this._projVec.y };
+  }
+
+  /**
+   * Drive the orthographic camera from a pan/zoom transform. Scale maps to
+   * camera.zoom (1 = identity, larger zooms in). Offsets map to
+   * camera.position (world coord that sits at the canvas centre). The base
+   * frustum (camera.left/right/top/bottom) is set by setView() or
+   * updateCameraFrustum() and is NOT touched here — Three.js applies zoom
+   * + position on top, so this method is safe to call alongside the
+   * existing view-fit logic.
+   */
+  setCameraTransform(scale: number, offsetX: number, offsetY: number): void {
+    this.camera.zoom       = Math.max(0.0001, scale);
+    this.camera.position.x = offsetX;
+    this.camera.position.y = offsetY;
+    this.camera.updateProjectionMatrix();
+    this.needsRender = true;
+  }
+
+  /**
+   * Map-normalised coord (0..1 in each axis) → CSS-pixel coord on the
+   * canvas, accounting for the current camera transform. The GM-side
+   * editors (fog, viewport, projector-viewport, marker overlay) all use
+   * this so their canvas drawing tracks the workspace pan/zoom without
+   * each needing its own letterbox math.
+   */
+  mapNormToCanvasCss(mx: number, my: number): { x: number; y: number } | null {
+    const wx =  (mx - 0.5) * this.aspectRatio;
+    const wy = -(my - 0.5);
+    return this.worldToScreen(wx, wy);
+  }
+
+  /**
+   * Inverse: CSS-pixel canvas coord → map-normalised coord. Returns coords
+   * outside [0,1] when the click landed in letterbox / off-map area; callers
+   * that need clamping can apply their own.
+   */
+  canvasCssToMapNorm(cssX: number, cssY: number): { x: number; y: number } | null {
+    const w = this.screenToWorld(cssX, cssY);
+    if (!w) return null;
+    return { x: w.x / this.aspectRatio + 0.5, y: -w.y + 0.5 };
   }
 
   // ─── Reveal-overlay (handout animation) ────────────────────────────────

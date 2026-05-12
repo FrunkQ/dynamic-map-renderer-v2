@@ -273,6 +273,21 @@ export class MarkerLayer {
   setAspectRatio(ar: number): void { this.ar = ar; }
   setOverlay(overlay: MarkerOverlay | null): void { this._overlay = overlay; }
 
+  /**
+   * GM workspace pan/zoom — applied to the default (view-null) frustum
+   * so the marker layer's project / unproject / hit-test math mirrors
+   * the Three.js camera state. Player + projector pass through
+   * setView() instead and leave this alone.
+   */
+  private _camScale   = 1;
+  private _camOffsetX = 0;
+  private _camOffsetY = 0;
+  setCameraTransform(scale: number, offsetX: number, offsetY: number): void {
+    this._camScale   = Math.max(0.0001, scale);
+    this._camOffsetX = offsetX;
+    this._camOffsetY = offsetY;
+  }
+
   // ── Rendering ──────────────────────────────────────────────────────────────
 
   render(
@@ -572,9 +587,19 @@ export class MarkerLayer {
       return { left: cx - hw, right: cx + hw, top: cy + hh, bottom: cy - hh };
     }
 
+    // Default fit (no broadcast view): centre on origin with letterbox.
     let hw: number, hh: number;
     if (sa > ma) { hh = 0.5; hw = hh * sa; }
     else         { hw = ma * 0.5; hh = hw / sa; }
-    return { left: -hw, right: hw, top: hh, bottom: -hh };
+    // Apply the GM workspace pan/zoom (identity by default = old behaviour).
+    const sc = this._camScale;
+    const ox = this._camOffsetX;
+    const oy = this._camOffsetY;
+    return {
+      left:   ox - hw / sc,
+      right:  ox + hw / sc,
+      top:    oy + hh / sc,
+      bottom: oy - hh / sc,
+    };
   }
 }

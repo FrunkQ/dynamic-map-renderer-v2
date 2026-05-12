@@ -52,6 +52,7 @@ import { randomFaffMessage } from '../utils/faffMessages.ts';
 import { blobToDataUrl } from '../utils/blob.ts';
 import type { MotionOverlay } from '../rendering/MarkerLayer.ts';
 import { MarkerOverlay } from '../rendering/MarkerOverlay.ts';
+import { CanvasTransform } from '../utils/CanvasTransform.ts';
 import type { SessionState, StoredMap, TransitionConfig, FilterState, Marker, MarkerIconData, AudioAsset, AudioRole, MotionRole, ProjectorConnection, ProjectorViewport, GMMessage } from '../types.ts';
 import { defaultProjectorViewport } from '../types.ts';
 import QRCode from 'qrcode';
@@ -83,6 +84,14 @@ export class GMApp {
   private fogEditor!:      FogEditor;
   private viewportEditor!: ViewportEditor;
   private projectorEditor!: ProjectorViewportEditor;
+
+  /**
+   * GM workspace pan/zoom — wheel scrolls zoom (around the cursor),
+   * arrow keys pan, R resets. Default identity = behaviour pre-v2.11/A4.
+   * Editors track it via the Renderer (FogEditor / ViewportEditor /
+   * ProjectorViewportEditor) or via direct setter (MarkerLayer).
+   */
+  private gmTransform = new CanvasTransform({ minScale: 0.5, maxScale: 8 });
   /**
    * Connected projectors keyed by their per-window clientId. The first entry
    * (insertion order) is the primary; everyone after is a monitor. The map
@@ -224,6 +233,73 @@ export class GMApp {
     this.setStatus(`P2P error: ${err.message}`, 'error');
   }
 
+  /**
+   * Bind wheel + keyboard handlers that drive the workspace pan/zoom
+   * transform. Wheel zooms around the cursor; arrow keys pan in world
+   * units (smaller deltas when zoomed in so each keystroke feels
+   * similar regardless of zoom); R resets to identity. Inputs / textareas
+   * are ignored so typing doesn't pan the map mid-word.
+   */
+  private _bindWorkspacePanZoom(): void {
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (!wrapper) return;
+
+    wrapper.addEventListener('wheel', (e) => {
+      // Only consume wheel when it lands on the canvas stack (avoids
+      // hijacking page scroll if the wrapper ever becomes scrollable).
+      e.preventDefault();
+      const factor = (e as WheelEvent).deltaY > 0 ? 1 / 1.25 : 1.25;
+      const rect = wrapper.getBoundingClientRect();
+      const cssX = (e as WheelEvent).clientX - rect.left;
+      const cssY = (e as WheelEvent).clientY - rect.top;
+      const world = this.renderer.screenToWorld(cssX, cssY);
+      if (world) {
+        this.gmTransform.zoomAround(factor, world.x, world.y);
+        this._applyWorkspaceTransform();
+      }
+    }, { passive: false });
+
+    window.addEventListener('keydown', (e) => {
+      // Skip when typing into form fields.
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if ((e.target as HTMLElement | null)?.isContentEditable) return;
+
+      const step = 0.1 / this.gmTransform.scale;
+      let handled = true;
+      switch (e.key) {
+        case 'ArrowLeft':  this.gmTransform.panByWorld(-step, 0);  break;
+        case 'ArrowRight': this.gmTransform.panByWorld( step, 0);  break;
+        case 'ArrowUp':    this.gmTransform.panByWorld(0,  step);  break;
+        case 'ArrowDown':  this.gmTransform.panByWorld(0, -step);  break;
+        case 'r': case 'R': this.gmTransform.reset(); break;
+        default: handled = false;
+      }
+      if (handled) {
+        e.preventDefault();
+        this._applyWorkspaceTransform();
+      }
+    });
+  }
+
+  /**
+   * Push the current CanvasTransform out to every consumer: Three.js
+   * camera (via Renderer), MarkerLayer's internal frustum, and trigger
+   * re-renders on the editor canvases that draw with map-relative
+   * positions (fog, viewport, projector-viewport).
+   */
+  private _applyWorkspaceTransform(): void {
+    const t = this.gmTransform;
+    this.renderer.setCameraTransform(t.scale, t.offsetX, t.offsetY);
+    this.markerEditor?.layer.setCameraTransform(t.scale, t.offsetX, t.offsetY);
+    // Trigger redraws — editors that ride the Renderer's worldToScreen
+    // will pick up the new camera state in their next paint.
+    this.markerEditor?.redraw();
+    this.fogEditor?.redraw();
+    this.viewportEditor?.redrawExternal();
+    this.projectorEditor?.redrawExternal();
+  }
+
   private _setBrokerErrorVisible(visible: boolean): void {
     const errBox = document.getElementById('broker-error');
     const qr     = document.getElementById('qr-container');
@@ -243,6 +319,7 @@ export class GMApp {
     this.bindMarkerEditor();
     this.bindSoundboardPanel();
     this.bindHamburgerMenu();
+    this._bindWorkspacePanZoom();
 
     // Resume positional audio context on first user gesture (autoplay policy)
     const resumePA = () => this.audio.tryResume();
@@ -1322,6 +1399,7 @@ export class GMApp {
   private bindProjectorEditor(): void {
     const canvas = document.querySelector<HTMLCanvasElement>('#projector-viewport-canvas')!;
     this.projectorEditor = new ProjectorViewportEditor(canvas);
+    this.projectorEditor.setRenderer(this.renderer);
     this.projectorEditor.onChange((vp) => {
       this.state.setProjectorViewport(vp);
       this.host.broadcast({ type: 'projector_viewport_update', payload: vp });
@@ -1711,6 +1789,7 @@ export class GMApp {
   private bindViewportEditor(): void {
     const canvas = document.querySelector<HTMLCanvasElement>('#viewport-canvas')!;
     this.viewportEditor = new ViewportEditor(canvas);
+    this.viewportEditor.setRenderer(this.renderer);
 
     // Live drag → push view to state (and on to players via P2P)
     this.viewportEditor.onChange((view) => {
@@ -1776,6 +1855,7 @@ export class GMApp {
   private bindFogEditor(): void {
     const canvas = document.querySelector<HTMLCanvasElement>('#fog-canvas')!;
     this.fogEditor = new FogEditor(canvas, (fog) => this.state.setFog(fog));
+    this.fogEditor.setRenderer(this.renderer);
 
     // Start in select mode so the canvas is interactive immediately
     this.fogEditor.disable();

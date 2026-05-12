@@ -1,5 +1,6 @@
 import type { ProjectorConnection, ProjectorViewport } from '../types.ts';
 import { defaultProjectorViewport } from '../types.ts';
+import type { Renderer } from '../rendering/Renderer.ts';
 
 type ChangeCallback = (vp: ProjectorViewport) => void;
 
@@ -57,6 +58,11 @@ export class ProjectorViewportEditor {
 
   private editMode = false;
 
+  /** Optional Renderer reference — when wired, mapBounds tracks the live
+   *  GM camera transform (so the projector rectangle pans/zooms with the
+   *  workspace). Identity-equivalent without a renderer. */
+  private renderer: Renderer | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -86,6 +92,26 @@ export class ProjectorViewportEditor {
     this.mapAspect = aspect;
     this.hasMap = hasMap;
     this.redraw();
+  }
+
+  /** Wire a Renderer so mapBounds tracks the live GM camera transform. */
+  setRenderer(renderer: Renderer): void {
+    this.renderer = renderer;
+  }
+
+  /** Force a redraw — for camera-transform changes that don't involve
+   *  the projector viewport state itself. */
+  redrawExternal(): void {
+    this.redraw();
+  }
+
+  private liveMapBounds(): MapBounds {
+    if (this.renderer) {
+      const tl = this.renderer.mapNormToCanvasCss(0, 0);
+      const br = this.renderer.mapNormToCanvasCss(1, 1);
+      if (tl && br) return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+    }
+    return mapBounds(this.drawW, this.drawH, this.mapAspect);
   }
 
   setMapPixelsPerSquare(pps: number | null): void {
@@ -133,7 +159,7 @@ export class ProjectorViewportEditor {
   private rectInCanvas(): { x: number; y: number; w: number; h: number } | null {
     if (!this.isActive()) return null;
     const conn = this.connection!;
-    const mb = mapBounds(this.drawW, this.drawH, this.mapAspect);
+    const mb = this.liveMapBounds();
     // Compute projector viewport size in MAP pixels.
     //   feet-per-projector-canvas-w = canvasW / projector-px-per-square
     //   map-pixels = feet-per-projector-canvas-w * map-px-per-square
@@ -268,7 +294,7 @@ export class ProjectorViewportEditor {
     const r = this.canvas.getBoundingClientRect();
     const px = e.clientX - r.left;
     const py = e.clientY - r.top;
-    const mb = mapBounds(this.drawW, this.drawH, this.mapAspect);
+    const mb = this.liveMapBounds();
     const dx = (px - this.dragStart.x) / mb.w;
     const dy = (py - this.dragStart.y) / mb.h;
     this.viewport = {
