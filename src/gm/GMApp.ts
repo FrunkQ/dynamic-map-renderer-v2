@@ -889,7 +889,15 @@ export class GMApp {
     // a Fix Missing Map, or re-loading after a retarget. The broadcast
     // map_change shouldn't replay the entry transition in that case.
     const previousMapId = this.state.snapshot().map?.id;
-    if (previousMapId === map.id) this._suppressNextMapTransition = true;
+    const isReload = previousMapId === map.id;
+    if (isReload) this._suppressNextMapTransition = true;
+    // Compute the entry transition's duration NOW so the autoReveal
+    // delay later in this function can wait the right amount of time
+    // for the player to finish the map→map transition before the
+    // handout reveal fires. buildTransitionConfig down in the
+    // broadcast consumes the suppress flag, so reading it here keeps
+    // the calculation honest.
+    const entryTransitionMs = this._computeEntryTransitionDurationMs(isReload);
     // Flush any unsaved state from the previous map before switching
     await this.state.flushSave();
     this.setStatus(`Loading ${map.name}…`, 'ok');
@@ -991,7 +999,13 @@ export class GMApp {
       if (this._suppressAutoReveal) {
         this._suppressAutoReveal = false;
       } else {
-        setTimeout(() => { void this._triggerHandoutReveal(); }, 350);
+        // Wait for the player's map→map entry transition to finish
+        // BEFORE firing the reveal — otherwise the reveal animation
+        // overlaps the entry transition and looks like a single
+        // jumbled effect. 600 ms buffer covers chunked-blob delivery
+        // over WebRTC + texture decode + the first paint frame.
+        const delayMs = entryTransitionMs + 600;
+        setTimeout(() => { void this._triggerHandoutReveal(); }, delayMs);
       }
     }
 
@@ -1690,6 +1704,22 @@ export class GMApp {
    *  re-target). Consumed and cleared by the next buildTransitionConfig
    *  call. */
   private _suppressNextMapTransition = false;
+
+  /** Read the duration param of the currently-active map→map entry
+   *  transition. Used by the auto-reveal scheduler to wait the right
+   *  amount of time for the player's entry transition to finish before
+   *  firing the handout reveal. Returns 0 for "no transition" cases
+   *  (reload, 'none' picked, no duration param). */
+  private _computeEntryTransitionDurationMs(isReload: boolean): number {
+    if (isReload) return 0;
+    if (this.activeTransitionId === 'none') return 0;
+    const saved = this.allTransitionParams[this.activeTransitionId]?.['duration'];
+    if (typeof saved === 'number') return saved;
+    const def = transitionRegistry.get(this.activeTransitionId);
+    const p = def?.params.find((q) => q.id === 'duration');
+    if (p && p.type === 'slider') return p.default;
+    return 0;
+  }
   /** One-shot flag — set true before a loadMap() when we don't want
    *  the handout autoReveal to fire (Reset Animation path: we want the
    *  GM to manually click Start again rather than the reveal replaying
