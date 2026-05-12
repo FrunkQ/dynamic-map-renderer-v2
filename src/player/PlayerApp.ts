@@ -43,6 +43,9 @@ export class PlayerApp {
   private _sbPausedByMute = new Set<string>();
   /** markerIds paused by a positional mute-all — resumed on unmute. */
   private _posPausedByMute = new Set<string>();
+  /** Live state of the Markers-panel master mute (broadcast by the GM).
+   *  Silences both positional sources and the tracker ping. */
+  private _posMutedAll = false;
   private _audioResumeScheduled = false;
   /** markerId → <audio> element for active positional sources */
   private _posAudioEls  = new Map<string, HTMLAudioElement>();
@@ -392,7 +395,10 @@ export class PlayerApp {
       case 'positional_mute_all': {
         // Pause / resume every positional source so loops survive the
         // round-trip cleanly. Soundboard slots are unaffected — they
-        // ride the separate soundboard_mute_all channel.
+        // ride the separate soundboard_mute_all channel. The flag also
+        // gates the tracker ping so an active scan keeps animating
+        // silently when marker audio is muted.
+        this._posMutedAll = msg.muted;
         if (msg.muted) {
           this._posPausedByMute.clear();
           for (const [id, el] of this._posAudioEls.entries()) {
@@ -502,7 +508,7 @@ export class PlayerApp {
     if (dataUrl) this._trackerAudioUrls.set(assetId, dataUrl);
     const url = this._trackerAudioUrls.get(assetId);
     if (!url) return;
-    if (this.sbMuted) return; // respect the player's master mute toggle
+    if (this.sbMuted || this._posMutedAll) return; // respect player mute + GM marker-mute
     const a = new Audio(url);
     a.volume = Math.max(0, Math.min(1, volume ?? 0.8));
     void a.play().catch(() => { /* autoplay-policy ignore */ });

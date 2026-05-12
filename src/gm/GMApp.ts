@@ -1982,6 +1982,7 @@ export class GMApp {
       markerMuteToggle.addEventListener('change', () => {
         const muted = !markerMuteToggle.checked;
         this.audio.setMuteAll(muted);
+        this.trackerAudio.setMuteAll(muted);
         this.host.broadcast({ type: 'positional_mute_all', muted });
       });
     }

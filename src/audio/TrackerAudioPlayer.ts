@@ -15,6 +15,12 @@ export class TrackerAudioPlayer {
   private returnAssetId:   string | null = null;
   private outgoingVolume = 0.8;
   private returnVolume   = 0.8;
+  private _muteAll       = false;
+
+  /** Silences the tracker ping without halting the visual scan — used
+   *  by the Markers-panel master mute. The tracker animation keeps
+   *  playing; only the audio is gated. */
+  setMuteAll(muted: boolean): void { this._muteAll = muted; }
 
   setOutgoingVolume(v: number): void { this.outgoingVolume = Math.max(0, Math.min(1, v)); }
   setReturnVolume(v: number):   void { this.returnVolume   = Math.max(0, Math.min(1, v)); }
@@ -36,7 +42,7 @@ export class TrackerAudioPlayer {
   playReturn():   void { this._play(this.returnUrl,   this.returnVolume);   }
 
   private _play(url: string | null, volume: number): void {
-    if (!url) return;
+    if (!url || this._muteAll) return;
     const a = new Audio(url);
     a.volume = volume;
     void a.play().catch(() => { /* ignore autoplay rejection */ });
