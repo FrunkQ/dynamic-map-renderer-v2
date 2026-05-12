@@ -200,18 +200,17 @@ export async function rasterizeTextMap(
     console.warn('[rasterizeTextMap] font embedding skipped:', err);
   }
 
-  // Baseline CSS for the foreignObject document — mirrors what the
-  // editor applies on .rte-editor / .txt-map-page so list items and
-  // paragraphs don't pick up the foreignObject's default browser
-  // margins. Without this, each <li><p>N</p></li> got
-  // `p { margin: 1em 0 }` top + bottom, doubling the spacing between
-  // numbers in a list and making the rasterised map look very different
-  // from the editor.
+  // Baseline CSS for the foreignObject document — kept in lockstep
+  // with .txt-map-el-body CSS on the editor side so paragraph + list
+  // spacing renders identically in both. p margin defaults to 1em top
+  // + bottom in user-agent stylesheets; that doubled vertical spacing
+  // in lists of <li><p>N</p></li> AND added a perceptible gap between
+  // every paragraph that wasn't there in the editor. Setting to 0
+  // matches what contenteditable effectively shows in the editor.
   const cssReset =
-    `p{margin:0 0 0.4em 0;}`
-    + `p:last-child{margin-bottom:0;}`
+    `p{margin:0;}`
     + `ul,ol{margin:0 0 0.6em 0;padding-left:1.6em;}`
-    + `li{margin:0 0 0.2em 0;}`;
+    + `li{margin:0;}`;
 
   const buildSvg = (withFontCss: boolean): string => {
     const styleBody = cssReset + (withFontCss && fontFaceCss ? fontFaceCss : '');

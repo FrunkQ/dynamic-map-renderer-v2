@@ -573,7 +573,13 @@ export class TextMapEditor {
           slider.value = String(cur.params[p.id] ?? p.default);
           const valSpan = document.createElement('span');
           valSpan.className = 'txt-map-element-slider-val';
-          const fmt = (n: number): string => `${n}${p.unit ? ' ' + p.unit : ''}`;
+          // Display milliseconds as seconds (1 decimal) — easier to
+          // parse than "30000 ms". Param is still stored in ms; only
+          // the displayed text changes.
+          const fmt = (n: number): string => {
+            if (p.unit === 'ms') return `${(n / 1000).toFixed(1)} s`;
+            return `${n}${p.unit ? ' ' + p.unit : ''}`;
+          };
           valSpan.textContent = fmt(parseFloat(slider.value));
           slider.addEventListener('input', () => {
             const v = parseFloat(slider.value);

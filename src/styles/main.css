@@ -1856,6 +1856,13 @@ option.select-option--add {
   overflow: hidden;
   cursor: text;
 }
+/* Match the rasteriser's CSS reset so paragraph + list spacing renders
+   identically in both contexts. Browser defaults give p / li 1em top
+   + bottom margins; that was making the rasterised map appear MORE
+   spaced than the editor preview even though the content was identical. */
+.txt-map-el-body p { margin: 0; }
+.txt-map-el-body ul, .txt-map-el-body ol { margin: 0 0 0.6em 0; padding-left: 1.6em; }
+.txt-map-el-body li { margin: 0; }
 .txt-map-el--image .txt-map-el-body {
   display: block;
   padding: 0;
