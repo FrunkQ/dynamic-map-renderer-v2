@@ -276,25 +276,37 @@ export class PlayerApp {
         // Reveal animation for a handout. The starting frame is
         // already on the renderer (set by an earlier map_change for
         // this mapId); the GM is sending us the FINAL frame as
-        // mapBlob plus the transition config. We snapshot the current
-        // (starting) frame, swap the texture to final, and run the
-        // transition — same code path as a map switch but inside one
-        // map id.
+        // mapBlob plus the transition config. We use the cached raw
+        // bytes of the STARTING frame as the transition snapshot —
+        // capturing the live canvas would bake whatever filter is
+        // active (Night Vision, CRT, etc.) into the snapshot and
+        // freeze it for the duration of the reveal. The cached bytes
+        // are the unsullied rasterise. Filter still runs live on the
+        // underlying final frame via the Three.js post-effect.
         if (!mapBlob) break;
         if (msg.mapId !== this.currentMapId) break; // stale message
         const finalBlob = mapBlob;
+        const startBlob = this.lastMapBlob; // cached starting frame
         const fog    = this.lastFog;
         const filter = this.lastFilter;
         const view   = this.lastView;
         this.lastMapBlob = finalBlob;
-        void this.runTransition(msg.transition, async () => {
-          await this.renderer.loadMap(finalBlob, fog);
-          if (filter) this.renderer.setFilter(filter);
-          if (view) {
-            this.renderer.setView(view);
-            this.markerTexture.setViewHeight(view.viewNH);
+        void (async () => {
+          let preSnap: ImageBitmap | undefined;
+          if (startBlob) {
+            try {
+              preSnap = await createImageBitmap(new Blob([startBlob], { type: 'image/png' }));
+            } catch { preSnap = undefined; }
           }
-        });
+          await this.runTransition(msg.transition, async () => {
+            await this.renderer.loadMap(finalBlob, fog);
+            if (filter) this.renderer.setFilter(filter);
+            if (view) {
+              this.renderer.setView(view);
+              this.markerTexture.setViewHeight(view.viewNH);
+            }
+          }, preSnap);
+        })();
         break;
       }
 
@@ -618,12 +630,18 @@ export class PlayerApp {
   private async runTransition(
     config: TransitionConfig | undefined,
     applyChange: () => Promise<void>,
+    /** Optional pre-decoded snapshot for the transition's "before"
+     *  state. Handout reveal pathway passes in the raw starting-frame
+     *  bitmap so the filter doesn't get baked into the snapshot at
+     *  capture time. Map→map transitions leave this undefined and the
+     *  engine snapshots the live canvas. */
+    preSnapshot?: ImageBitmap,
   ): Promise<void> {
     const id  = config?.transitionId ?? 'none';
     const def = transitionRegistry.getOrFallback(id);
     const params = config?.params ?? transitionRegistry.defaultParams(id);
     const canvas = document.querySelector<HTMLCanvasElement>('#renderer-canvas')!;
-    await this.transitionEngine.run(def, params, canvas, applyChange);
+    await this.transitionEngine.run(def, params, canvas, applyChange, preSnapshot);
   }
 
   // ─── UI ───────────────────────────────────────────────────────────────────

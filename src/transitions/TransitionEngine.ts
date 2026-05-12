@@ -71,6 +71,16 @@ export class TransitionEngine {
     params: Record<string, number | string>,
     sourceCanvas: HTMLCanvasElement,
     applyChange: () => Promise<void>,
+    /** Optional pre-captured snapshot — when provided, the engine uses
+     *  these pixels as the transition's "before" state instead of
+     *  grabbing the current sourceCanvas pixels. Used by the handout
+     *  reveal pathway to pass in the raw, UNFILTERED rasterise of the
+     *  starting frame: capturing the canvas there would bake in
+     *  whatever filter happens to be live (Night Vision, CRT, etc.),
+     *  freezing it on the snapshot for the duration of the reveal.
+     *  Map→map transitions leave this undefined and get the
+     *  canvas-snapshot path. */
+    preSnapshot?: ImageBitmap,
   ): Promise<void> {
     // 'none' skips the overlay entirely — just apply immediately
     if (def.id === 'none') {
@@ -90,14 +100,22 @@ export class TransitionEngine {
     this.overlay.width  = sourceCanvas.clientWidth  || window.innerWidth;
     this.overlay.height = sourceCanvas.clientHeight || window.innerHeight;
 
-    // Capture the current frame as a bitmap
+    // Use the caller-provided snapshot when available (handout reveal
+    // path supplies the raw starting-frame bytes so the transition
+    // shows the untainted page rather than whatever was on the
+    // filtered canvas at capture time). Otherwise grab the live
+    // canvas — the map→map transition path.
     let snapshot: ImageBitmap;
-    try {
-      snapshot = await createImageBitmap(sourceCanvas);
-    } catch {
-      // If capture fails (e.g. canvas tainted), fall through to a plain cut
-      await applyChange();
-      return;
+    if (preSnapshot) {
+      snapshot = preSnapshot;
+    } else {
+      try {
+        snapshot = await createImageBitmap(sourceCanvas);
+      } catch {
+        // If capture fails (e.g. canvas tainted), fall through to a plain cut
+        await applyChange();
+        return;
+      }
     }
 
     // Cover the canvas with the snapshot so texture decode is invisible
