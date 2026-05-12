@@ -6,7 +6,7 @@ import { gameIconsConnector } from './connectors/gameIcons.ts';
 import { lucideConnector } from './connectors/lucide.ts';
 import { generateId } from '../utils/id.ts';
 import { UNICODE_LICENSE_LABEL } from './seedImageAssets.ts';
-import { ensureFontsLoaded, pangramFor } from './fontCatalog.ts';
+import { ensureFontsLoaded, pangramFor, registerLocalFontsFromAssets, registerLocalFontAsset } from './fontCatalog.ts';
 import { fuzzySearch } from '../utils/fuzzySearch.ts';
 import { cleanTintableSvg } from '../utils/resolveAssetImages.ts';
 
@@ -16,6 +16,15 @@ interface SharedAttribution {
   attribution:     string;
   attributionLink: string;
   license:         string;
+}
+
+/** Result of the font-upload metadata prompt. family is required;
+ *  every other field is optional. */
+interface UploadFontMeta {
+  family:      string;
+  attribution: string;
+  license:     string;
+  sourceUrl:   string;
 }
 
 const CONNECTORS: readonly ImageSourceConnector[] = [
@@ -662,6 +671,17 @@ export class ImageAssetModal {
       addFont.addEventListener('click', () => void this._promptAddGoogleFont());
       host.appendChild(addFont);
 
+      // + Upload font — accepts .woff/.woff2/.ttf/.otf, registers via
+      // FontFace API, then drops the asset into the Fonts category.
+      // For self-hosted fonts that aren't on Google Fonts.
+      const uploadFontBtn = document.createElement('button');
+      uploadFontBtn.type = 'button';
+      uploadFontBtn.className = 'btn btn--ghost btn--xs';
+      uploadFontBtn.textContent = '+ Upload font';
+      uploadFontBtn.title = 'Upload a font file from disk (woff2 / woff / ttf / otf)';
+      uploadFontBtn.addEventListener('click', () => this._promptUploadFont());
+      host.appendChild(uploadFontBtn);
+
       const browseFonts = document.createElement('a');
       browseFonts.className = 'btn btn--ghost btn--xs';
       browseFonts.href = 'https://fonts.google.com';
@@ -789,6 +809,180 @@ export class ImageAssetModal {
     };
     await ImageAssetStore.save(asset);
     await this._reload();
+  }
+
+  /** Upload a font file (woff2 / woff / ttf / otf) into the Fonts
+   *  category. Derives the family name from the filename, registers
+   *  the bytes via the FontFace API so it's immediately usable in any
+   *  font picker, and stores the blob on the asset record so it
+   *  round-trips through bundle save/load and re-registers on the
+   *  next session. */
+  private _promptUploadFont(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf,application/font-woff,application/font-woff2';
+    input.style.display = 'none';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (file) void this._handleUploadFont(file);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  private async _handleUploadFont(file: File): Promise<void> {
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    // PostScript family names commonly use hyphens / dashes; strip
+    // for a friendlier default. User can override if the font expects
+    // a specific exact family.
+    const suggested = baseName.replace(/[_-]+/g, ' ').trim() || 'Custom font';
+    const meta = await this._promptUploadFontMeta(suggested);
+    if (!meta) return;
+
+    // Register with the document BEFORE saving — this validates the
+    // file is actually a usable font. If FontFace.load() rejects we
+    // bail without polluting the library with a broken record.
+    try {
+      await registerLocalFontAsset(meta.family, file);
+    } catch (err) {
+      alert(`That font file couldn't be loaded: ${(err as Error).message ?? 'unknown error'}`);
+      return;
+    }
+
+    const id = 'font-upload-' + generateId();
+    const asset: ImageAsset = {
+      id,
+      name:            meta.family,
+      source:          'font',
+      categoryId:      SYSTEM_CATEGORY_IDS.fonts,
+      tintable:        false,
+      fontFamily:      meta.family,
+      blob:            file,
+      mimeType:        file.type || 'font/woff2',
+      attribution:     meta.attribution || `${meta.family} — uploaded by user`,
+      license:         meta.license     || 'See font file',
+      addedAt:         Date.now(),
+      ...(meta.sourceUrl ? { sourceUrl: meta.sourceUrl, attributionLink: meta.sourceUrl } : {}),
+    };
+    await ImageAssetStore.save(asset);
+    await this._reload();
+  }
+
+  /** Prompt the user for the metadata that should travel with an
+   *  uploaded font — family name + attribution + licence + source URL.
+   *  Source URL is for crediting back to dafont / fontspace / wherever
+   *  the user found the font; it flows into the bundle's Copy
+   *  attributions output. Returns null if the user cancels. */
+  private _promptUploadFontMeta(suggestedFamily: string): Promise<UploadFontMeta | null> {
+    return new Promise<UploadFontMeta | null>((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog modal-dialog--sm';
+      overlay.appendChild(dialog);
+
+      const header = document.createElement('div');
+      header.className = 'modal-header';
+      const title = document.createElement('span');
+      title.className = 'modal-title';
+      title.textContent = 'Add Font';
+      header.appendChild(title);
+      const closeX = document.createElement('button');
+      closeX.type = 'button';
+      closeX.className = 'modal-close';
+      closeX.textContent = '×';
+      closeX.addEventListener('click', () => done(null));
+      header.appendChild(closeX);
+      dialog.appendChild(header);
+
+      const body = document.createElement('div');
+      body.style.padding = 'var(--space-md)';
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+      body.style.gap = 'var(--space-md)';
+      dialog.appendChild(body);
+
+      const intro = document.createElement('p');
+      intro.style.color = 'var(--text-secondary)';
+      intro.style.margin = '0';
+      intro.textContent =
+        `Metadata for this font. Family name is required; attribution + licence + source URL `
+        + `feed the bundle's Copy attributions output so creators get credit when packs are shared.`;
+      body.appendChild(intro);
+
+      const mkField = (label: string, placeholder: string, initial = ''): HTMLInputElement => {
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.flexDirection = 'column';
+        wrap.style.gap = '4px';
+        const l = document.createElement('label');
+        l.style.fontSize = '0.78rem';
+        l.style.color = 'var(--text-dim)';
+        l.style.textTransform = 'uppercase';
+        l.style.letterSpacing = '0.04em';
+        l.textContent = label;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'select-full';
+        input.placeholder = placeholder;
+        input.value = initial;
+        wrap.append(l, input);
+        body.appendChild(wrap);
+        return input;
+      };
+
+      const familyInput = mkField(
+        'CSS family name',
+        'Must match the family the font ships with internally',
+        suggestedFamily,
+      );
+      const attrInput   = mkField('Attribution', 'e.g. "MedievalSharp by Marcelo Magalhães"');
+      const licInput    = mkField('Licence',     'e.g. "SIL OFL 1.1", "Free for personal use"');
+      const urlInput    = mkField('Source URL',  'e.g. dafont / fontspace / specimen page (optional)');
+      setTimeout(() => familyInput.focus(), 0);
+
+      const footer = document.createElement('div');
+      footer.style.padding = 'var(--space-md)';
+      footer.style.borderTop = '1px solid var(--border)';
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'flex-end';
+      footer.style.gap = 'var(--space-sm)';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn--ghost';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', () => done(null));
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'btn btn--primary';
+      okBtn.textContent = 'Add';
+      okBtn.addEventListener('click', () => {
+        const family = familyInput.value.trim();
+        if (!family) { familyInput.focus(); return; }
+        done({
+          family,
+          attribution: attrInput.value.trim(),
+          license:     licInput.value.trim(),
+          sourceUrl:   urlInput.value.trim(),
+        });
+      });
+      footer.append(cancelBtn, okBtn);
+      dialog.appendChild(footer);
+
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') done(null);
+        if (e.key === 'Enter' && document.activeElement?.tagName === 'INPUT') okBtn.click();
+      };
+      document.addEventListener('keydown', onKey);
+
+      function done(value: UploadFontMeta | null): void {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        resolve(value);
+      }
+      document.body.appendChild(overlay);
+    });
   }
 
   private _promptUpload(): void {
@@ -1023,8 +1217,12 @@ export class ImageAssetModal {
    *  at the top lets users add more by family name. */
   private _renderFontsCategory(host: HTMLElement): void {
     const allFonts = this.assets.filter((a) => a.source === 'font');
-    // Trigger CSS load for whatever families are in the library now —
-    // includes user-added entries that the bundled link wouldn't cover.
+    // Register any uploaded-font blobs first (via FontFace API) — those
+    // get filtered out of the Google CDN fetch below so we don't
+    // double-load a family that ships its own bytes. Awaiting isn't
+    // strictly needed; the .load() promises resolve into document.fonts
+    // and the grid re-renders correctly when they're ready.
+    void registerLocalFontsFromAssets(allFonts);
     ensureFontsLoaded(allFonts.map((f) => f.fontFamily).filter((f): f is string => !!f));
 
     // Filter by the toolbar search box — matches font name, family, tags.

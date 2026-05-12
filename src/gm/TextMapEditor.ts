@@ -10,7 +10,7 @@ import {
 } from '../maps/textMapElements.ts';
 import { ImageAssetStore } from '../images/ImageAssetStore.ts';
 import { ImageAssetModal } from '../images/ImageAssetModal.ts';
-import { ensureFontsLoaded } from '../images/fontCatalog.ts';
+import { ensureFontsLoaded, registerLocalFontsFromAssets } from '../images/fontCatalog.ts';
 import { generateId } from '../utils/id.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
 import { renderAssetToInlineHtml } from '../utils/resolveAssetImages.ts';
@@ -131,16 +131,13 @@ export class TextMapEditor {
 
   private async _loadFontsForPreview(): Promise<void> {
     const all = await ImageAssetStore.getAll();
-    const families = all
-      .filter((a) => a.source === 'font' && a.fontFamily)
-      .map((a) => a.fontFamily!);
+    const fontAssets = all.filter((a) => a.source === 'font' && a.fontFamily);
+    const families = fontAssets.map((a) => a.fontFamily!);
+    // Register any uploaded-font blobs via FontFace first; that filters
+    // them out of the Google CDN request so we don't double-fetch.
+    await registerLocalFontsFromAssets(fontAssets);
     ensureFontsLoaded(families);
-    // Cache the full library list so element-toolbar font picker pulls
-    // from the same source as the page-level default.
     this.libraryFonts = families.length > 0 ? families : FALLBACK_FONTS.slice();
-    // Refresh the element toolbar if a text element is currently
-    // selected — the font select may have rendered before the async
-    // load resolved.
     this._renderElementToolbar();
   }
 

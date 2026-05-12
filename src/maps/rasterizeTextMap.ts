@@ -32,6 +32,25 @@ async function fetchFontFaceForSvg(family: string): Promise<string | null> {
   const cached = fontFaceCache.get(family);
   if (cached !== undefined) return cached;
 
+  // Local-blob path first: if the user uploaded a font with this
+  // family, embed its bytes directly. Skips the network entirely and
+  // works for fonts that aren't on Google at all.
+  try {
+    const all = await ImageAssetStore.getAll();
+    const match = all.find((a) => a.source === 'font' && a.fontFamily === family && !!a.blob);
+    if (match?.blob) {
+      const buf = await match.blob.arrayBuffer();
+      const b64 = arrayBufferToBase64(buf);
+      const mime = match.blob.type || 'font/woff2';
+      const block =
+        `@font-face{font-family:'${family}';`
+        + `src:url(data:${mime};base64,${b64}) format('woff2');`
+        + `font-display:swap;}`;
+      fontFaceCache.set(family, block);
+      return block;
+    }
+  } catch { /* fall through to Google fetch */ }
+
   try {
     // Fetch the Google Fonts CSS as the browser sees it — that path
     // returns woff2 URLs (other agents see ttf).

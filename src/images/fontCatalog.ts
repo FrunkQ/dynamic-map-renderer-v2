@@ -63,14 +63,20 @@ export function pangramFor(key: string): string {
 /** Lazy-load font families via the Google Fonts CSS API. Each call replaces
  *  the previous <link> so newly-added user fonts are picked up without a
  *  reload. Pass the live list of families from the imageAssets store —
- *  source of truth lives there once seeding has run. Stream C will swap
- *  this for bundled self-hosted woff2 + @font-face so the fonts work
- *  offline. */
+ *  source of truth lives there once seeding has run.
+ *
+ *  Locally-uploaded fonts (font assets that carry their own woff2/ttf
+ *  blob) bypass this path entirely — they're registered via the
+ *  FontFace API by registerLocalFontAsset() below. Pass them in too —
+ *  this function filters out families that already have a FontFace
+ *  registered so we don't double-fetch from Google for a font that
+ *  ships its own bytes. */
 let _fontsLinkEl: HTMLLinkElement | null = null;
 let _loadedFamiliesKey = '';
 export function ensureFontsLoaded(families: readonly string[]): void {
-  // Stable cache key so we skip the DOM churn when nothing changed.
-  const unique = Array.from(new Set(families.map((f) => f.trim()).filter(Boolean))).sort();
+  const unique = Array.from(new Set(families.map((f) => f.trim()).filter(Boolean)))
+    .filter((f) => !isLocallyRegistered(f))
+    .sort();
   const key = unique.join('|');
   if (key === _loadedFamiliesKey) return;
   _loadedFamiliesKey = key;
@@ -91,6 +97,55 @@ export function ensureFontsLoaded(families: readonly string[]): void {
     document.head.appendChild(_fontsLinkEl);
   }
   _fontsLinkEl.href = href;
+}
+
+// ─── Locally-uploaded fonts ─────────────────────────────────────────────
+
+/** Tracks family names we've already registered via FontFace so calls
+ *  are idempotent and ensureFontsLoaded() doesn't re-fetch from Google
+ *  for a font we already have locally. */
+const _localFamilies = new Set<string>();
+
+function isLocallyRegistered(family: string): boolean {
+  return _localFamilies.has(family);
+}
+
+/** Register an uploaded font file with the document so any CSS using
+ *  its `family` resolves to the user's bytes (rather than falling
+ *  through to a Google CDN fetch / system fallback). Idempotent on
+ *  the family — calling twice with the same family is a no-op. */
+export async function registerLocalFontAsset(family: string, blob: Blob): Promise<void> {
+  const trimmed = family.trim();
+  if (!trimmed) return;
+  if (_localFamilies.has(trimmed)) return;
+  try {
+    const buf = await blob.arrayBuffer();
+    const face = new FontFace(trimmed, buf);
+    await face.load();
+    document.fonts.add(face);
+    _localFamilies.add(trimmed);
+    // Drop the cache key so the next ensureFontsLoaded() doesn't think
+    // its Google <link> is still authoritative — this family no longer
+    // needs to be in the CDN request.
+    _loadedFamiliesKey = '';
+  } catch (err) {
+    console.warn(`[fontCatalog] failed to register local font "${trimmed}":`, err);
+  }
+}
+
+/** Bulk-register every font asset that ships its own blob (uploaded by
+ *  the user). Walks a list of ImageAsset-shaped records — designed to
+ *  be called with the result of ImageAssetStore.getAll() filtered to
+ *  source === 'font'. Bundled Google fonts have no blob and are
+ *  silently skipped here; they continue to load via ensureFontsLoaded. */
+export async function registerLocalFontsFromAssets(
+  assets: ReadonlyArray<{ source: string; fontFamily?: string; blob?: Blob }>,
+): Promise<void> {
+  for (const a of assets) {
+    if (a.source !== 'font') continue;
+    if (!a.fontFamily || !a.blob) continue;
+    await registerLocalFontAsset(a.fontFamily, a.blob);
+  }
 }
 
 export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
@@ -181,5 +236,13 @@ export const BUNDLED_FONTS: ReadonlyArray<FontCatalogEntry> = [
     attribution: 'Whisper by Kimberly Geswein',
     license:     'SIL OFL 1.1',
     sourceUrl:   'https://fonts.google.com/specimen/Whisper',
+  },
+  {
+    name:        'MedievalSharp',
+    family:      'MedievalSharp',
+    vibe:        'Carved stone / rune-like — rock inscriptions, monuments, dungeon plaques',
+    attribution: 'MedievalSharp by Marcelo Magalhães',
+    license:     'SIL OFL 1.1',
+    sourceUrl:   'https://fonts.google.com/specimen/MedievalSharp',
   },
 ];
