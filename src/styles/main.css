@@ -3449,13 +3449,8 @@ option.select-option--add {
 }
 .projector-warn-banner.is-faded { opacity: 0; }
 
-/* Black-out overlay — covers everything when state.projectorViewport.mode === 'black'. */
-.projector-blackout {
-  position: fixed; inset: 0;
-  background: #000;
-  z-index: 50;
-  pointer-events: none;
-}
+/* Blackout overlay retired in v2.11/A8.3 — see commit log. The
+   projector-broadcast toggle's faff placeholder replaces it. */
 
 .calibration-prompt {
   position: fixed; inset: 0;

@@ -271,7 +271,11 @@ export const STATE_VERSION = 2;
  *  - 'black':  render solid black, e.g. while the GM resets the table.
  * Mutually exclusive.
  */
-export type ProjectorMode = 'scaled' | 'full' | 'black';
+/** Projector display mode. 'black' was retired in v2.11/A8.3 — the
+ *  side-panel broadcast toggle (with its faff-overlay placeholder) is
+ *  the new "hide what players see" affordance. Legacy saves are
+ *  normalised on load (see StateManager.setProjectorViewport). */
+export type ProjectorMode = 'scaled' | 'full';
 
 export interface ProjectorViewport {
   /** Centre of the projector view, normalised 0..1 over the map. */

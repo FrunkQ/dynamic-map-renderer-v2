@@ -393,10 +393,10 @@
 
           <div id="projection-default-actions" class="viewport-actions">
             <button id="edit-projection-btn"     class="btn btn--primary btn--full">Move Projection View</button>
-            <div class="btn-row">
-              <button id="projection-blackout-btn" class="btn btn--ghost btn--sm" title="Black out the projector display">Black Out</button>
-              <button id="projection-fullmap-btn"  class="btn btn--ghost btn--sm" title="Show the entire map fit-to-window on the projector, ignoring calibration">Full Map</button>
-            </div>
+            <!-- Blackout button retired in v2.11/A8.3 — the panel's
+                 broadcast switch (faff placeholder) covers the same
+                 "hide what players see" need with a friendlier UX. -->
+            <button id="projection-fullmap-btn" class="btn btn--ghost btn--sm btn--full" title="Show the entire map fit-to-window on the projector, ignoring calibration">Full Map</button>
             <div class="param-row param-row--toggle">
               <label for="projection-filter-toggle" title="When on, the GM&rsquo;s visual filter does NOT apply to the projector — useful when projecting battlemaps that should stay unfiltered.">Disable Filters</label>
               <label class="toggle-switch">

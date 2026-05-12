@@ -1694,11 +1694,10 @@ export class GMApp {
     document.getElementById('projection-ok-btn')?.addEventListener('click',     () => exitEdit(true));
     document.getElementById('projection-cancel-btn')?.addEventListener('click', () => exitEdit(false));
 
-    // Mode toggles — Reset to Full Map and Black Out are mutually exclusive
-    // states relative to 'scaled' (the default). Clicking an active button
-    // returns the projector to scaled; clicking the inactive other button
-    // switches to that mode.
-    const setMode = (mode: 'scaled' | 'full' | 'black') => {
+    // Full-Map toggle — switches between scaled and full-map projection.
+    // The retired Blackout button's job (hide what's on the projector) is
+    // covered by the projection-broadcast switch + faff placeholder now.
+    const setMode = (mode: 'scaled' | 'full') => {
       const current = this.state.snapshot().projectorViewport ?? defaultProjectorViewport();
       const next: ProjectorViewport = { ...current, mode };
       this.state.setProjectorViewport(next);
@@ -1707,12 +1706,11 @@ export class GMApp {
       this.refreshProjectionModeButtons();
     };
     document.getElementById('projection-fullmap-btn')?.addEventListener('click', () => {
+      // Locked to 'full' while the active map is uncalibrated — scaled
+      // requires pixelsPerSquare to render meaningfully.
+      if (!this._isActiveMapCalibrated()) return;
       const cur = this.state.snapshot().projectorViewport?.mode ?? 'scaled';
       setMode(cur === 'full' ? 'scaled' : 'full');
-    });
-    document.getElementById('projection-blackout-btn')?.addEventListener('click', () => {
-      const cur = this.state.snapshot().projectorViewport?.mode ?? 'scaled';
-      setMode(cur === 'black' ? 'scaled' : 'black');
     });
 
     // Rotation buttons — quick set-and-broadcast.
@@ -1880,18 +1878,26 @@ export class GMApp {
 
   private refreshProjectionModeButtons(): void {
     const mode = this.state.snapshot().projectorViewport?.mode ?? 'scaled';
-    const fullBtn  = document.getElementById('projection-fullmap-btn');
-    const blackBtn = document.getElementById('projection-blackout-btn');
-    if (fullBtn) {
-      const active = mode === 'full';
-      fullBtn.classList.toggle('btn--warn', active);
-      fullBtn.textContent = active ? 'Scaled View' : 'Full Map';
-    }
-    if (blackBtn) {
-      const active = mode === 'black';
-      blackBtn.classList.toggle('btn--danger', active);
-      blackBtn.textContent = active ? 'Restore' : 'Black Out';
-    }
+    const fullBtn = document.getElementById('projection-fullmap-btn') as HTMLButtonElement | null;
+    if (!fullBtn) return;
+    const active   = mode === 'full';
+    const locked   = !this._isActiveMapCalibrated();
+    fullBtn.classList.toggle('btn--warn', active);
+    fullBtn.textContent = active ? 'Scaled View' : 'Full Map';
+    // When the active map has no calibration, Scaled View is invalid;
+    // lock the button in its pressed "Full Map" state so the user can
+    // see why nothing reacts to clicks. Calibrating the map (or swapping
+    // to a calibrated one) releases the lock.
+    fullBtn.disabled = locked;
+    fullBtn.title = locked
+      ? 'Map is not calibrated — calibrate to enable Scaled View'
+      : '';
+  }
+
+  /** Is the active map calibrated? Drives the Full Map button lock and
+   *  the auto-flip to 'full' mode on uncalibrated map swaps. */
+  private _isActiveMapCalibrated(): boolean {
+    return !!this._lastMapAssetMeta?.pixelsPerSquare;
   }
 
   private onPeerMessage(_peerId: string, msg: GMMessage): void {
@@ -2625,6 +2631,21 @@ export class GMApp {
     });
     // Monitors care about the primary's resulting view fraction — push it so they re-crop.
     this._broadcastRoles(false);
+    // If the new active map is uncalibrated and the projector is currently
+    // in 'scaled' mode, flip to 'full' — scaled requires pixelsPerSquare
+    // to render meaningfully. The Full Map button lock (in
+    // refreshProjectionModeButtons) keeps the user out of 'scaled' until
+    // calibration arrives.
+    if (!asset.pixelsPerSquare) {
+      const currentVp = this.state.snapshot().projectorViewport ?? defaultProjectorViewport();
+      if (currentVp.mode === 'scaled') {
+        const next: ProjectorViewport = { ...currentVp, mode: 'full' };
+        this.state.setProjectorViewport(next);
+        this.projectorEditor.setViewport(next);
+        this.host.broadcast({ type: 'projector_viewport_update', payload: next });
+      }
+    }
+    this.refreshProjectionModeButtons();
     // The projector rect's bounds depend on mapPixelsPerSquare we only
     // resolved a moment ago (asset metadata is read async from IndexedDB),
     // so getRectBounds() returned null during renderer.onMapLoaded's

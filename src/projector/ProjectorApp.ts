@@ -60,7 +60,6 @@ export class ProjectorApp {
   private calibratePrompt!: HTMLElement;
   private controlsEl!:      HTMLElement;
   private setupLabelEl!:    HTMLElement;
-  private blackoutEl!:      HTMLElement;
   private gridCanvas!:      HTMLCanvasElement;
   private monitorBadge!:    HTMLElement;
   private noMapEl!:         HTMLElement;
@@ -126,11 +125,9 @@ export class ProjectorApp {
     this.uncalWarnEl.hidden = true;
     document.body.appendChild(this.uncalWarnEl);
 
-    // Black-out overlay — covers the full window when projectorViewport.mode === 'black'.
-    this.blackoutEl = document.createElement('div');
-    this.blackoutEl.className = 'projector-blackout';
-    this.blackoutEl.hidden = true;
-    document.body.appendChild(this.blackoutEl);
+    // Blackout overlay retired in v2.11/A8.3 — the projector-broadcast
+    // toggle on the GM panel (with its faff placeholder) covers the
+    // "hide what players see" need with a friendlier UX.
 
     document.getElementById('calibrate-btn')?.addEventListener('click',  () => void this._openCalibration());
     document.getElementById('recalibrate-btn')?.addEventListener('click', () => void this._openCalibration());
@@ -609,15 +606,12 @@ export class ProjectorApp {
     return { centerX: 0.5, centerY: 0.5, viewNW: 1, viewNH: 1, backgroundColor: bg };
   }
 
-  /** Push the computed view to the renderer + show/hide the black-out overlay. */
+  /** Push the computed view to the renderer. */
   private _applyView(): void {
-    const mode = this.projectorViewport.mode;
-    this.blackoutEl.hidden = mode !== 'black';
     // Reflect rotation onto body so CSS can rotate the canvas + grid.
     document.body.dataset['rot'] = String(this.projectorViewport.rotation);
     this._drawGrid();
     this._refreshErrorStates();
-    if (mode === 'black') return;
     const view = this._computeViewState();
     this.renderer.setView(view);
     this.markerSprites.render(this.currentMarkers, this.playerIconCache);
@@ -632,10 +626,8 @@ export class ProjectorApp {
    *     uncalibrated, and monitors don't care since they mirror primary).
    */
   private _refreshErrorStates(): void {
-    const blacked = this.projectorViewport.mode === 'black';
-    const noMap   = !this.mapBlob && !blacked;
+    const noMap   = !this.mapBlob;
     const uncal   = !!this.mapBlob
-                    && !blacked
                     && this.role !== 'monitor'
                     && this.projectorViewport.mode === 'scaled'
                     && (!this.mapPixelsPerSquare || !this.setup);
@@ -718,7 +710,6 @@ export class ProjectorApp {
     ctx.clearRect(0, 0, w, h);
 
     if (!this.projectorViewport.gridEnabled) return;
-    if (this.projectorViewport.mode === 'black') return;
     if (this.role === 'monitor') return; // monitors don't show the calibration grid
     if (!this.setup) return;
 

@@ -63,7 +63,14 @@ export class StateManager {
   }
 
   setProjectorViewport(vp: ProjectorViewport): void {
-    this.state = { ...this.state, projectorViewport: vp };
+    // Migrate the retired 'black' mode to 'full' on the way in so legacy
+    // bundles + IndexedDB entries don't leave the projector in a dead
+    // state (the blackout overlay + button were removed in v2.11/A8.3
+    // because the broadcast-toggle's faff overlay covers the same need).
+    const normalised: ProjectorViewport = (vp.mode as string) === 'black'
+      ? { ...vp, mode: 'full' }
+      : vp;
+    this.state = { ...this.state, projectorViewport: normalised };
     this._notify(['projectorViewport']);
   }
 
