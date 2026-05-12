@@ -27,6 +27,7 @@ import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
 import { seedImageAssetsIfNeeded } from '../images/seedImageAssets.ts';
+import { migrateLegacyIconsIfNeeded } from '../images/migrateLegacyIcons.ts';
 import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { generateId } from '../utils/id.ts';
 import { exportBundle, importBundleText } from '../storage/bundleIO.ts';
@@ -268,6 +269,7 @@ export class GMApp {
     await seedAudioAssets();
     await migrateLegacyMaps();
     await seedImageAssetsIfNeeded();
+    await migrateLegacyIconsIfNeeded();
     // Check for ?bundle=<URL> startup load. If the user came in via a
     // shared link, we load that pack instead of seeding the default.
     const handledByUrl = await this._maybeLoadBundleFromUrl();
