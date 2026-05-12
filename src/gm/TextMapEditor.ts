@@ -324,7 +324,7 @@ export class TextMapEditor {
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
     uploadBtn.className = 'btn btn--ghost btn--sm';
-    uploadBtn.textContent = '+ Upload';
+    uploadBtn.textContent = '+ Upload New Image';
     uploadBtn.title = 'Upload an image from disk and drop it on the page';
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
