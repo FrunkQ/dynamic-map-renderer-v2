@@ -460,6 +460,84 @@ export class Renderer {
     this.needsRender = true;
   }
 
+  // ─── Reveal-overlay (handout animation) ────────────────────────────────
+  //
+  // Sits as an extra plane mesh INSIDE the main scene (above the map +
+  // fog + marker layers) so the EffectComposer post-effect filter runs
+  // over its pixels too. The TransitionEngine paints the reveal
+  // animation onto an offscreen canvas; the renderer pulls those
+  // pixels into the WebGL pipeline via a CanvasTexture. This is the
+  // architectural difference that puts "filter over both halves of the
+  // reveal" within reach without rewriting every transition.
+
+  private revealOverlayCanvas:  HTMLCanvasElement | null = null;
+  private revealOverlayTexture: THREE.CanvasTexture | null = null;
+  private revealOverlayMesh:    THREE.Mesh | null = null;
+  private revealPumpId:         number | null = null;
+
+  /** Begin a reveal-overlay pass. Returns an offscreen canvas the
+   *  caller can paint to each frame. Adds a textured plane at z=0.03
+   *  (above markers, below the GM border line). Starts a per-frame
+   *  pump that marks the CanvasTexture dirty so canvas → GPU uploads
+   *  happen automatically while the reveal animation runs. */
+  beginRevealOverlay(width: number, height: number): HTMLCanvasElement {
+    if (!this.revealOverlayCanvas) this.revealOverlayCanvas = document.createElement('canvas');
+    this.revealOverlayCanvas.width  = Math.max(1, Math.round(width));
+    this.revealOverlayCanvas.height = Math.max(1, Math.round(height));
+    if (!this.revealOverlayTexture) {
+      this.revealOverlayTexture = new THREE.CanvasTexture(this.revealOverlayCanvas);
+      this.revealOverlayTexture.colorSpace = THREE.SRGBColorSpace;
+      this.revealOverlayTexture.minFilter  = THREE.LinearFilter;
+    } else {
+      // CanvasTexture caches dimensions — force a fresh upload after
+      // a resize so the GPU side matches.
+      this.revealOverlayTexture.needsUpdate = true;
+    }
+    if (!this.revealOverlayMesh) {
+      const geo = new THREE.PlaneGeometry(this.aspectRatio || 1, 1);
+      const mat = new THREE.MeshBasicMaterial({
+        map: this.revealOverlayTexture,
+        transparent: true,
+        depthWrite: false,
+      });
+      this.revealOverlayMesh = new THREE.Mesh(geo, mat);
+      this.revealOverlayMesh.position.z = 0.03;
+      this.scene.add(this.revealOverlayMesh);
+    }
+    // Per-frame pump — marks the texture dirty so the CanvasTexture
+    // uploads the latest canvas pixels every render frame while the
+    // reveal is in flight. Cheap; only runs while the mesh exists.
+    const pump = (): void => {
+      if (!this.revealOverlayMesh) {
+        this.revealPumpId = null;
+        return;
+      }
+      if (this.revealOverlayTexture) this.revealOverlayTexture.needsUpdate = true;
+      this.needsRender = true;
+      this.revealPumpId = requestAnimationFrame(pump);
+    };
+    if (this.revealPumpId === null) this.revealPumpId = requestAnimationFrame(pump);
+    this.needsRender = true;
+    return this.revealOverlayCanvas;
+  }
+
+  /** Tear down the reveal overlay. Mesh removed from scene; texture +
+   *  canvas kept for the next beginRevealOverlay (cheaper than
+   *  re-creating). The per-frame pump exits on its next tick. */
+  endRevealOverlay(): void {
+    if (this.revealOverlayMesh) {
+      this.scene.remove(this.revealOverlayMesh);
+      (this.revealOverlayMesh.material as THREE.Material).dispose();
+      this.revealOverlayMesh.geometry.dispose();
+      this.revealOverlayMesh = null;
+    }
+    if (this.revealPumpId !== null) {
+      cancelAnimationFrame(this.revealPumpId);
+      this.revealPumpId = null;
+    }
+    this.needsRender = true;
+  }
+
   dispose(): void {
     this.stop();
     this.fogCompositor.dispose();

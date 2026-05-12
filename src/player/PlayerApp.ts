@@ -273,16 +273,12 @@ export class PlayerApp {
       }
 
       case 'handout_reveal': {
-        // Reveal animation for a handout. The starting frame is
-        // already on the renderer (set by an earlier map_change for
-        // this mapId); the GM is sending us the FINAL frame as
-        // mapBlob plus the transition config. We use the cached raw
-        // bytes of the STARTING frame as the transition snapshot —
-        // capturing the live canvas would bake whatever filter is
-        // active (Night Vision, CRT, etc.) into the snapshot and
-        // freeze it for the duration of the reveal. The cached bytes
-        // are the unsullied rasterise. Filter still runs live on the
-        // underlying final frame via the Three.js post-effect.
+        // Reveal animation for a handout. Routes through the
+        // renderer's IN-SCENE reveal overlay so the EffectComposer
+        // post-effect filter runs over BOTH halves of the reveal
+        // (snapshot of unsullied starting frame + underlying final
+        // frame). Map→map transitions stay on the existing DOM-overlay
+        // path — different filter semantics by design.
         if (!mapBlob) break;
         if (msg.mapId !== this.currentMapId) break; // stale message
         const finalBlob = mapBlob;
@@ -298,14 +294,29 @@ export class PlayerApp {
               preSnap = await createImageBitmap(new Blob([startBlob], { type: 'image/png' }));
             } catch { preSnap = undefined; }
           }
-          await this.runTransition(msg.transition, async () => {
-            await this.renderer.loadMap(finalBlob, fog);
-            if (filter) this.renderer.setFilter(filter);
-            if (view) {
-              this.renderer.setView(view);
-              this.markerTexture.setViewHeight(view.viewNH);
-            }
-          }, preSnap);
+          // Open an in-scene reveal overlay sized to the WebGL
+          // canvas's CSS pixels. The TransitionEngine paints onto
+          // this offscreen canvas; the renderer pulls those pixels
+          // into a CanvasTexture on a plane inside the EffectComposer
+          // pipeline. Filter applies. The overlay is torn down when
+          // the transition finishes.
+          const rendererCanvas = document.querySelector<HTMLCanvasElement>('#renderer-canvas')!;
+          const revealCanvas = this.renderer.beginRevealOverlay(
+            rendererCanvas.clientWidth  || window.innerWidth,
+            rendererCanvas.clientHeight || window.innerHeight,
+          );
+          try {
+            await this.runTransition(msg.transition, async () => {
+              await this.renderer.loadMap(finalBlob, fog);
+              if (filter) this.renderer.setFilter(filter);
+              if (view) {
+                this.renderer.setView(view);
+                this.markerTexture.setViewHeight(view.viewNH);
+              }
+            }, preSnap, revealCanvas);
+          } finally {
+            this.renderer.endRevealOverlay();
+          }
         })();
         break;
       }
@@ -636,12 +647,19 @@ export class PlayerApp {
      *  capture time. Map→map transitions leave this undefined and the
      *  engine snapshots the live canvas. */
     preSnapshot?: ImageBitmap,
+    /** Optional offscreen canvas the transition should paint onto
+     *  instead of the DOM overlay. Handout reveal pathway supplies
+     *  the renderer's in-scene reveal-overlay canvas so the filter
+     *  applies to BOTH halves of the reveal. Map→map transitions
+     *  leave this undefined and paint to the DOM overlay above the
+     *  WebGL canvas — outside the filter pipeline. */
+    overlayOverride?: HTMLCanvasElement,
   ): Promise<void> {
     const id  = config?.transitionId ?? 'none';
     const def = transitionRegistry.getOrFallback(id);
     const params = config?.params ?? transitionRegistry.defaultParams(id);
     const canvas = document.querySelector<HTMLCanvasElement>('#renderer-canvas')!;
-    await this.transitionEngine.run(def, params, canvas, applyChange, preSnapshot);
+    await this.transitionEngine.run(def, params, canvas, applyChange, preSnapshot, overlayOverride);
   }
 
   // ─── UI ───────────────────────────────────────────────────────────────────

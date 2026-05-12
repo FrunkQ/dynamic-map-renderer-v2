@@ -81,6 +81,15 @@ export class TransitionEngine {
      *  Map→map transitions leave this undefined and get the
      *  canvas-snapshot path. */
     preSnapshot?: ImageBitmap,
+    /** Optional target canvas the transition should paint onto in
+     *  place of the engine's DOM overlay canvas. Used by the handout
+     *  reveal pathway to route painting onto an offscreen canvas
+     *  that's wired to a Three.js CanvasTexture INSIDE the scene —
+     *  so the EffectComposer post-effect filter runs over both
+     *  halves of the reveal. Map→map transitions leave this undefined
+     *  and the engine paints to its own DOM overlay above the
+     *  WebGL canvas (unchanged behaviour). */
+    overlayOverride?: HTMLCanvasElement,
   ): Promise<void> {
     // 'none' skips the overlay entirely — just apply immediately
     if (def.id === 'none') {
@@ -96,9 +105,18 @@ export class TransitionEngine {
     this._abort = new AbortController();
     const signal = this._abort.signal;
 
-    // Sync overlay dimensions to the source canvas CSS size before capturing
-    this.overlay.width  = sourceCanvas.clientWidth  || window.innerWidth;
-    this.overlay.height = sourceCanvas.clientHeight || window.innerHeight;
+    // Resolve the canvas the transition will paint onto. Map→map
+    // transitions use this.overlay (the DOM canvas above the WebGL
+    // canvas — outside the filter pipeline, which is the desired
+    // behaviour: snapshot keeps its old filter baked, new map gets the
+    // new filter from Three.js). Handout reveals pass overlayOverride
+    // — an offscreen canvas backing a CanvasTexture INSIDE the scene,
+    // so the EffectComposer filter applies to the composite of both
+    // halves of the reveal.
+    const target = overlayOverride ?? this.overlay;
+
+    target.width  = sourceCanvas.clientWidth  || window.innerWidth;
+    target.height = sourceCanvas.clientHeight || window.innerHeight;
 
     // Use the caller-provided snapshot when available (handout reveal
     // path supplies the raw starting-frame bytes so the transition
@@ -118,9 +136,10 @@ export class TransitionEngine {
       }
     }
 
-    // Cover the canvas with the snapshot so texture decode is invisible
-    const ctx = this.overlay.getContext('2d')!;
-    ctx.drawImage(snapshot, 0, 0, this.overlay.width, this.overlay.height);
+    // Cover the target canvas with the snapshot so the texture decode
+    // (in applyChange below) is invisible behind it.
+    const ctx = target.getContext('2d')!;
+    ctx.drawImage(snapshot, 0, 0, target.width, target.height);
 
     // Load new map, filter, and view underneath the snapshot
     await applyChange();
@@ -129,11 +148,12 @@ export class TransitionEngine {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
     try {
-      await def.play({ overlay: this.overlay, snapshot, params, signal });
+      await def.play({ overlay: target, snapshot, params, signal });
     } finally {
-      // Always clear the overlay when done, even if the transition threw
-      const ctx2 = this.overlay.getContext('2d');
-      if (ctx2) ctx2.clearRect(0, 0, this.overlay.width, this.overlay.height);
+      // Always clear the target canvas when done, even if the
+      // transition threw.
+      const ctx2 = target.getContext('2d');
+      if (ctx2) ctx2.clearRect(0, 0, target.width, target.height);
       snapshot.close();
       // Clear the controller reference if this is the run that owns it.
       if (this._abort?.signal === signal) this._abort = null;
