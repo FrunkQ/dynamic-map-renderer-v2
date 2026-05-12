@@ -731,6 +731,11 @@ export class GMApp {
   }
 
   private async loadMap(map: StoredMap): Promise<void> {
+    // Detect "same map reload" — e.g. after editing a handout, applying
+    // a Fix Missing Map, or re-loading after a retarget. The broadcast
+    // map_change shouldn't replay the entry transition in that case.
+    const previousMapId = this.state.snapshot().map?.id;
+    if (previousMapId === map.id) this._suppressNextMapTransition = true;
     // Flush any unsaved state from the previous map before switching
     await this.state.flushSave();
     this.setStatus(`Loading ${map.name}…`, 'ok');
@@ -1456,13 +1461,28 @@ export class GMApp {
     );
   }
 
-  /** Returns the current transition config to include in a map_change broadcast. */
+  /** Returns the current transition config to include in a map_change
+   *  broadcast. When the upcoming map_change is a reload of the same
+   *  map (re-broadcast after an asset edit, retarget, etc. — same id
+   *  before and after), we force transition=none so the player /
+   *  projector don't re-run the entry transition. The user only wants
+   *  to see the entry transition when actually switching to a different
+   *  map, not when the GM has just tweaked the active one. */
   private buildTransitionConfig(): TransitionConfig {
+    if (this._suppressNextMapTransition) {
+      this._suppressNextMapTransition = false;
+      return { transitionId: 'none', params: {} };
+    }
     return {
       transitionId: this.activeTransitionId,
       params: this.allTransitionParams[this.activeTransitionId] ?? transitionRegistry.defaultParams(this.activeTransitionId),
     };
   }
+  /** One-shot flag — set true before a loadMap() that should NOT play
+   *  the entry transition (same-map reload after an edit, fix-missing,
+   *  re-target). Consumed and cleared by the next buildTransitionConfig
+   *  call. */
+  private _suppressNextMapTransition = false;
 
   private bindUIControls(): void {
     this.mapAssetModal = new MapAssetModal(

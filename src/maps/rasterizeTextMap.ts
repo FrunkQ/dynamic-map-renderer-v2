@@ -113,6 +113,10 @@ export interface RasterizeOpts {
    *  player view at typical viewport sizes; the projector path can ask
    *  for higher when calibration is in play. */
   longSidePx?: number;
+  /** When true, render ONLY elements flagged `noAnimate: true`. Used to
+   *  produce the "starting frame" for handout reveal animations — the
+   *  state players see before the GM kicks off the reveal. */
+  staticOnly?: boolean;
 }
 
 // 2048 px on the long side gives crisp text on a typical 1440p / 4K GM
