@@ -47,6 +47,15 @@ export interface TransitionDefinition {
   label: string;
   params: TransitionParam[];
   /**
+   * Suitability flag for handout (text-map) reveal animations. A
+   * handout reveal runs the transition from "background + noAnimate
+   * elements" (snapshot) to "background + all elements" (the layer
+   * underneath). Effects where the snapshot DISSOLVES / FADES / WIPES
+   * away cleanly suit this — anything that slides or zooms the whole
+   * frame doesn't, because static elements would move too.
+   * Default: false. */
+  forHandout?: boolean;
+  /**
    * Runs the full transition animation on the overlay canvas.
    * Must return a Promise that resolves when the transition is complete.
    * The engine will clear the overlay canvas after resolution.

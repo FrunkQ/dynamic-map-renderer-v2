@@ -4,6 +4,7 @@ import { animate, linear } from '../../easing.ts';
 export default {
   id: 'scanline',
   label: 'Terminal Clear',
+  forHandout: true,
   params: [
     {
       type: 'slider',

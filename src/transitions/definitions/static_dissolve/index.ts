@@ -28,6 +28,7 @@ function getBlockOrder(cols: number, rows: number): number[] {
 export default {
   id: 'static_dissolve',
   label: 'Static Dissolve',
+  forHandout: true,
   params: [
     {
       type: 'slider',

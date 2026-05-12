@@ -53,6 +53,7 @@ function drawEdge(
 export default {
   id: 'wipe',
   label: 'Wipe',
+  forHandout: true,
   params: [
     {
       type: 'select',

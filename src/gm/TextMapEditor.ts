@@ -1,4 +1,5 @@
-import type { MapAsset, TextMapConfig, TextMapElement, TextMapTextElement } from '../types.ts';
+import type { MapAsset, TextMapConfig, TextMapElement, TextMapTextElement, TextMapAnimation } from '../types.ts';
+import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { SYSTEM_CATEGORY_IDS } from '../types.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { predictTextMapPixelDimensions } from '../maps/rasterizeTextMap.ts';
@@ -452,18 +453,193 @@ export class TextMapEditor {
     return tb;
   }
 
-  /** Placeholder popover for animation settings — list of
-   *  handout-suitable transitions + a duration slider. Wired to the
-   *  actual transition engine in the follow-up commit; for now it
-   *  surfaces the design + lets the UI shape settle. */
+  /** Open the reveal-animation picker. Lets the GM enable the reveal,
+   *  pick a handout-suitable transition, tweak its params, and choose
+   *  whether the reveal fires automatically on map load or waits for
+   *  a GM trigger. Stored on cfg.animation. */
   private _openAnimationPicker(): void {
-    alert(
-      'Handout reveal animation — design landing in the next commit.\n\n'
-      + 'Approach: run a transition from "background + Don\'t-animate elements" '
-      + 'to "background + all elements". Reuses the same transition system '
-      + 'as map→map changes; transition picker shows only the ones tagged '
-      + 'as handout-suitable (fades, wipes, dissolves).'
-    );
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'modal-dialog modal-dialog--sm';
+    overlay.appendChild(dialog);
+
+    // Working copy — committed back to cfg.animation on Save.
+    const cur: TextMapAnimation = this.cfg.animation
+      ? { ...this.cfg.animation, params: { ...this.cfg.animation.params } }
+      : { enabled: false, autoReveal: true, transitionId: 'written', params: {} };
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+    const title = document.createElement('span');
+    title.className = 'modal-title';
+    title.textContent = 'Reveal Animation';
+    header.appendChild(title);
+    const closeX = document.createElement('button');
+    closeX.type = 'button';
+    closeX.className = 'modal-close';
+    closeX.textContent = '×';
+    const close = (commit: boolean): void => {
+      if (commit) {
+        if (cur.enabled) {
+          this.cfg.animation = cur;
+        } else {
+          // Disabled: drop the field entirely so the player / projector
+          // skip the reveal pathway altogether.
+          const { animation: _a, ...rest } = this.cfg;
+          void _a;
+          this.cfg = rest as TextMapConfig;
+        }
+      }
+      overlay.remove();
+    };
+    closeX.addEventListener('click', () => close(false));
+    header.appendChild(closeX);
+    dialog.appendChild(header);
+
+    // Body
+    const body = document.createElement('div');
+    body.style.padding = 'var(--space-md)';
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
+    body.style.gap = 'var(--space-md)';
+    dialog.appendChild(body);
+
+    // Master switch
+    const enable = document.createElement('label');
+    enable.className = 'txt-map-toolbar-checkbox';
+    const enableCheck = document.createElement('input');
+    enableCheck.type = 'checkbox';
+    enableCheck.checked = cur.enabled;
+    enable.append(enableCheck, document.createTextNode(' Reveal animation enabled'));
+    body.appendChild(enable);
+
+    // Auto / manual trigger
+    const auto = document.createElement('label');
+    auto.className = 'txt-map-toolbar-checkbox';
+    const autoCheck = document.createElement('input');
+    autoCheck.type = 'checkbox';
+    autoCheck.checked = cur.autoReveal;
+    auto.append(autoCheck, document.createTextNode(' Play automatically when map loads (otherwise the GM kicks it off via the Start button)'));
+    body.appendChild(auto);
+
+    // Transition picker — filtered to forHandout-tagged definitions.
+    const sel = document.createElement('select');
+    sel.className = 'select-full';
+    const handoutDefs = transitionRegistry.getAll().filter((d) => d.forHandout);
+    for (const d of handoutDefs) {
+      const o = document.createElement('option');
+      o.value = d.id; o.textContent = d.label;
+      if (d.id === cur.transitionId) o.selected = true;
+      sel.appendChild(o);
+    }
+    const selWrap = document.createElement('div');
+    const selLabel = document.createElement('div');
+    selLabel.className = 'txt-map-toolbar-group-label';
+    selLabel.textContent = 'Transition';
+    selWrap.append(selLabel, sel);
+    body.appendChild(selWrap);
+
+    // Param panel — re-rendered when the transition changes.
+    const paramHost = document.createElement('div');
+    paramHost.style.display = 'flex';
+    paramHost.style.flexDirection = 'column';
+    paramHost.style.gap = 'var(--space-sm)';
+    body.appendChild(paramHost);
+
+    const renderParams = (): void => {
+      const def = transitionRegistry.get(cur.transitionId);
+      paramHost.innerHTML = '';
+      if (!def || def.params.length === 0) return;
+      for (const p of def.params) {
+        const row = document.createElement('label');
+        row.style.display = 'flex';
+        row.style.flexDirection = 'column';
+        row.style.gap = '4px';
+        const lbl = document.createElement('span');
+        lbl.className = 'txt-map-toolbar-group-label';
+        lbl.textContent = p.label;
+        row.appendChild(lbl);
+        if (p.type === 'slider') {
+          const sliderRow = document.createElement('div');
+          sliderRow.style.display = 'flex';
+          sliderRow.style.alignItems = 'center';
+          sliderRow.style.gap = 'var(--space-sm)';
+          const slider = document.createElement('input');
+          slider.type = 'range';
+          slider.min = String(p.min); slider.max = String(p.max); slider.step = String(p.step);
+          slider.style.flex = '1';
+          slider.value = String(cur.params[p.id] ?? p.default);
+          const valSpan = document.createElement('span');
+          valSpan.className = 'txt-map-element-slider-val';
+          const fmt = (n: number): string => `${n}${p.unit ? ' ' + p.unit : ''}`;
+          valSpan.textContent = fmt(parseFloat(slider.value));
+          slider.addEventListener('input', () => {
+            const v = parseFloat(slider.value);
+            cur.params[p.id] = v;
+            valSpan.textContent = fmt(v);
+          });
+          sliderRow.append(slider, valSpan);
+          row.appendChild(sliderRow);
+        } else {
+          const optSel = document.createElement('select');
+          optSel.className = 'select-full';
+          for (const opt of p.options) {
+            const o = document.createElement('option');
+            o.value = opt.value; o.textContent = opt.label;
+            if ((cur.params[p.id] ?? p.default) === opt.value) o.selected = true;
+            optSel.appendChild(o);
+          }
+          optSel.addEventListener('change', () => { cur.params[p.id] = optSel.value; });
+          row.appendChild(optSel);
+        }
+        paramHost.appendChild(row);
+      }
+    };
+
+    sel.addEventListener('change', () => {
+      cur.transitionId = sel.value;
+      // Reset params to the new transition's defaults — params are
+      // per-transition so old values rarely apply.
+      cur.params = transitionRegistry.defaultParams(sel.value);
+      renderParams();
+    });
+    // Ensure defaults are filled in for the initially-selected transition
+    // if cur.params is empty.
+    if (Object.keys(cur.params).length === 0) {
+      cur.params = transitionRegistry.defaultParams(cur.transitionId);
+    }
+    renderParams();
+
+    enableCheck.addEventListener('change', () => {
+      cur.enabled = enableCheck.checked;
+    });
+    autoCheck.addEventListener('change', () => {
+      cur.autoReveal = autoCheck.checked;
+    });
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.style.padding = 'var(--space-md)';
+    footer.style.borderTop = '1px solid var(--border)';
+    footer.style.display = 'flex';
+    footer.style.justifyContent = 'flex-end';
+    footer.style.gap = 'var(--space-sm)';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn--ghost';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => close(false));
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'btn btn--primary';
+    okBtn.textContent = 'Save';
+    okBtn.addEventListener('click', () => close(true));
+    footer.append(cancelBtn, okBtn);
+    dialog.appendChild(footer);
+
+    document.body.appendChild(overlay);
   }
 
   /** Save a user-picked image file to the Image Library (Textmap

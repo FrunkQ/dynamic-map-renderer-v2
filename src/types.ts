@@ -814,14 +814,20 @@ export interface TextMapImageElement extends TextMapElementBase {
 }
 
 export interface TextMapAnimation {
-  /** When true, the player reveals the body one character at a time. */
-  typewriter:    boolean;
-  /** Total reveal duration in seconds (1–30). Ignored when typewriter is off. */
-  durationSecs:  number;
-  /** When true, the typewriter pauses at the end of each visual line — the
-   *  classic teletypewriter feel. When false, characters reveal at constant
-   *  rate across line breaks for a continuous flow. */
-  linePause:     boolean;
+  /** Master switch. When false, the handout shows its final frame
+   *  immediately on map load — no reveal. */
+  enabled:      boolean;
+  /** When true, the reveal runs automatically on map load. When false,
+   *  the player + projector show the starting frame statically until
+   *  the GM triggers the reveal via the GM-side Start button. */
+  autoReveal:   boolean;
+  /** Transition id from the shared registry (filtered to
+   *  `forHandout: true`). Drives the reveal animation between
+   *  "background + noAnimate elements" (snapshot) and "background +
+   *  all elements" (final). */
+  transitionId: string;
+  /** Per-transition params (duration, line width, direction, etc.). */
+  params:       Record<string, number | string>;
 }
 
 /* ── Image Assets ────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { animate, easeIn, easeOut } from '../../easing.ts';
 export default {
   id: 'fade',
   label: 'Fade to Black',
+  forHandout: true,
   params: [
     {
       type: 'slider',
