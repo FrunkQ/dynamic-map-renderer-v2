@@ -3,7 +3,6 @@ import { MapManager } from './MapManager.ts';
 import { FogEditor } from './FogEditor.ts';
 import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
-import { IconPicker } from './IconPicker.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { TextMapEditor } from './TextMapEditor.ts';
@@ -28,7 +27,7 @@ import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
 import { seedImageAssetsIfNeeded } from '../images/seedImageAssets.ts';
 import { migrateLegacyIconsIfNeeded } from '../images/migrateLegacyIcons.ts';
-import { renderLibIcon } from '../images/libIconRender.ts';
+import { renderLibIcon, renderLibIconFromAsset } from '../images/libIconRender.ts';
 import { ImageAssetStore } from '../images/ImageAssetStore.ts';
 import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { generateId } from '../utils/id.ts';
@@ -103,7 +102,12 @@ export class GMApp {
   private filterPanel!:     FilterPanel;
   private transitionPanel!: TransitionPanel;
 
-  private iconPicker!:       IconPicker;
+  /** Pre-rendered bitmaps for marker icons. Keys follow the marker.icon
+   *  string — bare 'libAsset:<id>' for raster, '<libAsset:id>#<color>'
+   *  for tintable, plus a legacy 'asset:<id>' alias so pre-v2.11 saved
+   *  bundles continue to resolve after the icon-store migration. */
+  readonly iconCache    = new Map<string, ImageBitmap>();
+  readonly iconDataUrls = new Map<string, string>();
   private mapAssetModal!:    MapAssetModal;
   /** Last real (non-sentinel) value selected in #map-select — used to revert
    *  when the user picks the "+ Add" sentinel and we need to keep the dropdown
@@ -424,7 +428,7 @@ export class GMApp {
     for (const m of markers) {
       // Legacy 'asset:' icons: cached under the bare icon key.
       if (m.icon.startsWith('asset:') && !seen.has(m.icon)) {
-        const dataUrl = this.iconPicker.iconDataUrls.get(m.icon);
+        const dataUrl = this.iconDataUrls.get(m.icon);
         if (dataUrl) result.push({ key: m.icon, dataUrl });
         seen.add(m.icon);
       }
@@ -436,13 +440,13 @@ export class GMApp {
       if (m.icon.startsWith('libAsset:')) {
         const compound = `${m.icon}#${m.color}`;
         if (!seen.has(compound)) {
-          const compoundUrl = this.iconPicker.iconDataUrls.get(compound);
+          const compoundUrl = this.iconDataUrls.get(compound);
           if (compoundUrl) {
             result.push({ key: compound, dataUrl: compoundUrl });
             seen.add(compound);
             continue;
           }
-          const plainUrl = this.iconPicker.iconDataUrls.get(m.icon);
+          const plainUrl = this.iconDataUrls.get(m.icon);
           if (plainUrl && !seen.has(m.icon)) {
             result.push({ key: m.icon, dataUrl: plainUrl });
             seen.add(m.icon);
@@ -468,15 +472,49 @@ export class GMApp {
       const pair = `${m.icon}#${m.color}`;
       if (seenPairs.has(pair)) continue;
       seenPairs.add(pair);
-      if (this.iconPicker.iconCache.has(pair)) continue;
-      if (this.iconPicker.iconCache.has(m.icon)) continue;
+      if (this.iconCache.has(pair)) continue;
+      if (this.iconCache.has(m.icon)) continue;
       const rendered = await renderLibIcon(m.icon, m.color);
       if (!rendered) continue;
-      this.iconPicker.iconCache.set(rendered.key, rendered.bitmap);
-      this.iconPicker.iconDataUrls.set(rendered.key, rendered.dataUrl);
+      this.iconCache.set(rendered.key, rendered.bitmap);
+      this.iconDataUrls.set(rendered.key, rendered.dataUrl);
       added = true;
     }
     return added;
+  }
+
+  /**
+   * Prewarm iconCache + iconDataUrls with every raster library asset so
+   * markers in saved bundles render immediately on first paint. Tintable
+   * assets are skipped — those depend on per-marker colour and get
+   * rendered lazily by _ensureLibIcons. Each raster asset is also cached
+   * under the legacy 'asset:<id>' key as an alias so pre-v2.11 marker
+   * icons in saved bundles keep resolving without rewriting marker.icon.
+   */
+  private async _preloadLibIcons(): Promise<void> {
+    const all = await ImageAssetStore.getAll();
+    await Promise.all(all.map(async (asset) => {
+      if (asset.tintable) return;
+      if (asset.source === 'unicode' || asset.source === 'font') return;
+      const libKey = 'libAsset:' + asset.id;
+      if (this.iconCache.has(libKey)) return;
+      const rendered = await renderLibIconFromAsset(asset, '#e03e3e');
+      if (!rendered) return;
+      this.iconCache.set(rendered.key, rendered.bitmap);
+      this.iconDataUrls.set(rendered.key, rendered.dataUrl);
+      const legacyKey = 'asset:' + asset.id;
+      if (!this.iconCache.has(legacyKey)) {
+        this.iconCache.set(legacyKey, rendered.bitmap);
+        this.iconDataUrls.set(legacyKey, rendered.dataUrl);
+      }
+    }));
+  }
+
+  /** Drop caches and prewarm again — call after a bundle import / new pack. */
+  private async _reloadLibIcons(): Promise<void> {
+    this.iconCache.clear();
+    this.iconDataUrls.clear();
+    await this._preloadLibIcons();
   }
 
   /** Builds the per-call context handed to every MarkerInteraction. */
@@ -2164,8 +2202,7 @@ export class GMApp {
     const canvas    = document.querySelector<HTMLCanvasElement>('#gm-markers-canvas')!;
     const ctxMenuEl = document.querySelector<HTMLElement>('#marker-context-menu')!;
 
-    this.iconPicker = new IconPicker();
-    void this.iconPicker.load();
+    void this._preloadLibIcons();
 
     this.markerEditor = new MarkerEditor(
       canvas,
@@ -2183,7 +2220,7 @@ export class GMApp {
           }
         }
       },
-      () => this.iconPicker.iconCache,
+      () => this.iconCache,
     );
 
     this.markerEditor.setFogSelectCallback((pos) => this.fogEditor.trySelectAt(pos));
@@ -2242,13 +2279,26 @@ export class GMApp {
     });
 
     this.markerIconBtn.addEventListener('click', () => {
-      const currentIcon = this.state.getState().markers.find(
-        (m) => m.id === this.selectedMarkerId
-      )?.icon ?? '◆';
-      const currentColor = this.state.getState().markers
-        .find((m) => m.id === this.selectedMarkerId)?.color ?? '#e03e3e';
-      this.iconPicker.open(this.markerIconBtn, currentIcon, currentColor, (icon) => {
-        this.updateSelectedMarker({ icon });
+      const sel = this.state.getState().markers.find((m) => m.id === this.selectedMarkerId);
+      const currentColor = sel?.color ?? '#e03e3e';
+      // Reuse the full Small Asset Library modal as the picker — gives the
+      // GM the same category sidebar, search, and inline upload as the
+      // standalone library tool. Unicode glyphs flow back as the literal
+      // character; everything else as 'libAsset:<id>'.
+      void new ImageAssetModal().open({
+        pickMode: true,
+        onPick: async (asset) => {
+          if (asset.source === 'unicode' && asset.unicodeChar) {
+            this.updateSelectedMarker({ icon: asset.unicodeChar });
+            return;
+          }
+          const rendered = await renderLibIconFromAsset(asset, currentColor);
+          if (rendered) {
+            this.iconCache.set(rendered.key, rendered.bitmap);
+            this.iconDataUrls.set(rendered.key, rendered.dataUrl);
+          }
+          this.updateSelectedMarker({ icon: 'libAsset:' + asset.id });
+        },
       });
     });
 
@@ -2762,7 +2812,7 @@ export class GMApp {
       });
       await seedAudioAssets(); // re-seed built-in tracker pings (CC0)
       this.state.resetForImport();
-      await this.iconPicker.reload();
+      await this._reloadLibIcons();
       await this.populateMapList();
       void this._refreshPackNameInput();
       applyTheme(undefined); // back to default theme
@@ -2967,7 +3017,7 @@ export class GMApp {
       await seedAudioAssets();           // re-seed built-in tracker pings (CC0)
       await seedImageAssetsIfNeeded();   // re-pin system image categories + Unicode presets if missing
       this.state.resetForImport();
-      await this.iconPicker.reload();
+      await this._reloadLibIcons();
       await this.populateMapList();
       void this._refreshPackNameInput();
       // Re-apply theme so any creator-supplied look from the bundle takes effect.
@@ -3030,11 +3080,11 @@ export class GMApp {
       if (isAsset) {
         // libAsset tintables live under '<icon>#<color>' in iconCache.
         const cacheKey = isLib
-          ? (this.iconPicker.iconCache.has(`${sel.icon}#${sel.color}`)
+          ? (this.iconCache.has(`${sel.icon}#${sel.color}`)
               ? `${sel.icon}#${sel.color}`
               : sel.icon)
           : sel.icon;
-        const bmp = this.iconPicker.iconCache.get(cacheKey);
+        const bmp = this.iconCache.get(cacheKey);
         const img = document.createElement('img');
         if (bmp) {
           const cv = document.createElement('canvas');

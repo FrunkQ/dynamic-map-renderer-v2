@@ -1253,88 +1253,9 @@ option.select-option--add {
 }
 
 /* ── Icon picker popover ────────────────────────────────────────────────── */
-.icon-picker {
-  position: fixed;
-  z-index: 1000;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.65);
-  width: 256px;
-}
-.icon-picker-section-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  padding: var(--space-xs) 0 2px;
-}
-.icon-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 2px;
-}
-.icon-picker-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px;
-  background: var(--bg-input);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  cursor: pointer;
-  color: var(--text-primary);
-}
-.icon-picker-btn:hover { background: var(--bg-hover); border-color: var(--border); }
-.icon-picker-btn--active { border-color: var(--accent); background: var(--accent-dim); }
-.icon-picker-btn img { width: 18px; height: 18px; object-fit: contain; }
-.icon-picker-sep { height: 1px; background: var(--border); margin: var(--space-xs) 0; }
-/* Library section can be many categories deep — scroll inside the popover
-   rather than letting the popover grow past the viewport. */
-.icon-picker-scroll {
-  max-height: 280px;
-  overflow-y: auto;
-  margin-right: -4px;
-  padding-right: 4px;
-}
-.panel-sep      { height: 1px; background: var(--border); margin: var(--space-sm) 0; border: 0; }
-.icon-picker-upload {
-  display: block; width: 100%;
-  padding: var(--space-xs) var(--space-sm);
-  margin-top: var(--space-xs);
-  background: none;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  text-align: center;
-  cursor: pointer;
-}
-.icon-picker-upload:hover { border-color: var(--accent); color: var(--accent); }
-.icon-picker-upload--danger { color: var(--danger); border-color: transparent; }
-.icon-picker-upload--danger:hover { border-color: var(--danger); color: var(--danger); }
-.icon-picker-btn--danger { border-color: var(--danger) !important; opacity: 0.8; }
-.icon-picker-btn--danger:hover { opacity: 1; background: rgba(220,50,50,0.15) !important; }
-/* Unused custom icons in delete mode get an orange dot top-right. */
-.icon-picker-btn--unused { position: relative; }
-.icon-picker-btn--unused::after {
-  content: '!';
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  background: #f59e0b;
-  color: #1a1a1a;
-  font-size: 9px;
-  font-weight: 700;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
+/* Standalone IconPicker popover removed in v2.11 — marker icon selection
+   now reuses the full Small Asset Library modal in pickMode. */
+.panel-sep { height: 1px; background: var(--border); margin: var(--space-sm) 0; border: 0; }
 
 /* ── Soundboard panel ───────────────────────────────────────────────────── */
 .sb-mute-row   { margin-bottom: 2px; }
