@@ -398,6 +398,11 @@ body.player-view #renderer-canvas {
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  /* Anchor for absolutely-positioned panel-header overlays (bypass
+     toggle). Without this the toggle escapes its panel and lands on
+     whichever positioned ancestor it finds — usually the main layout
+     container, which puts the green dot somewhere in the map area. */
+  position: relative;
 }
 
 /* Panel title doubles as the collapse toggle button */
