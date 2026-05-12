@@ -77,10 +77,30 @@ export async function renderLibIconFromAsset(
   return null;
 }
 
+/**
+ * Rasterise an SVG data URL to a bitmap via an Image element + canvas.
+ *
+ * Going directly through `createImageBitmap(svgBlob)` is unreliable: Chrome
+ * rejects SVG blobs that lack intrinsic width/height (only a viewBox), and
+ * the rejection surfaces as a useless "InvalidStateError: The source image
+ * could not be decoded". An Image element honours the viewBox and renders
+ * happily, and createImageBitmap on the resulting canvas always works.
+ *
+ * Fixed 64px raster — matches the upload-side _resize and is plenty for
+ * marker rendering up to the GM canvas zoom.
+ */
 async function fetchBitmap(dataUrl: string): Promise<ImageBitmap> {
-  const res  = await fetch(dataUrl);
-  const blob = await res.blob();
-  return createImageBitmap(blob);
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  const size   = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width  = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2d context unavailable');
+  ctx.drawImage(img, 0, 0, size, size);
+  return createImageBitmap(canvas);
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
