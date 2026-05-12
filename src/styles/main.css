@@ -1540,6 +1540,28 @@ option.select-option--add {
 }
 .img-modal-cell:hover .img-modal-del { opacity: 1; }
 .img-modal-del:hover { background: var(--danger, #c0392b); }
+/* Edit-attribution pen icon — mirror of .img-modal-del, sitting to its
+   left so hover affordances cluster in the top-right corner. */
+.img-modal-edit {
+  position: absolute;
+  top: 2px;
+  right: 24px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(0,0,0,0.4);
+  color: var(--text);
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+  padding: 0;
+}
+.img-modal-cell:hover .img-modal-edit { opacity: 1; }
+.img-modal-edit:hover { background: var(--accent, #6aa3ff); color: #fff; }
 
 /* Hover preview — mirror of .map-preview-popover. Larger icon + name + attribution. */
 .img-modal-preview-popover {

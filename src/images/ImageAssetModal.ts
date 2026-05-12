@@ -11,11 +11,14 @@ import { fuzzySearch } from '../utils/fuzzySearch.ts';
 import { cleanTintableSvg } from '../utils/resolveAssetImages.ts';
 
 /** Result of the shared-attribution prompt for bulk uploads. Empty
- *  strings mean "skip that field on this batch". */
+ *  strings mean "skip that field on this batch". categoryId is the
+ *  target category every asset in the batch lands in — may be a
+ *  freshly-created one from the inline "+ New category…" path. */
 interface SharedAttribution {
   attribution:     string;
   attributionLink: string;
   license:         string;
+  categoryId:      string;
 }
 
 /** Result of the font-upload metadata prompt. family is required;
@@ -1061,10 +1064,52 @@ export class ImageAssetModal {
       intro.style.color = 'var(--text-secondary)';
       intro.style.margin = '0';
       intro.textContent =
-        `Apply one attribution to all ${count} tokens. This travels in the bundle's `
-        + `Copy attributions output. Leave blank to skip attribution on this batch.`;
+        `Apply one attribution + target category to all ${count} tokens. The `
+        + `attribution travels in the bundle's Copy attributions output. Leave `
+        + `the attribution blank to skip it on this batch.`;
       body.appendChild(intro);
 
+      // Category dropdown — pre-selected with whatever sidebar row is
+      // active so the natural flow is "click a category, drop in files".
+      // "+ New category…" sentinel triggers an inline name input.
+      const catLabel = document.createElement('div');
+      catLabel.className = 'txt-map-toolbar-section-label';
+      catLabel.textContent = 'Drop into category:';
+      body.appendChild(catLabel);
+      const catSel = document.createElement('select');
+      catSel.className = 'select-full';
+      const NEW_CAT = '__new__';
+      const userCats = this.categories.filter((c) => !c.isSystem);
+      const systemCats = this.categories.filter((c) => c.isSystem);
+      for (const cat of [...systemCats, ...userCats]) {
+        const o = document.createElement('option');
+        o.value = cat.id; o.textContent = cat.name;
+        if (cat.id === this.selectedCategoryId) o.selected = true;
+        catSel.appendChild(o);
+      }
+      const newOpt = document.createElement('option');
+      newOpt.value = NEW_CAT;
+      newOpt.textContent = '+ New category…';
+      catSel.appendChild(newOpt);
+      body.appendChild(catSel);
+      // Inline input for the new category name — hidden by default,
+      // revealed when the user picks the sentinel.
+      const newCatInput = document.createElement('input');
+      newCatInput.type = 'text';
+      newCatInput.className = 'select-full';
+      newCatInput.placeholder = 'New category name';
+      newCatInput.hidden = true;
+      body.appendChild(newCatInput);
+      catSel.addEventListener('change', () => {
+        const isNew = catSel.value === NEW_CAT;
+        newCatInput.hidden = !isNew;
+        if (isNew) setTimeout(() => newCatInput.focus(), 0);
+      });
+
+      const attrLabel = document.createElement('div');
+      attrLabel.className = 'txt-map-toolbar-section-label';
+      attrLabel.textContent = 'Attribution:';
+      body.appendChild(attrLabel);
       const attrInput = document.createElement('input');
       attrInput.type = 'text';
       attrInput.className = 'select-full';
@@ -1099,11 +1144,29 @@ export class ImageAssetModal {
       okBtn.type = 'button';
       okBtn.className = 'btn btn--primary';
       okBtn.textContent = `Upload ${count}`;
-      okBtn.addEventListener('click', () => done({
-        attribution:     attrInput.value.trim(),
-        attributionLink: linkInput.value.trim(),
-        license:         licInput.value.trim(),
-      }));
+      okBtn.addEventListener('click', () => {
+        void (async () => {
+          // Resolve the target category — create the new one inline if
+          // the user picked the sentinel.
+          let targetCategoryId = catSel.value;
+          if (targetCategoryId === NEW_CAT) {
+            const name = newCatInput.value.trim();
+            if (!name) { newCatInput.focus(); return; }
+            const id = 'cat-' + generateId();
+            await ImageAssetStore.saveCategory({
+              id, name, isSystem: false,
+              sortOrder: 100 + Date.now() / 1000,
+            });
+            targetCategoryId = id;
+          }
+          done({
+            attribution:     attrInput.value.trim(),
+            attributionLink: linkInput.value.trim(),
+            license:         licInput.value.trim(),
+            categoryId:      targetCategoryId,
+          });
+        })();
+      });
       footer.append(cancelBtn, okBtn);
       dialog.appendChild(footer);
 
@@ -1133,11 +1196,15 @@ export class ImageAssetModal {
     if (shared?.attribution)     attribution.attribution     = shared.attribution;
     if (shared?.attributionLink) attribution.attributionLink = shared.attributionLink;
     if (shared?.license)         attribution.license         = shared.license;
+    // Bulk-upload dialog can target a specific category (including a
+    // freshly-created one); single-file path falls back to whatever
+    // sidebar row is active.
+    const categoryId = shared?.categoryId ?? this.selectedCategoryId;
     if (isSvg) {
       const svgSource = await file.text();
       const asset: ImageAsset = {
         id, name, source: 'upload',
-        categoryId: this.selectedCategoryId,
+        categoryId,
         tintable: false,
         svgSource,
         mimeType: 'image/svg+xml',
@@ -1148,7 +1215,7 @@ export class ImageAssetModal {
     } else {
       const asset: ImageAsset = {
         id, name, source: 'upload',
-        categoryId: this.selectedCategoryId,
+        categoryId,
         tintable: false,
         blob: file,
         mimeType: file.type,
@@ -1783,8 +1850,23 @@ export class ImageAssetModal {
     label.textContent = asset.name;
     cell.appendChild(label);
 
-    // No delete affordance in pick mode — a single click means insert.
+    // No delete / edit affordances in pick mode — a single click means insert.
     if (!this.pickMode) {
+      // Pen — opens an attribution editor for this specific asset.
+      // Matches the hover-reveal of the delete button below; sits to
+      // the LEFT of the delete so the two hover affordances cluster
+      // in the top-right corner.
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'img-modal-edit';
+      edit.title = 'Edit attribution / name';
+      edit.innerHTML = '✎';
+      edit.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void this._editAssetMeta(asset);
+      });
+      cell.appendChild(edit);
+
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'img-modal-del';
@@ -1800,6 +1882,106 @@ export class ImageAssetModal {
     }
 
     return cell;
+  }
+
+  /** Per-asset attribution editor — opens a small modal letting the GM
+   *  edit name + attribution + attribution link + licence. Used both
+   *  for fixing typos on existing assets and for populating
+   *  attribution after a quick bulk upload that skipped it. */
+  private _editAssetMeta(asset: ImageAsset): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog modal-dialog--sm';
+      overlay.appendChild(dialog);
+
+      const header = document.createElement('div');
+      header.className = 'modal-header';
+      const title = document.createElement('span');
+      title.className = 'modal-title';
+      title.textContent = 'Edit asset attribution';
+      header.appendChild(title);
+      const closeX = document.createElement('button');
+      closeX.type = 'button';
+      closeX.className = 'modal-close';
+      closeX.textContent = '×';
+      const finish = (): void => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        resolve();
+      };
+      closeX.addEventListener('click', finish);
+      header.appendChild(closeX);
+      dialog.appendChild(header);
+
+      const body = document.createElement('div');
+      body.style.padding = 'var(--space-md)';
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+      body.style.gap = 'var(--space-md)';
+      dialog.appendChild(body);
+
+      const mk = (label: string, placeholder: string, value: string): HTMLInputElement => {
+        const lbl = document.createElement('div');
+        lbl.className = 'txt-map-toolbar-section-label';
+        lbl.textContent = label;
+        body.appendChild(lbl);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'select-full';
+        input.placeholder = placeholder;
+        input.value = value;
+        body.appendChild(input);
+        return input;
+      };
+      const nameInput    = mk('Name',             'Display name',                                     asset.name);
+      const attrInput    = mk('Attribution',      'e.g. "MedievalSharp by Marcelo Magalhães"',         asset.attribution ?? '');
+      const linkInput    = mk('Attribution link', 'URL where the original lives (optional)',           asset.attributionLink ?? '');
+      const licInput     = mk('Licence',          'e.g. "CC-BY 4.0", "SIL OFL 1.1"',                   asset.license ?? '');
+
+      const footer = document.createElement('div');
+      footer.style.padding = 'var(--space-md)';
+      footer.style.borderTop = '1px solid var(--border)';
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'flex-end';
+      footer.style.gap = 'var(--space-sm)';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn--ghost';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', finish);
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn btn--primary';
+      saveBtn.textContent = 'Save';
+      saveBtn.addEventListener('click', () => {
+        void (async () => {
+          const patch: Partial<ImageAsset> = {
+            name: nameInput.value.trim() || asset.name,
+          };
+          const a = attrInput.value.trim();
+          const l = linkInput.value.trim();
+          const lic = licInput.value.trim();
+          if (a)   patch.attribution     = a;
+          if (l)   patch.attributionLink = l;
+          if (lic) patch.license         = lic;
+          await ImageAssetStore.update(asset.id, patch);
+          await this._reload();
+          finish();
+        })();
+      });
+      footer.append(cancelBtn, saveBtn);
+      dialog.appendChild(footer);
+
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') finish();
+        if (e.key === 'Enter' && document.activeElement?.tagName === 'INPUT') saveBtn.click();
+      };
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(overlay);
+      setTimeout(() => nameInput.focus(), 0);
+    });
   }
 
   /** Render an ImageAsset into the given container — used for both the
