@@ -2409,13 +2409,30 @@ export class GMApp {
       remoteToggle.addEventListener('change', () => {
         this.remoteAudioEnabled = remoteToggle.checked;
         localStorage.setItem(REMOTE_AUDIO_KEY, String(this.remoteAudioEnabled));
+        const { slots } = this.state.getState().audio;
         if (!this.remoteAudioEnabled) {
           // Stop all currently playing slots on remote players
-          const { slots } = this.state.getState().audio;
           for (const slot of slots) {
             if (this.soundboardEngine.isPlaying(slot.id)) {
               this.host.broadcast({ type: 'soundboard_stop', slotId: slot.id });
             }
+          }
+        } else {
+          // Re-enabling — push the GM's currently-playing slots out to
+          // players so the audience hears whatever the GM is hearing
+          // without the GM needing to retrigger each slot.
+          for (const slot of slots) {
+            if (!slot.assetId || !this.soundboardEngine.isPlaying(slot.id)) continue;
+            const dataUrl = this.soundboardEngine.getDataUrl(slot.assetId);
+            if (!dataUrl) continue;
+            this.host.broadcast({
+              type:    'soundboard_play',
+              slotId:  slot.id,
+              assetId: slot.assetId,
+              loop:    slot.loop,
+              volume:  slot.volume,
+              dataUrl,
+            });
           }
         }
       });
