@@ -1883,11 +1883,14 @@ export class GMApp {
     const active   = mode === 'full';
     const locked   = !this._isActiveMapCalibrated();
     fullBtn.classList.toggle('btn--warn', active);
-    fullBtn.textContent = active ? 'Scaled View' : 'Full Map';
     // When the active map has no calibration, Scaled View is invalid;
     // lock the button in its pressed "Full Map" state so the user can
     // see why nothing reacts to clicks. Calibrating the map (or swapping
-    // to a calibrated one) releases the lock.
+    // to a calibrated one) releases the lock. Label spells out the
+    // locked state explicitly so disabled-greyed text still reads.
+    fullBtn.textContent = locked
+      ? 'Scaled View (Unavailable)'
+      : (active ? 'Scaled View' : 'Full Map');
     fullBtn.disabled = locked;
     fullBtn.title = locked
       ? 'Map is not calibrated — calibrate to enable Scaled View'
