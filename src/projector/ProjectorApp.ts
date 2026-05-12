@@ -7,6 +7,7 @@ import {
 } from './calibrationStorage.ts';
 import { ProjectorCalibrationModal } from '../gm/ProjectorCalibrationModal.ts';
 import { bindFullscreenButton } from '../utils/fullscreen.ts';
+import { decodeImageBitmap } from '../utils/decodeImageBitmap.ts';
 import { generateId } from '../utils/id.ts';
 import {
   type GMMessage, type ViewState, type FogState, type Marker, type MarkerIconData,
@@ -497,9 +498,7 @@ export class ProjectorApp {
         .filter(({ key }) => !this.playerIconCache.has(key))
         .map(async ({ key, dataUrl }) => {
           try {
-            const res  = await fetch(dataUrl);
-            const blob = await res.blob();
-            const bmp  = await createImageBitmap(blob);
+            const bmp = await decodeImageBitmap(dataUrl);
             this.playerIconCache.set(key, bmp);
           } catch {
             /* shrug — skip this icon */

@@ -1,5 +1,6 @@
 import { Guest } from '../p2p/Guest.ts';
 import { bindFullscreenButton } from '../utils/fullscreen.ts';
+import { decodeImageBitmap } from '../utils/decodeImageBitmap.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { MarkerTexture } from '../rendering/MarkerTexture.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
@@ -717,10 +718,12 @@ export class PlayerApp {
       iconData
         .filter(({ key }) => !this.playerIconCache.has(key))
         .map(async ({ key, dataUrl }) => {
-          const res  = await fetch(dataUrl);
-          const blob = await res.blob();
-          const bmp  = await createImageBitmap(blob);
-          this.playerIconCache.set(key, bmp);
+          try {
+            const bmp = await decodeImageBitmap(dataUrl);
+            this.playerIconCache.set(key, bmp);
+          } catch {
+            /* shrug — skip this icon, fallback circle will render */
+          }
         }),
     );
   }
