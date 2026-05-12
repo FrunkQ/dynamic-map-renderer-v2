@@ -10,6 +10,7 @@ import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
 import { HamburgerMenu } from './HamburgerMenu.ts';
 import { SELECT_ADD_SENTINEL, appendAddOption } from './selectAdd.ts';
+import { EditableSelect } from './EditableSelect.ts';
 import { getAllSetups, setActiveSetupId } from '../projector/calibrationStorage.ts';
 import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts';
 import { SoundboardEngine } from '../audio/SoundboardEngine.ts';
@@ -191,7 +192,7 @@ export class GMApp {
 
   // DOM references (assigned in init)
   private mapSelect!:               HTMLSelectElement;
-  private mapNameInput!:            HTMLInputElement;
+  private mapEditableSelect!:       EditableSelect;
   private editTextMapBtn!:          HTMLButtonElement;
   private startAnimationBtn!:       HTMLButtonElement;
   private revealProgressEl!:        HTMLElement;
@@ -1386,9 +1387,11 @@ export class GMApp {
       const last = session?.lastMapId ? (maps.find((m) => m.id === session.lastMapId) ?? maps[0]!) : maps[0]!;
       this.mapSelect.value = last.id;
       this._lastMapSelectValue = last.id;
+      this.mapEditableSelect?.refresh();
       await this.loadMap(last);
     } else {
       this._lastMapSelectValue = '';
+      this.mapEditableSelect?.refresh();
     }
   }
 
@@ -1580,7 +1583,7 @@ export class GMApp {
     // Flush any unsaved state from the previous map before switching
     await this.state.flushSave();
     this.setStatus(`Loading ${map.name}…`, 'ok');
-    this.mapNameInput.value = map.name;
+    this.mapEditableSelect.refresh();
     this.activeFilterId = ''; // force panel rebuild for new map's saved filter
     // Show the inline "Edit" button next to the Name field iff this is a
     // text-map handout — gives a one-click route into the editor without
@@ -1757,7 +1760,9 @@ export class GMApp {
       document.querySelector<T>(sel)!;
 
     this.mapSelect                  = q<HTMLSelectElement>('#map-select');
-    this.mapNameInput               = q<HTMLInputElement>('#map-name-input');
+    this.mapEditableSelect          = new EditableSelect(this.mapSelect, {
+      onRename: (id, name) => void this._renameMap(id, name),
+    });
     this.editTextMapBtn             = q<HTMLButtonElement>('#edit-textmap-btn');
     this.editTextMapBtn.addEventListener('click', () => void this._editCurrentTextMap());
     this.startAnimationBtn          = q<HTMLButtonElement>('#start-animation-btn');
@@ -2436,6 +2441,7 @@ export class GMApp {
         // Revert visually before opening the modal so the dropdown doesn't
         // sit on the action item if the user cancels out.
         this.mapSelect.value = this._lastMapSelectValue;
+        this.mapEditableSelect.refresh();
         this.openAddMapDialog();
         return;
       }
@@ -2500,6 +2506,7 @@ export class GMApp {
         opt.textContent = newMap.name;
         this.mapSelect.appendChild(opt);
         this.mapSelect.value = newMap.id;
+        this.mapEditableSelect.refresh();
         await this.loadMap(newMap);
       } catch (err) {
         this.setStatus(`Clone failed: ${(err as Error).message}`, 'error');
@@ -2516,16 +2523,8 @@ export class GMApp {
       this._schedulePackNameSave(this.packNameInput.value, /* immediate */ true);
     });
 
-    // Map rename — live-edit the active map's display name
-    this.mapNameInput.addEventListener('input', async () => {
-      const id = this.mapSelect.value;
-      if (!id) return;
-      const name = this.mapNameInput.value;
-      await this.maps.rename(id, name);
-      // Update the dropdown option in place so the user sees the new label immediately
-      const opt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
-      if (opt) opt.textContent = name || '(unnamed)';
-    });
+    // Map rename — now driven by the EditableSelect's onRename callback;
+    // see _renameMap() below.
 
 
     // Bundle import — file picker change handler. Picker is triggered from the
@@ -3283,9 +3282,21 @@ export class GMApp {
       const insertBefore = addSentinel?.previousElementSibling ?? addSentinel ?? null;
       this.mapSelect.insertBefore(opt, insertBefore);
       this.mapSelect.value = map.id;
+      this.mapEditableSelect.refresh();
       this._lastMapSelectValue = map.id;
       void this.loadMap(map);
     });
+  }
+
+  /** Persist a rename of the active map, triggered from the EditableSelect.
+   *  Updates the native option text in place (so refresh picks it up) and
+   *  writes through to MapManager. */
+  private async _renameMap(id: string, name: string): Promise<void> {
+    if (!id) return;
+    await this.maps.rename(id, name);
+    const opt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
+    if (opt) opt.textContent = name || '(unnamed)';
+    this.mapEditableSelect.refresh();
   }
 
   /** Persist the pack-name input value to session, debounced. Pass
