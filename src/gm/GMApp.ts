@@ -384,34 +384,49 @@ export class GMApp {
   }
 
   private _updatePlayerCount(): void {
-    // Total raw PeerJS connections includes both players and remote projectors.
-    // Subtract the projector subset so the count reflects actual players.
+    // PeerJS connectedCount mixes network players and remote projectors —
+    // strip the remote-projector subset to get the network-player count.
     const total            = this.host.connectedCount;
     const projectorPeerIds = new Set(this._projectorPeerByClientId.values());
-    const players          = Math.max(0, total - projectorPeerIds.size);
-    this.playerCountEl.textContent = String(players);
-    const plural = document.querySelector('#player-count-plural');
-    if (plural) plural.textContent = players === 1 ? '' : 's';
+    const remotePlayers    = Math.max(0, total - projectorPeerIds.size);
+    // Same-machine player windows ping us over BroadcastChannel; the count
+    // expires entries that haven't pinged in the last 10s.
+    const localPlayers     = this.host.localPlayerCount;
+    const totalPlayers     = remotePlayers + localPlayers;
 
-    // "(+ N projector)" suffix accounts for ALL projector windows, both
-    // local-BroadcastChannel (which never appears in host.connectedCount) and
-    // remote-PeerJS. Hidden when zero so the line reads cleanly.
-    const projCount = this.projectorConnections.size;
-    const suffix = document.querySelector<HTMLElement>('#projector-count-suffix');
-    if (suffix) {
-      suffix.textContent = projCount > 0
-        ? ` (+${projCount} projector${projCount !== 1 ? 's' : ''})`
-        : '';
+    this.playerCountEl.textContent = String(remotePlayers);
+    const plural = document.querySelector('#player-count-plural');
+    if (plural) plural.textContent = remotePlayers === 1 ? '' : 's';
+
+    // "(N)" — full audience including same-machine players. Shown only when
+    // there's at least one local player so the line stays clean for the
+    // common pure-remote case.
+    const totalSuffix = document.querySelector<HTMLElement>('#player-total-suffix');
+    if (totalSuffix) {
+      totalSuffix.textContent = localPlayers > 0 ? ` (${totalPlayers})` : '';
+    }
+
+    // Projector segment: "+ Projector" once any projector connects, with a
+    // bracketed count of ADDITIONAL monitors (projector #1 is always
+    // primary; closing the primary auto-closes all monitors).
+    const projTotal = this.projectorConnections.size;
+    const monitors  = Math.max(0, projTotal - 1);
+    const projSuffix = document.querySelector<HTMLElement>('#projector-count-suffix');
+    if (projSuffix) {
+      if (projTotal === 0)      projSuffix.textContent = '';
+      else if (monitors === 0)  projSuffix.textContent = ' + Projector';
+      else                      projSuffix.textContent = ` + Projector (${monitors})`;
     }
 
     // Grey out the broadcast toggles on the side-panel headers when nothing
     // of that type is currently receiving. CSS handles the visual fade; the
     // toggle stays clickable so the GM can pre-set state before joining
-    // players / projectors arrive.
+    // players / projectors arrive. Player toggle uses TOTAL players (a
+    // single local player is enough to undgrey it).
     document.querySelector('#view-panel .panel-header')
-      ?.classList.toggle('panel-header--no-connection', players === 0);
+      ?.classList.toggle('panel-header--no-connection', totalPlayers === 0);
     document.querySelector('#projection-panel .panel-header')
-      ?.classList.toggle('panel-header--no-connection', projCount === 0);
+      ?.classList.toggle('panel-header--no-connection', projTotal === 0);
 
     // Hover tooltip on the session-meta line listing what we know about each
     // connected peer. Players are anonymous PeerJS peers today (real names
@@ -2150,6 +2165,12 @@ export class GMApp {
     // Paint initial "no connection" greying so the toggles are correctly
     // faded before any first connect/disconnect event fires.
     this._updatePlayerCount();
+
+    // Local players ping us via BroadcastChannel every ~4s; their entries
+    // expire after 10s of silence. Refresh the displayed count on the
+    // same cadence so a closed player tab drops out of the count
+    // promptly even without an explicit disconnect event.
+    window.setInterval(() => this._updatePlayerCount(), 5000);
   }
 
   private _wireBroadcastBypass(selector: string, target: 'player' | 'projector'): void {

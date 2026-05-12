@@ -125,6 +125,15 @@ export class Host {
     return this.connections.size;
   }
 
+  /**
+   * Same-machine player windows currently alive (BroadcastChannel-only,
+   * tracked via player_heartbeat liveness pings). Disjoint from
+   * connectedCount, which only covers PeerJS peers.
+   */
+  get localPlayerCount(): number {
+    return this.local.localPlayerCount;
+  }
+
   /** All peer ids currently connected via PeerJS — includes both players and
    *  remote projectors. Callers that want just players should filter out the
    *  ones they've identified as projectors. */
@@ -251,12 +260,16 @@ export class Host {
 
     conn.on('data', (raw) => {
       // Inbound peer message (e.g. projector_hello). Ignore if no listener.
-      if (!this.events.onPeerMessage) return;
       const data = raw as { type?: string };
-      if (typeof data === 'object' && data && typeof data.type === 'string') {
-        try { this.events.onPeerMessage(conn.peer, data as GMMessage); }
-        catch (err) { this.events.onError(err as Error); }
-      }
+      if (typeof data !== 'object' || !data || typeof data.type !== 'string') return;
+      // PeerJS players send heartbeats too (Guest.send fans out to both
+      // transports). They don't change the count — PeerJS lifecycle
+      // already tracks these peers — so swallow them here rather than
+      // bubbling up as an unknown message type to GMApp.
+      if (data.type === 'player_heartbeat') return;
+      if (!this.events.onPeerMessage) return;
+      try { this.events.onPeerMessage(conn.peer, data as GMMessage); }
+      catch (err) { this.events.onError(err as Error); }
     });
 
     conn.on('close', () => {

@@ -35,12 +35,29 @@ export class LocalChannel {
   private reqListeners:      ((req: LocalRequest) => void)[]  = [];
   private peerMsgListeners:  ((msg: GMMessage) => void)[]     = [];
 
+  /**
+   * clientId → last-seen timestamp (performance.now() ms). Players sending
+   * player_heartbeat messages over BroadcastChannel land here. The GM
+   * counts entries newer than HEARTBEAT_STALE_MS as live local players.
+   * BC has no inherent presence mechanism, so this is how we know
+   * same-machine player windows are still around.
+   */
+  private heartbeats = new Map<string, number>();
+  private static readonly HEARTBEAT_STALE_MS = 10_000;
+
   constructor() {
     // Listen for incoming peer-to-GM messages (GM side). Splits into
-    // request_state pings vs. full GMMessages from connected peers.
+    // request_state pings, player heartbeats, and full GMMessages from
+    // connected peers.
     this.inbound.addEventListener('message', (e: MessageEvent<PeerToGm>) => {
       const data = e.data;
-      if ((data as LocalRequest).type === 'request_state') {
+      const kind = (data as { type?: string }).type;
+      if (kind === 'player_heartbeat') {
+        const id = (data as { clientId?: string }).clientId;
+        if (id) this.heartbeats.set(id, performance.now());
+        return;
+      }
+      if (kind === 'request_state') {
         for (const fn of this.reqListeners) fn(data as LocalRequest);
       } else {
         for (const fn of this.peerMsgListeners) fn(data as GMMessage);
@@ -51,6 +68,21 @@ export class LocalChannel {
     this.outbound.addEventListener('message', (e: MessageEvent<GMMessage>) => {
       for (const fn of this.msgListeners) fn(e.data);
     });
+  }
+
+  /**
+   * Number of distinct same-machine players whose heartbeat arrived
+   * within the last HEARTBEAT_STALE_MS. Reading this also prunes stale
+   * entries so the map stays bounded.
+   */
+  get localPlayerCount(): number {
+    const cutoff = performance.now() - LocalChannel.HEARTBEAT_STALE_MS;
+    let count = 0;
+    for (const [id, t] of this.heartbeats) {
+      if (t < cutoff) this.heartbeats.delete(id);
+      else count++;
+    }
+    return count;
   }
 
   // ─── GM side ─────────────────────────────────────────────────────────────

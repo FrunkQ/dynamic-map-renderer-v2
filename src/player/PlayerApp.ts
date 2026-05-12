@@ -1,4 +1,5 @@
 import { Guest } from '../p2p/Guest.ts';
+import { generateId } from '../utils/id.ts';
 import { bindFullscreenButton } from '../utils/fullscreen.ts';
 import { decodeImageBitmap } from '../utils/decodeImageBitmap.ts';
 import { Renderer } from '../rendering/Renderer.ts';
@@ -82,6 +83,16 @@ export class PlayerApp {
    * get discarded.  Tracking seqs lets us drop the PeerJS duplicate entirely.
    */
   private seenSeqs = new Set<number>();
+
+  /**
+   * Stable id for this player tab so the GM's heartbeat tracker can
+   * deduplicate pings from this client (vs. counting each ping as a
+   * distinct player). Regenerated per page load — a reload looks like a
+   * fresh player and the prior id naturally expires from the GM's map.
+   */
+  private clientId = generateId();
+  /** Interval id for the BC liveness ping. Cleared on disconnect. */
+  private _heartbeatInterval: number | null = null;
 
   async init(): Promise<void> {
     const fsBtn = document.getElementById('player-fullscreen-btn');
@@ -200,6 +211,15 @@ export class PlayerApp {
     });
 
     this.guest.connect(roomCode);
+
+    // Liveness pings so the GM can detect this same-machine player even
+    // though BroadcastChannel offers no presence signal. PeerJS-connected
+    // players ping too — Host swallows those (the conn lifecycle already
+    // tracks them) so the bandwidth cost is a few bytes per 4s.
+    if (this._heartbeatInterval !== null) clearInterval(this._heartbeatInterval);
+    const beat = () => this.guest.send({ type: 'player_heartbeat', clientId: this.clientId });
+    beat();
+    this._heartbeatInterval = window.setInterval(beat, 4000);
   }
 
   // ─── Message handling ─────────────────────────────────────────────────────

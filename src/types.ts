@@ -500,6 +500,18 @@ export interface MsgViewPlaceholder {
   message: string;
 }
 
+/**
+ * Liveness ping sent by player views every few seconds. BroadcastChannel
+ * has no built-in "who's listening" mechanism, so the GM tracks same-
+ * machine player presence by buffering recent clientIds and expiring
+ * them when heartbeats stop. PeerJS-connected players don't need this
+ * (Host.connections already tracks them via the conn lifecycle).
+ */
+export interface MsgPlayerHeartbeat {
+  type:     'player_heartbeat';
+  clientId: string;
+}
+
 /** GM changed volume on a playing slot — update without interrupting playback */
 export interface MsgSoundboardVolume {
   type: 'soundboard_volume';
@@ -680,6 +692,7 @@ export type GMMessage =
   | MsgPositionalStop
   | MsgPositionalMuteAll
   | MsgViewPlaceholder
+  | MsgPlayerHeartbeat
   | MsgTrackerScan
   | MsgTrackerBlob
   | MsgProjectorHello
