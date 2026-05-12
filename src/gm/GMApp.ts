@@ -217,7 +217,7 @@ export class GMApp {
       type === 'disconnected'  || type === 'ssl-unavailable';
     if (isBrokerLevel) {
       this._setBrokerErrorVisible(true);
-      this.setStatus('Network broker unreachable — remote players can\'t connect', 'error');
+      this.setStatus('Network broker unreachable — auto-retrying every minute', 'error');
       return;
     }
     this.setStatus(`P2P error: ${err.message}`, 'error');

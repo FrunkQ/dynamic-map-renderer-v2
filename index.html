@@ -57,7 +57,7 @@
             <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
           <strong>Network broker unreachable</strong>
-          <p>The public PeerJS signaling server isn't responding. Remote players (phones, other devices) can't join right now &mdash; but same-machine browser windows still work fine. Refresh in a few minutes; the broker usually recovers on its own.</p>
+          <p>The public PeerJS signaling server isn't responding. Remote players (phones, other devices) can't join right now &mdash; but same-machine browser windows still work fine. Auto-retrying every minute; will restore the QR as soon as the broker comes back.</p>
         </div>
 
         <div class="session-meta" id="session-meta" title="The leading number is players reaching you over the network. The bracketed number (when shown) adds same-machine browser windows so you see the full audience. '+ Projector' means the primary projector window is live; its bracketed count is additional monitor projectors (Projector #1 is always the primary; #2+ are monitors and close automatically if the primary closes).">

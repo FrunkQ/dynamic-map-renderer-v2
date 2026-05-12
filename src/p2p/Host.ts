@@ -49,6 +49,15 @@ export class Host {
    *  BroadcastChannel and PeerJS (local windows receive both). */
   private broadcastSeq = 0;
 
+  /**
+   * Pending broker-reconnect timer. Set when a broker-level PeerJS error
+   * (socket/network/server) fires; cleared on a successful peer.on('open')
+   * or on destroy(). PeerJS itself doesn't auto-retry the broker WebSocket,
+   * so we destroy the dead Peer and recreate it after a fixed delay.
+   */
+  private _brokerRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly BROKER_RETRY_MS = 60_000;
+
   constructor(events: HostEvents) {
     this.events = events;
     this.local = new LocalChannel();
@@ -61,6 +70,9 @@ export class Host {
     this.peer = peer;
 
     peer.on('open', (id) => {
+      // Broker just confirmed us — any pending auto-retry from a prior
+      // broker outage is now redundant.
+      this._clearBrokerRetry();
       this.events.onReady(id);
     });
 
@@ -69,13 +81,25 @@ export class Host {
     });
 
     peer.on('error', (err) => {
+      const type = (err as unknown as { type?: string }).type;
       // If the requested ID is already taken on the PeerJS server, silently
       // regenerate a new word code and retry — collisions are rare but possible.
-      if ((err as unknown as { type?: string }).type === 'unavailable-id') {
+      if (type === 'unavailable-id') {
         peer.destroy();
         this.start(generateRoomCode());
         return;
       }
+      // Broker-level failures (the WebSocket to 0.peerjs.com itself):
+      // schedule a one-minute auto-retry. PeerJS doesn't recover the
+      // signalling socket on its own — we destroy the dead Peer and
+      // recreate it so the broker can hand us the same peer id again
+      // once it's back. Same-machine BroadcastChannel players are
+      // unaffected throughout.
+      const isBrokerLevel =
+        type === 'socket-error' || type === 'socket-closed' ||
+        type === 'server-error' || type === 'network'       ||
+        type === 'disconnected' || type === 'ssl-unavailable';
+      if (isBrokerLevel) this._scheduleBrokerRetry();
       this.events.onError(err as Error);
     });
 
@@ -224,10 +248,34 @@ export class Host {
   }
 
   destroy(): void {
+    this._clearBrokerRetry();
     this.local.destroy();
     for (const conn of this.connections.values()) conn.close();
     this.peer?.destroy();
     this.peer = null;
+  }
+
+  private _scheduleBrokerRetry(): void {
+    // Coalesce — a single failure can fire multiple error events.
+    if (this._brokerRetryTimer !== null) return;
+    this._brokerRetryTimer = setTimeout(() => {
+      this._brokerRetryTimer = null;
+      const code = this.requestedRoomCode;
+      try { this.peer?.destroy(); } catch { /* ignore */ }
+      this.peer = null;
+      // Reuse the same room code so the QR / saved session stay valid
+      // once the broker comes back. start() also re-binds the same
+      // event handlers including this retry path, so a continuing
+      // outage just keeps the cycle going every BROKER_RETRY_MS.
+      if (code) this.start(code);
+    }, Host.BROKER_RETRY_MS);
+  }
+
+  private _clearBrokerRetry(): void {
+    if (this._brokerRetryTimer !== null) {
+      clearTimeout(this._brokerRetryTimer);
+      this._brokerRetryTimer = null;
+    }
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
