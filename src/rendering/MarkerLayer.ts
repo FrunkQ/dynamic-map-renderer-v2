@@ -314,9 +314,15 @@ export function drawMarkerShape(
   }
 
   // 3. Icon rendering
-  const isImage = m.icon.startsWith('data:') || m.icon.startsWith('asset:');
+  const isImage = m.icon.startsWith('data:') || m.icon.startsWith('asset:') || m.icon.startsWith('libAsset:');
   if (isImage) {
-    const bmp = iconCache?.get(m.icon);
+    // libAsset bitmaps are cached under the compound key '<icon>#<color>'
+    // when the underlying asset is tintable (the bitmap bakes the colour
+    // in), and under the bare icon when raster. Try compound first so a
+    // colour-aware lookup wins; fall back to bare for non-tintable.
+    const bmp = m.icon.startsWith('libAsset:')
+      ? (iconCache?.get(`${m.icon}#${m.color}`) ?? iconCache?.get(m.icon))
+      : iconCache?.get(m.icon);
     if (bmp) {
       ctx.drawImage(bmp, cx - r, cy - r, r * 2, r * 2);
     } else {

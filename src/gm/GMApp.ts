@@ -28,6 +28,8 @@ import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
 import { seedImageAssetsIfNeeded } from '../images/seedImageAssets.ts';
 import { migrateLegacyIconsIfNeeded } from '../images/migrateLegacyIcons.ts';
+import { renderLibIcon } from '../images/libIconRender.ts';
+import { ImageAssetStore } from '../images/ImageAssetStore.ts';
 import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { generateId } from '../utils/id.ts';
 import { exportBundle, importBundleText } from '../storage/bundleIO.ts';
@@ -420,13 +422,61 @@ export class GMApp {
     const seen: Set<string> = new Set();
     const result: MarkerIconData[] = [];
     for (const m of markers) {
+      // Legacy 'asset:' icons: cached under the bare icon key.
       if (m.icon.startsWith('asset:') && !seen.has(m.icon)) {
         const dataUrl = this.iconPicker.iconDataUrls.get(m.icon);
         if (dataUrl) result.push({ key: m.icon, dataUrl });
         seen.add(m.icon);
       }
+      // Small Asset Library icons: tintable variants live under the
+      // compound key '<icon>#<color>' so a single asset used in two
+      // colours broadcasts as two distinct bitmaps; raster variants
+      // share the bare icon key. The player resolves whichever the GM
+      // sent — no tintability knowledge needed on the receiving side.
+      if (m.icon.startsWith('libAsset:')) {
+        const compound = `${m.icon}#${m.color}`;
+        if (!seen.has(compound)) {
+          const compoundUrl = this.iconPicker.iconDataUrls.get(compound);
+          if (compoundUrl) {
+            result.push({ key: compound, dataUrl: compoundUrl });
+            seen.add(compound);
+            continue;
+          }
+          const plainUrl = this.iconPicker.iconDataUrls.get(m.icon);
+          if (plainUrl && !seen.has(m.icon)) {
+            result.push({ key: m.icon, dataUrl: plainUrl });
+            seen.add(m.icon);
+          }
+        }
+      }
     }
     return result;
+  }
+
+  /**
+   * Walks the supplied markers, lazily rendering any Small Asset Library
+   * icons that aren't yet in IconPicker's caches. Tintable assets render
+   * one bitmap per (asset, colour) pair; raster assets render once.
+   * Returns true if at least one new entry landed in the cache so the
+   * caller can decide whether to re-broadcast.
+   */
+  private async _ensureLibIcons(markers: Marker[]): Promise<boolean> {
+    let added = false;
+    const seenPairs = new Set<string>();
+    for (const m of markers) {
+      if (!m.icon.startsWith('libAsset:')) continue;
+      const pair = `${m.icon}#${m.color}`;
+      if (seenPairs.has(pair)) continue;
+      seenPairs.add(pair);
+      if (this.iconPicker.iconCache.has(pair)) continue;
+      if (this.iconPicker.iconCache.has(m.icon)) continue;
+      const rendered = await renderLibIcon(m.icon, m.color);
+      if (!rendered) continue;
+      this.iconPicker.iconCache.set(rendered.key, rendered.bitmap);
+      this.iconPicker.iconDataUrls.set(rendered.key, rendered.dataUrl);
+      added = true;
+    }
+    return added;
   }
 
   /** Builds the per-call context handed to every MarkerInteraction. */
@@ -653,6 +703,25 @@ export class GMApp {
         type: 'marker_update',
         payload: broadcastMarkers,
         ...(iconData.length > 0 ? { iconData } : {}),
+      });
+      // libAsset: bitmaps render lazily. If any of the just-broadcast
+      // markers reference a library icon that wasn't in cache yet, the
+      // immediate broadcast will have missed it (the player will draw
+      // a fallback circle). Kick off the async render and re-broadcast
+      // once the cache has caught up so the player updates.
+      void this._ensureLibIcons(broadcastMarkers).then((added) => {
+        if (!added) return;
+        const freshVisible = this.state.getState().markers.filter((m) => !m.hidden);
+        const freshBroadcast = this.state.getState().markers.filter((m) =>
+          !m.hidden || m.roles.audio === 'source' || m.roles.motion === 'source');
+        const freshIconData = this._collectIconData(freshVisible);
+        this.host.broadcast({
+          type: 'marker_update',
+          payload: freshBroadcast,
+          ...(freshIconData.length > 0 ? { iconData: freshIconData } : {}),
+        });
+        // GM canvas also redraws now that the bitmap exists.
+        this.renderer.markDirty();
       });
     }
 
@@ -2954,9 +3023,16 @@ export class GMApp {
       // button itself is 64×64 visually; rendering at 1.5× the visual
       // size keeps the icon crisp on high-DPI displays.
       this.markerIconBtn.innerHTML = '';
-      const isAsset = sel.icon.startsWith('asset:') || sel.icon.startsWith('data:');
+      const isLib   = sel.icon.startsWith('libAsset:');
+      const isAsset = sel.icon.startsWith('asset:') || sel.icon.startsWith('data:') || isLib;
       if (isAsset) {
-        const bmp = this.iconPicker.iconCache.get(sel.icon);
+        // libAsset tintables live under '<icon>#<color>' in iconCache.
+        const cacheKey = isLib
+          ? (this.iconPicker.iconCache.has(`${sel.icon}#${sel.color}`)
+              ? `${sel.icon}#${sel.color}`
+              : sel.icon)
+          : sel.icon;
+        const bmp = this.iconPicker.iconCache.get(cacheKey);
         const img = document.createElement('img');
         if (bmp) {
           const cv = document.createElement('canvas');
@@ -2968,14 +3044,25 @@ export class GMApp {
       } else {
         this.markerIconBtn.textContent = sel.icon;
       }
-      // Tintability: unicode glyphs respect marker.color (rendered as
-      // tinted text); raster assets from the legacy 'icon' store render
-      // verbatim — colour has no visible effect. Hide the Colour row
-      // for those so the GM isn't presented with a swatch that does
-      // nothing.
-      const tintable = !isAsset;
+      // Tintability gate for the Colour row. Unicode glyphs are always
+      // tintable. Legacy 'asset:' and inline 'data:' icons are not.
+      // libAsset: defers to ImageAssetStore.tintable — we resolve it
+      // async and adjust the row when the answer lands.
       const colorRow = document.getElementById('marker-color-row');
-      if (colorRow) colorRow.hidden = !tintable;
+      if (colorRow) {
+        if (isLib) {
+          // Optimistically hide; flip back if the asset turns out tintable.
+          colorRow.hidden = true;
+          const id = sel.icon.slice('libAsset:'.length);
+          void ImageAssetStore.get(id).then((asset) => {
+            if (asset && this.selectedMarkerId === sel.id) {
+              colorRow.hidden = !asset.tintable;
+            }
+          });
+        } else {
+          colorRow.hidden = isAsset; // tintable iff not a legacy raster asset
+        }
+      }
 
       // Audio role buttons — translate legacy data-role values to the current audio role
       document.querySelectorAll<HTMLElement>('.marker-audio-role-btns .marker-role-btn').forEach((btn) => {
