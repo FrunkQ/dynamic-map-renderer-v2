@@ -1,5 +1,6 @@
 import type { MapAsset } from '../types.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
+import { attachGestures } from '../utils/Gestures.ts';
 
 /**
  * Map calibration UI: shows the map image full-screen with two draggable
@@ -85,7 +86,7 @@ export class MapCalibrationModal {
         <header class="calibration-header">
           <div>
             <h3>Calibrate &ldquo;${this._esc(asset.filename)}&rdquo;</h3>
-            <p>Drag the two crosses to two points whose grid distance you know. Scroll to zoom, drag empty space to pan. Then enter how many 1&Prime;/25 mm squares the line spans.</p>
+            <p>Drag the two crosses to two points whose grid distance you know. Scroll or pinch to zoom, drag empty space to pan. Then enter how many 1&Prime;/25 mm squares the line spans.</p>
           </div>
           <button class="btn btn--ghost btn--xs calibration-reset" title="Reset zoom and pan">Reset View</button>
         </header>
@@ -127,14 +128,15 @@ export class MapCalibrationModal {
      * pixel under it, regardless of image aspect mismatch.
      */
     const svgPoint = svg.createSVGPoint();
-    const eventToSvg = (e: PointerEvent | WheelEvent): { x: number; y: number } => {
-      svgPoint.x = e.clientX;
-      svgPoint.y = e.clientY;
+    const clientToSvg = (cx: number, cy: number): { x: number; y: number } => {
+      svgPoint.x = cx;
+      svgPoint.y = cy;
       const ctm = svg.getScreenCTM();
       if (!ctm) return { x: 0, y: 0 };
       const p = svgPoint.matrixTransform(ctm.inverse());
       return { x: p.x, y: p.y };
     };
+    const eventToSvg = (e: PointerEvent | WheelEvent) => clientToSvg(e.clientX, e.clientY);
 
     /**
      * Crosshair drawing — fixed 30-px on-screen size regardless of zoom.
@@ -172,49 +174,80 @@ export class MapCalibrationModal {
     requestAnimationFrame(redraw);
     window.addEventListener('resize', redraw);
 
-    // Zoom toward cursor.
-    svg.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const factor = e.deltaY > 0 ? 1.25 : 1 / 1.25;
-      const p = eventToSvg(e);
+    /** Clamp viewBox dimension to the allowed zoom range. */
+    const clampW = (w: number) => Math.max(this.imgW * 0.02, Math.min(this.imgW * 4, w));
+
+    /** Apply a discrete zoom around a natural-coord anchor point. */
+    const zoomAround = (anchor: { x: number; y: number }, factor: number) => {
       const [vx, vy, vw, vh] = this.vb;
-      const newW = Math.max(this.imgW * 0.02, Math.min(this.imgW * 4, vw * factor));
+      const newW = clampW(vw * factor);
       const newH = newW * (vh / vw);
       this.vb = [
-        p.x - (p.x - vx) * (newW / vw),
-        p.y - (p.y - vy) * (newH / vh),
+        anchor.x - (anchor.x - vx) * (newW / vw),
+        anchor.y - (anchor.y - vy) * (newH / vh),
         newW,
         newH,
       ];
-      redraw();
-    }, { passive: false });
+    };
 
-    // Pan: drag on empty SVG area. CTM-derived ratio accounts for letterboxing.
-    svg.addEventListener('pointerdown', (e) => {
-      // Skip if the event originated inside a handle hit-area.
-      const target = e.target as Element;
-      if (target.closest('.calibration-handle')) return;
-      e.preventDefault();
-      svg.setPointerCapture(e.pointerId);
-      const start  = { x: e.clientX, y: e.clientY };
-      const startVb: [number, number, number, number] = [...this.vb];
-      const ctm = svg.getScreenCTM();
-      // Natural-units per client-pixel — uniform scale under xMidYMid meet,
-      // and inverted because CTM maps natural → screen.
-      const ratioX = ctm ? 1 / ctm.a : 1;
-      const ratioY = ctm ? 1 / ctm.d : 1;
-      const move = (ev: PointerEvent) => {
-        const dx = (ev.clientX - start.x) * ratioX;
-        const dy = (ev.clientY - start.y) * ratioY;
-        this.vb = [startVb[0] - dx, startVb[1] - dy, startVb[2], startVb[3]];
+    // Wheel + pointer drag + pinch via the shared Gestures helper. The helper
+    // also sets touch-action:none so two-finger pinches don't trigger native
+    // browser zoom on touch screens.
+    let panStartVb: [number, number, number, number] | null = null;
+    let twoLast = { midX: 0, midY: 0, scale: 1 };
+
+    attachGestures(svg, {
+      // Skip if the press hit a crosshair handle — its own pointerdown
+      // captures and stops propagation, but the gesture helper attaches to
+      // the SVG so it still sees the event. Returning false leaves the
+      // handle's behaviour intact.
+      shouldStart: (e) => !(e.target as Element).closest('.calibration-handle'),
+
+      onWheel: ({ clientX, clientY, factor }) => {
+        zoomAround(clientToSvg(clientX, clientY), factor);
         redraw();
-      };
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup',   up);
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup',   up);
+      },
+
+      onDrag: (e) => {
+        if (e.phase === 'start') {
+          panStartVb = [...this.vb];
+        } else if (e.phase === 'move' && panStartVb) {
+          const ctm = svg.getScreenCTM();
+          const ratioX = ctm ? 1 / ctm.a : 1;
+          const ratioY = ctm ? 1 / ctm.d : 1;
+          this.vb = [
+            panStartVb[0] - e.dx * ratioX,
+            panStartVb[1] - e.dy * ratioY,
+            panStartVb[2],
+            panStartVb[3],
+          ];
+          redraw();
+        } else {
+          panStartVb = null;
+        }
+      },
+
+      onTwoFinger: (e) => {
+        if (e.phase === 'start') {
+          twoLast = { midX: e.midX, midY: e.midY, scale: 1 };
+        } else if (e.phase === 'move') {
+          // Incremental: per-frame zoom around the current midpoint, then pan
+          // by the per-frame midpoint delta. Small per-frame deltas keep the
+          // CTM-based ratio close enough to correct without a full re-solve.
+          const stepScale = e.scale / twoLast.scale;
+          const dxClient  = e.midX - twoLast.midX;
+          const dyClient  = e.midY - twoLast.midY;
+          twoLast = { midX: e.midX, midY: e.midY, scale: e.scale };
+
+          zoomAround(clientToSvg(e.midX, e.midY), 1 / stepScale);
+          const ctm = svg.getScreenCTM();
+          const ratioX = ctm ? 1 / ctm.a : 1;
+          const ratioY = ctm ? 1 / ctm.d : 1;
+          this.vb[0] -= dxClient * ratioX;
+          this.vb[1] -= dyClient * ratioY;
+          redraw();
+        }
+      },
     });
 
     // Drag handles. Capture the offset between the cursor and the crosshair
