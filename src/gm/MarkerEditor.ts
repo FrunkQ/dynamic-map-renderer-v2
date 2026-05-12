@@ -21,7 +21,6 @@ export class MarkerEditor {
 
   private markers:    Marker[] = [];
   private selectedId: string | null = null;
-  private dragging    = false;
 
   private ctxMenuEl:  HTMLElement;
   private _ctxPos = { x: 0.5, y: 0.5 }; // normalised map position of last right-click
@@ -72,7 +71,6 @@ export class MarkerEditor {
     this.layer.canvas.style.pointerEvents = enabled ? 'auto' : 'none';
     if (!enabled) {
       this.selectedId = null;
-      this.dragging   = false;
       this.ctxMenuEl.hidden = true;
       this._redraw();
     }
@@ -121,47 +119,24 @@ export class MarkerEditor {
 
     const { x, y } = this._toCanvas(e);
 
-    // Badges no longer live on the canvas (v2.11/A3b2) — those clicks now
-    // come through MarkerOverlay's onBadgeClick → toggleOverlayBadge path.
-
-    const hit = this.layer.hitTestMarker(x, y, this.markers.filter(m => !m.locked), null);
-
-    if (hit) {
-      this.selectedId = hit.id;
-      this._onSelect(hit);
-      this.dragging   = true;
-      (e.target as Element).setPointerCapture(e.pointerId);
-    } else {
-      this.selectedId = null;
-      this._onSelect(null);
-      // Missed all markers — let fog editor try to select a polygon at this position
-      this._fogSelectCb?.(this.layer.unproject(x, y, null));
-    }
-
+    // Marker bodies are non-interactive (v2.11/A3b3) — selection and
+    // movement happen through the overlay handles. A canvas click is
+    // treated as "miss everything marker-related": deselect any current
+    // marker and offer the spot to the fog editor for polygon selection.
+    this.selectedId = null;
+    this._onSelect(null);
+    this._fogSelectCb?.(this.layer.unproject(x, y, null));
     this._redraw();
   }
 
-  private _onMove(e: PointerEvent): void {
-    if (!this.dragging || !this.selectedId) return;
-    const { x, y } = this._toCanvas(e);
-    const norm = this.layer.unproject(x, y, null);
-    this.markers = this.markers.map((m) =>
-      m.id !== this.selectedId ? m : {
-        ...m,
-        position: {
-          x: Math.max(0, Math.min(1, norm.x)),
-          y: Math.max(0, Math.min(1, norm.y)),
-        },
-      },
-    );
-    this._redraw();
+  private _onMove(_e: PointerEvent): void {
+    // Body drag removed in v2.11/A3b3 — overlay move handle is the only
+    // path to reposition a marker. Method kept as a no-op so the canvas
+    // pointermove listener doesn't error.
   }
 
   private _onUp(_e: PointerEvent): void {
-    if (!this.dragging) return;
-    this.dragging = false;
-    // Broadcast final position after drag ends
-    this._onChange([...this.markers]);
+    // Body drag removed in v2.11/A3b3 — see _onMove.
   }
 
   private _onCtxMenu(e: PointerEvent): void {
