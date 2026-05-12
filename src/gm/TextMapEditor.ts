@@ -270,16 +270,15 @@ export class TextMapEditor {
     });
     tb.appendChild(aspectSel);
 
-    // Background colour
+    // Background colour — the ONE page-level colour. Every text
+    // element carries its own colour in its toolbar; an extra
+    // page-level "Text colour" here would just be a second knob
+    // doing the same job. cfg.textColor still exists in the model as
+    // the inherited default for a new text element that hasn't been
+    // recoloured yet.
     tb.appendChild(this._buildColourInput('Background', this.cfg.backgroundColor, (v) => {
       this.cfg.backgroundColor = v;
       if (this.pageEl) this.pageEl.style.backgroundColor = v;
-    }));
-
-    // Text colour
-    tb.appendChild(this._buildColourInput('Text colour', this.cfg.textColor, (v) => {
-      this.cfg.textColor = v;
-      if (this.pageEl) this.pageEl.style.color = v;
     }));
 
     // Default font
