@@ -10,6 +10,8 @@ export class SoundboardEngine {
   private blobUrls  = new Map<string, string>();            // assetId → object URL
   private dataUrls  = new Map<string, string>();            // assetId → data URL
   private _muteAll  = false;
+  /** Slots paused by setMuteAll(true) — used to resume the right ones on unmute. */
+  private _pausedByMute = new Set<string>();
 
   /** Fired when a non-looping slot finishes playing naturally. */
   onSlotEnded: ((slotId: string) => void) | null = null;
@@ -73,9 +75,30 @@ export class SoundboardEngine {
   }
 
   setMuteAll(muted: boolean): void {
+    const wasMuted = this._muteAll;
     this._muteAll = muted;
-    // Mute/unmute in place — keeps playback position so sounds resume on unmute
-    for (const el of this.audioEls.values()) el.muted = muted;
+    if (muted && !wasMuted) {
+      // Snapshot which slots are currently playing so unmute can resume
+      // exactly those — pausing freezes the playback position so looping
+      // background tracks pick up where they left off.
+      this._pausedByMute.clear();
+      for (const [slotId, el] of this.audioEls.entries()) {
+        if (!el.paused) {
+          this._pausedByMute.add(slotId);
+          el.pause();
+        }
+      }
+    } else if (!muted && wasMuted) {
+      // Clear el.muted on anything that was started during the mute
+      // (play() copies this._muteAll onto the new element), then resume
+      // the slots we paused so loops continue where they left off.
+      for (const el of this.audioEls.values()) el.muted = false;
+      for (const slotId of this._pausedByMute) {
+        const el = this.audioEls.get(slotId);
+        if (el) void el.play().catch(() => { /* autoplay blocked — caller handles */ });
+      }
+      this._pausedByMute.clear();
+    }
   }
 
   isMutedAll(): boolean { return this._muteAll; }

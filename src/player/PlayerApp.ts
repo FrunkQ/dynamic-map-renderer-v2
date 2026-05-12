@@ -39,6 +39,8 @@ export class PlayerApp {
   private sbSlots: SoundboardSlot[] = [];
   /** Master mute flag — starts true so first click both satisfies autoplay policy and unmutes */
   private sbMuted = true;
+  /** slotIds paused by a mute transition — used to resume them on unmute. */
+  private _sbPausedByMute = new Set<string>();
   private _audioResumeScheduled = false;
   /** markerId → <audio> element for active positional sources */
   private _posAudioEls  = new Map<string, HTMLAudioElement>();
@@ -434,8 +436,7 @@ export class PlayerApp {
       }
 
       case 'soundboard_mute_all': {
-        this.sbMuted = msg.muted;
-        for (const el of this.sbAudioEls.values()) el.muted = msg.muted;
+        this._applyMute(msg.muted);
         break;
       }
 
@@ -575,10 +576,39 @@ export class PlayerApp {
   }
 
   private _toggleMute(): void {
-    this.sbMuted = !this.sbMuted;
-    for (const el of this.sbAudioEls.values())   el.muted = this.sbMuted;
-    for (const el of this._posAudioEls.values()) el.muted = this.sbMuted;
+    this._applyMute(!this.sbMuted);
     this._showMuteIndicator();
+  }
+
+  /**
+   * Apply a mute/unmute transition by pausing/resuming the currently
+   * playing audio elements rather than just setting `el.muted`. Looping
+   * background tracks survive mute → unmute cycles because pause
+   * preserves the playback position; setting `el.muted = false` after
+   * the element has been silent is unreliable in some browsers, so we
+   * pause on mute and explicitly resume on unmute.
+   */
+  private _applyMute(muted: boolean): void {
+    const wasMuted = this.sbMuted;
+    this.sbMuted = muted;
+    if (muted && !wasMuted) {
+      this._sbPausedByMute.clear();
+      for (const [slotId, el] of this.sbAudioEls.entries()) {
+        if (!el.paused) {
+          this._sbPausedByMute.add(slotId);
+          el.pause();
+        }
+      }
+      for (const el of this._posAudioEls.values()) el.muted = true;
+    } else if (!muted && wasMuted) {
+      for (const el of this.sbAudioEls.values())   el.muted = false;
+      for (const el of this._posAudioEls.values()) el.muted = false;
+      for (const slotId of this._sbPausedByMute) {
+        const el = this.sbAudioEls.get(slotId);
+        if (el) void el.play().catch(() => { /* autoplay blocked */ });
+      }
+      this._sbPausedByMute.clear();
+    }
   }
 
   private _showMuteIndicator(): void {
