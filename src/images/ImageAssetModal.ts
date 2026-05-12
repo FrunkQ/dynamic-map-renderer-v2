@@ -1595,8 +1595,16 @@ export class ImageAssetModal {
     const capped = filtered.length > limit;
     const toRender = capped ? filtered.slice(0, limit) : filtered;
 
+    // Defer fetching preview SVGs until the user has narrowed the result
+    // set to roughly a screenful (12). At 2-char search depth a result
+    // can hit several hundred entries — pulling every preview off
+    // jsdelivr is wasteful (bandwidth + rate-limit penalty) and the user
+    // hasn't picked yet anyway. Names alone are enough until they refine.
+    const PREVIEW_FETCH_THRESHOLD = 12;
+    const fetchPreviews = filtered.length <= PREVIEW_FETCH_THRESHOLD;
+
     for (const entry of toRender) {
-      host.appendChild(this._connectorCell(conn, entry));
+      host.appendChild(this._connectorCell(conn, entry, fetchPreviews));
     }
 
     if (capped) {
@@ -1624,20 +1632,27 @@ export class ImageAssetModal {
     }
   }
 
-  private _connectorCell(conn: ImageSourceConnector, entry: ConnectorManifestEntry): HTMLElement {
+  private _connectorCell(
+    conn: ImageSourceConnector,
+    entry: ConnectorManifestEntry,
+    fetchPreview: boolean,
+  ): HTMLElement {
     const cell = document.createElement('div');
     cell.className = 'img-modal-cell img-modal-cell--connector';
     cell.title = entry.name;
 
     const visual = document.createElement('div');
     visual.className = 'img-modal-visual';
-    // Lazy-load preview SVG on first render of the cell; fall back to a
-    // placeholder while the network request is in flight. We don't preload
-    // the whole grid — only the cells the user scrolls past.
     visual.innerHTML = '<div class="img-modal-broken" style="font-size:18px;">…</div>';
     cell.appendChild(visual);
 
-    void this._renderConnectorPreview(visual, conn, entry);
+    // Skip the preview fetch when the result set is too large — names
+    // are enough to navigate by, and hovering still loads the full
+    // preview into the popover. The caller controls when to flip this on
+    // (see _renderConnectorGrid's PREVIEW_FETCH_THRESHOLD).
+    if (fetchPreview) {
+      void this._renderConnectorPreview(visual, conn, entry);
+    }
 
     const label = document.createElement('div');
     label.className = 'img-modal-label';

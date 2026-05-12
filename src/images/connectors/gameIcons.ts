@@ -1,5 +1,6 @@
 import type { ImageSourceConnector, ConnectorManifestEntry } from './types.ts';
 import bundledManifest from './manifests/game-icons.json' with { type: 'json' };
+import { fetchSvgCached } from './connectorFetch.ts';
 
 /**
  * Game Icons (game-icons.net) — CC-BY 3.0 fantasy / sci-fi / abstract SVG
@@ -52,8 +53,6 @@ export const gameIconsConnector: ImageSourceConnector = {
   },
 
   async fetchSvg(entry: ConnectorManifestEntry): Promise<string> {
-    const res = await fetch(gameIconsConnector.buildUrl(entry));
-    if (!res.ok) throw new Error(`Fetch failed: HTTP ${res.status}`);
-    return await res.text();
+    return fetchSvgCached(gameIconsConnector.buildUrl(entry));
   },
 };

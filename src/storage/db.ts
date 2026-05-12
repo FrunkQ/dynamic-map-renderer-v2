@@ -44,10 +44,19 @@ interface DMRSchema extends DBSchema {
     key: string; // ImageCategory.id
     value: ImageCategory;
   };
+  connectorCache: {
+    // Persistent cache for asset connector fetches (game-icons.net, lucide).
+    // Keyed by the full source URL so connector + entry slug both contribute.
+    // Stores positive results (svg) and negative results (status='not-found')
+    // so we don't keep hammering a CDN with requests that we already know
+    // are 404s in a stale manifest.
+    key: string; // URL
+    value: { url: string; svg?: string; status: 'ok' | 'not-found'; fetchedAt: number };
+  };
 }
 
 const DB_NAME = 'dynamic-map-renderer';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 let _db: IDBPDatabase<DMRSchema> | null = null;
 
@@ -86,6 +95,9 @@ async function getDB(): Promise<IDBPDatabase<DMRSchema>> {
       }
       if (!db.objectStoreNames.contains('imageCategories')) {
         db.createObjectStore('imageCategories', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('connectorCache')) {
+        db.createObjectStore('connectorCache', { keyPath: 'url' });
       }
     },
     blocked() {
@@ -289,6 +301,24 @@ export async function deleteImageCategory(id: string): Promise<void> {
   const db = await getDB();
   if (!db.objectStoreNames.contains('imageCategories')) return;
   await db.delete('imageCategories', id);
+}
+
+// ─── Connector cache ──────────────────────────────────────────────────────────
+
+export async function getConnectorCacheEntry(
+  url: string,
+): Promise<{ url: string; svg?: string; status: 'ok' | 'not-found'; fetchedAt: number } | undefined> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('connectorCache')) return undefined;
+  return db.get('connectorCache', url);
+}
+
+export async function putConnectorCacheEntry(
+  entry: { url: string; svg?: string; status: 'ok' | 'not-found'; fetchedAt: number },
+): Promise<void> {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('connectorCache')) return;
+  await db.put('connectorCache', entry);
 }
 
 /** Wipe every asset-library store. Used by bundle import to replace the workspace. */

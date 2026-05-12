@@ -1,4 +1,5 @@
 import type { ImageSourceConnector, ConnectorManifestEntry } from './types.ts';
+import { fetchSvgCached } from './connectorFetch.ts';
 
 /**
  * Lucide (lucide.dev) — MIT-licensed contemporary line icons. Pure stroke
@@ -114,9 +115,7 @@ export const lucideConnector: ImageSourceConnector = {
   },
 
   async fetchSvg(entry: ConnectorManifestEntry): Promise<string> {
-    const res = await fetch(lucideConnector.buildUrl(entry));
-    if (!res.ok) throw new Error(`Fetch failed: HTTP ${res.status}`);
-    return await res.text();
+    return fetchSvgCached(lucideConnector.buildUrl(entry));
   },
 };
 
