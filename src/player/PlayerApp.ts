@@ -161,7 +161,6 @@ export class PlayerApp {
         if (this.lastFilter) this.renderer.setFilter(this.lastFilter);
         if (this.lastView) {
           this.renderer.setView(this.lastView);
-          this.markerTexture.setViewHeight(this.lastView.viewNH);
         }
         this.markerTexture.render(this.currentMarkers, this.playerIconCache);
         this.renderer.markMarkersDirty();
@@ -233,7 +232,6 @@ export class PlayerApp {
         if (msg.payload.view)   this.lastView   = msg.payload.view;
         this.renderer.setFilter(msg.payload.filter);
         this.renderer.setView(msg.payload.view);
-        this.markerTexture.setViewHeight(msg.payload.view.viewNH);
         void (async () => {
           if (msg.iconData?.length)         await this._decodeIconData(msg.iconData);
           if (msg.soundboardAssets?.length) this._cacheSoundboardAssets(msg.soundboardAssets);
@@ -272,7 +270,6 @@ export class PlayerApp {
               if (filter) this.renderer.setFilter(filter);
               if (view) {
                 this.renderer.setView(view);
-                this.markerTexture.setViewHeight(view.viewNH);
               }
             });
           })();
@@ -319,7 +316,6 @@ export class PlayerApp {
               if (filter) this.renderer.setFilter(filter);
               if (view) {
                 this.renderer.setView(view);
-                this.markerTexture.setViewHeight(view.viewNH);
               }
             }, preSnap, revealCanvas);
           } finally {
@@ -348,9 +344,7 @@ export class PlayerApp {
       case 'view_update': {
         this.lastView = msg.payload;
         this.renderer.setView(msg.payload);
-        this.markerTexture.setViewHeight(msg.payload.viewNH);
-        // Re-render markers so the new size kicks in immediately even if the
-        // marker list itself hasn't changed.
+        // Re-render markers so any size-relevant state stays in sync.
         this.markerTexture.render(this.currentMarkers, this.playerIconCache);
         this.renderer.markMarkersDirty();
         break;

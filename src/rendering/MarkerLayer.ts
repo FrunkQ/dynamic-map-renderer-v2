@@ -284,10 +284,46 @@ function _motionBadge(ctx: Ctx2D, m: Marker, bx: number, by: number): void {
 }
 
 /**
+ * Look up an image-icon bitmap from the cache, honouring the compound
+ * '<icon>#<color>' key used for tintable libAsset bitmaps. Returns null
+ * for non-image markers or cache misses.
+ */
+export function getMarkerBitmap(
+  m: Marker,
+  iconCache?: Map<string, ImageBitmap>,
+): ImageBitmap | null {
+  const isImage = m.icon.startsWith('data:') || m.icon.startsWith('asset:') || m.icon.startsWith('libAsset:');
+  if (!isImage || !iconCache) return null;
+  if (m.icon.startsWith('libAsset:')) {
+    return iconCache.get(`${m.icon}#${m.color}`) ?? iconCache.get(m.icon) ?? null;
+  }
+  return iconCache.get(m.icon) ?? null;
+}
+
+/**
+ * Aspect ratio (width / height) of a marker's rendered icon. For image
+ * markers this comes from the cached bitmap's natural dimensions (preserved
+ * by decodeImageBitmap from v2.10.27 onward). Non-image markers and cache
+ * misses are treated as 1:1.
+ */
+export function getMarkerAspect(
+  m: Marker,
+  iconCache?: Map<string, ImageBitmap>,
+): number {
+  const bmp = getMarkerBitmap(m, iconCache);
+  if (!bmp || !bmp.width || !bmp.height) return 1;
+  return bmp.width / bmp.height;
+}
+
+/**
  * Standalone marker drawing function used by both the DOM overlay (GM)
  * and the WebGL CanvasTexture (player via MarkerTexture).
  *
- * No circle background — icon is drawn in the marker's own color.
+ * Markers render as a rectangle sized r×2 vertically with width scaled by
+ * the icon's natural aspect ratio. So a 2:1 wide dragon icon renders 2×
+ * wider than tall at the same size value, and the selection ring / badges
+ * / label all follow the rectangle's bounds. Non-image markers (emoji /
+ * unicode glyphs) fall back to aspect=1.
  */
 export function drawMarkerShape(
   ctx: Ctx2D,
@@ -302,10 +338,16 @@ export function drawMarkerShape(
   // 1. Dim locked markers for GM (locked = non-interactive; hidden is now badge-only)
   if (isGM && m.locked) ctx.globalAlpha = 0.4;
 
-  // 2. Dashed selection ring
+  const isImage = m.icon.startsWith('data:') || m.icon.startsWith('asset:') || m.icon.startsWith('libAsset:');
+  const bmp     = isImage ? getMarkerBitmap(m, iconCache) : null;
+  const aspect  = (bmp && bmp.width && bmp.height) ? bmp.width / bmp.height : 1;
+  const halfH   = r;
+  const halfW   = r * aspect;
+
+  // 2. Dashed selection ring — ellipse around the rectangle bounds
   if (selected) {
     ctx.beginPath();
-    ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, halfW + 5, halfH + 5, 0, 0, Math.PI * 2);
     ctx.setLineDash([6, 3]);
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth   = 2;
@@ -313,19 +355,12 @@ export function drawMarkerShape(
     ctx.setLineDash([]);
   }
 
-  // 3. Icon rendering
-  const isImage = m.icon.startsWith('data:') || m.icon.startsWith('asset:') || m.icon.startsWith('libAsset:');
+  // 3. Icon rendering — rect with the icon's natural aspect ratio
   if (isImage) {
-    // libAsset bitmaps are cached under the compound key '<icon>#<color>'
-    // when the underlying asset is tintable (the bitmap bakes the colour
-    // in), and under the bare icon when raster. Try compound first so a
-    // colour-aware lookup wins; fall back to bare for non-tintable.
-    const bmp = m.icon.startsWith('libAsset:')
-      ? (iconCache?.get(`${m.icon}#${m.color}`) ?? iconCache?.get(m.icon))
-      : iconCache?.get(m.icon);
     if (bmp) {
-      ctx.drawImage(bmp, cx - r, cy - r, r * 2, r * 2);
+      ctx.drawImage(bmp, cx - halfW, cy - halfH, halfW * 2, halfH * 2);
     } else {
+      // Cache miss — show a small dot so the marker is still locatable
       ctx.beginPath();
       ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = m.color;
@@ -351,20 +386,23 @@ export function drawMarkerShape(
     ctx.textBaseline = 'top';
     ctx.lineWidth    = 2.5;
     ctx.strokeStyle  = 'rgba(0,0,0,0.85)';
-    ctx.strokeText(m.label, cx, cy + r + 3);
+    ctx.strokeText(m.label, cx, cy + halfH + 3);
     ctx.fillStyle    = 'white';
-    ctx.fillText(m.label, cx, cy + r + 3);
+    ctx.fillText(m.label, cx, cy + halfH + 3);
   }
 
   // 5. Status badges — GM only
   //    top-left:    visibility (eye) — always shown
   //    top-right:   audio (speaker / ear) — only when roles.audio is set
   //    bottom-right: motion (arrow) — only when roles.motion is set
+  // Badge offsets follow the rectangle's bounds so wide icons keep their
+  // badges out of the icon body rather than floating inside it.
   if (isGM) {
-    const bOff = Math.max(BADGE_R + 2, r * 0.78);
-    _visibilityBadge(ctx, m, cx - bOff, cy - bOff);
-    _audioBadge(ctx, m, cx + bOff, cy - bOff);
-    _motionBadge(ctx, m, cx + bOff, cy + bOff);
+    const bOffX = Math.max(BADGE_R + 2, halfW * 0.78);
+    const bOffY = Math.max(BADGE_R + 2, halfH * 0.78);
+    _visibilityBadge(ctx, m, cx - bOffX, cy - bOffY);
+    _audioBadge(ctx, m, cx + bOffX, cy - bOffY);
+    _motionBadge(ctx, m, cx + bOffX, cy + bOffY);
   }
 
   // 6. Reset alpha
@@ -478,7 +516,7 @@ export class MarkerLayer {
       if (!isGM && m.hidden) continue;
       const pos = this.project(m.position.x, m.position.y, view);
       if (!pos) continue;
-      const baseR = Math.min(W, H) * 0.025 * m.size;
+      const baseR = H * 0.025 * m.size;
       this._drawMarker(ctx, m, pos.x, pos.y, baseR, m.id === sel, isGM, iconCache);
     }
 
@@ -497,7 +535,7 @@ export class MarkerLayer {
       const pos = this.project(b.position.x, b.position.y, view);
       if (!pos) continue;
       const marker = this._markers.find((mm) => mm.id === b.sourceId);
-      const r = Math.min(W, H) * 0.025 * (marker?.size ?? 1);
+      const r = H * 0.025 * (marker?.size ?? 1);
       ctx.save();
       ctx.fillStyle = _hexWithAlpha(b.colour, alpha);
       if (b.mode === 'multi-few' || b.mode === 'multi-many') {
@@ -607,14 +645,22 @@ export class MarkerLayer {
     return { x: wx / this.ar + 0.5, y: -wy + 0.5 };
   }
 
-  /** Returns the topmost marker under canvas pixel (px, py), or null. */
+  /**
+   * Returns the topmost marker under canvas pixel (px, py), or null.
+   * Hit area is the rectangle the marker actually renders into (aspect-aware
+   * for non-square icons) plus a small forgiveness pad.
+   */
   hitTestMarker(px: number, py: number, markers: Marker[], view: ViewState | null): Marker | null {
+    const H = this.canvas.height;
     for (let i = markers.length - 1; i >= 0; i--) {
       const m   = markers[i]!;
       const pos = this.project(m.position.x, m.position.y, view);
       if (!pos) continue;
-      const r = Math.min(this.canvas.width, this.canvas.height) * 0.025 * m.size;
-      if (Math.hypot(px - pos.x, py - pos.y) <= r + 6) return m;
+      const r      = H * 0.025 * m.size;
+      const aspect = getMarkerAspect(m, this._iconCache);
+      const halfW  = r * aspect + 6;
+      const halfH  = r + 6;
+      if (Math.abs(px - pos.x) <= halfW && Math.abs(py - pos.y) <= halfH) return m;
     }
     return null;
   }
@@ -642,20 +688,24 @@ export class MarkerLayer {
   ): 'hidden' | 'audio' | 'motion' | null {
     const pos = this.project(marker.position.x, marker.position.y, view);
     if (!pos) return null;
-    const r    = Math.min(this.canvas.width, this.canvas.height) * 0.025 * marker.size;
-    const bOff = Math.max(BADGE_R + 2, r * 0.78);
+    const r      = this.canvas.height * 0.025 * marker.size;
+    const aspect = getMarkerAspect(marker, this._iconCache);
+    const halfW  = r * aspect;
+    const halfH  = r;
+    const bOffX  = Math.max(BADGE_R + 2, halfW * 0.78);
+    const bOffY  = Math.max(BADGE_R + 2, halfH * 0.78);
 
     // Top-left: visibility
-    if (Math.hypot(px - (pos.x - bOff), py - (pos.y - bOff)) <= BADGE_HIT) return 'hidden';
+    if (Math.hypot(px - (pos.x - bOffX), py - (pos.y - bOffY)) <= BADGE_HIT) return 'hidden';
 
     // Top-right: audio (only when a marker has an audio role)
     if (marker.roles.audio) {
-      if (Math.hypot(px - (pos.x + bOff), py - (pos.y - bOff)) <= BADGE_HIT) return 'audio';
+      if (Math.hypot(px - (pos.x + bOffX), py - (pos.y - bOffY)) <= BADGE_HIT) return 'audio';
     }
 
     // Bottom-right: motion (only when a marker has a motion role)
     if (marker.roles.motion) {
-      if (Math.hypot(px - (pos.x + bOff), py - (pos.y + bOff)) <= BADGE_HIT) return 'motion';
+      if (Math.hypot(px - (pos.x + bOffX), py - (pos.y + bOffY)) <= BADGE_HIT) return 'motion';
     }
 
     return null;

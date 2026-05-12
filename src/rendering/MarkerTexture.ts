@@ -17,9 +17,6 @@ import { drawMarkerShape, type MotionOverlay } from './MarkerLayer.ts';
 export class MarkerTexture {
   readonly canvas: OffscreenCanvas;
   private aspect = 1;
-  /** Vertical fraction of the map currently shown by the player camera (0–1). Used to
-   *  keep marker sizes screen-fixed regardless of how zoomed the player view is. */
-  private viewNH = 1;
 
   constructor() {
     this.canvas = new OffscreenCanvas(1024, 1024);
@@ -27,10 +24,6 @@ export class MarkerTexture {
 
   setAspectRatio(ar: number): void {
     this.aspect = Math.max(0.0001, ar);
-  }
-
-  setViewHeight(viewNH: number): void {
-    this.viewNH = Math.max(0.0001, viewNH);
   }
 
   render(
@@ -46,10 +39,10 @@ export class MarkerTexture {
       if (m.hidden) continue; // players never see hidden markers
       const cx = m.position.x * W;
       const cy = m.position.y * H;
-      // Multiplying by viewNH keeps the marker's on-screen size constant regardless
-      // of how zoomed the player view is — a half-size view doubles pixels-per-world,
-      // so the texture-radius needs to halve to compensate.
-      const r  = H * 0.025 * m.size * this.viewNH;
+      // Map-fixed sizing: marker stays at 2.5% of map height regardless of
+      // how zoomed the viewport is. This matches the projector (always
+      // calibrated) and the GM canvas — a marker is a token on the map.
+      const r  = H * 0.025 * m.size;
       // Pre-squash horizontally so the marker comes out as a true visual circle
       // after the texture is stretched onto the aspect:1 plane.
       ctx.save();
@@ -100,7 +93,7 @@ export class MarkerTexture {
       // Use the live size from the player's marker list (broadcast keeps it current).
       const src = markers.find((mm) => mm.id === b.sourceId);
       const sizeMul = src?.size ?? 1;
-      const r = H * 0.025 * sizeMul * this.viewNH;
+      const r = H * 0.025 * sizeMul;
       ctx.save();
       ctx.fillStyle = _hexA(b.colour, alpha);
       if (b.mode === 'multi-few' || b.mode === 'multi-many') {

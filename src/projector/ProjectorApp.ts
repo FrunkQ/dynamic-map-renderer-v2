@@ -501,10 +501,6 @@ export class ProjectorApp {
 
   private _renderMarkers(): void {
     if (!this.currentMarkers) return;
-    // Projector markers are MAP-fixed, not screen-fixed: a token sized for one
-    // grid square should always be one grid square, regardless of how zoomed
-    // the projector crop is. Leaving viewHeight at the default 1 gives that.
-    this.markerTexture.setViewHeight(1);
     this.markerTexture.render(this.currentMarkers, this.playerIconCache);
     this.renderer.markMarkersDirty();
   }
@@ -585,8 +581,6 @@ export class ProjectorApp {
     if (mode === 'black') return;
     const view = this._computeViewState();
     this.renderer.setView(view);
-    // viewHeight stays at 1 — see _renderMarkers for why projector uses map-fixed sizing.
-    this.markerTexture.setViewHeight(1);
     this.markerTexture.render(this.currentMarkers, this.playerIconCache);
     this.renderer.markMarkersDirty();
   }
