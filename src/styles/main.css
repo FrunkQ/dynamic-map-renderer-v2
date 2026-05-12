@@ -1727,44 +1727,81 @@ option.select-option--add {
 .txt-map-toolbar {
   display: flex;
   gap: var(--space-md);
-  align-items: center;
+  align-items: stretch;
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
   flex-shrink: 0;
 }
-/* Three sections: name on the left, contextual + add controls in the
-   middle, Layout (paper size + colour) anchored on the right. */
+/* Three top-level clusters: LEFT (name + add content + clipboard),
+   CENTRE (element properties), RIGHT (layout + animation). Each
+   cluster lays its child sections + dividers in a flex row. */
 .txt-map-toolbar-left,
 .txt-map-toolbar-right {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-sm);
   flex: 0 0 auto;
 }
 .txt-map-toolbar-centre {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-sm);
   flex: 1 1 auto;
   justify-content: center;
   min-width: 0;
 }
-.txt-map-toolbar-name-label {
-  font-size: 0.85rem;
+/* Per-section frame: two rows — label on top, controls below. */
+.txt-map-toolbar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: flex-start;
+}
+.txt-map-toolbar-section[hidden] { display: none; }
+.txt-map-toolbar-section-label {
+  font-size: 0.72rem;
   color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.txt-map-toolbar-section-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 28px;
+}
+.txt-map-toolbar-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  flex-shrink: 0;
 }
 .txt-map-toolbar-name {
   width: 220px;
   min-width: 120px;
 }
+/* Animation row — selected-transition name + edit icon. */
+.txt-map-animation-name {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  min-width: 100px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Retire the old single-line label class — kept as an alias so any
+   stale call site doesn't go untargeted. */
 .txt-map-toolbar-group-label {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-right: 4px;
+  letter-spacing: 0.05em;
+  font-weight: 600;
 }
 /* Handout reveal progress bar — shown on the GM side after clicking
    Start Animation. The GM doesn't see the actual reveal transition
@@ -1789,13 +1826,13 @@ option.select-option--add {
 /* Cut / Copy / Paste cluster — sits next to the add buttons in the
    left section. Thin vertical divider in front of it so the icon
    buttons feel separate from the labelled +Text/+Image/+Upload group. */
+/* Clipboard cluster is now wrapped inside a section frame; the
+   former leading divider is provided by .txt-map-toolbar-divider, so
+   the cluster itself just needs the icon-button row layout. */
 .txt-map-toolbar-clipboard {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-left: 4px;
-  padding-left: var(--space-sm);
-  border-left: 1px solid var(--border);
 }
 .txt-map-icon-btn {
   width: 28px;
@@ -1825,13 +1862,8 @@ option.select-option--add {
   cursor: pointer;
 }
 .txt-map-toolbar-checkbox input { margin: 0; }
-/* Vertical divider in front of the Layout group so the Element
-   Properties (centre) and Layout (right) sections are visually
-   separated — matches the divider style between Name and clipboard. */
-.txt-map-toolbar-right {
-  padding-left: var(--space-md);
-  border-left: 1px solid var(--border);
-}
+/* (Old per-cluster border-left removed — section dividers now use
+   .txt-map-toolbar-divider elements between sections.) */
 .txt-map-canvas-wrap {
   flex: 1;
   display: grid;
@@ -1938,14 +1970,13 @@ option.select-option--add {
    knob is in one place. Visible only when an element is selected;
    appended after the page-level controls in the same flex row. */
 .txt-map-toolbar-element {
+  /* Inherits section-row flex layout via .txt-map-toolbar-section-row.
+     The leading divider previously baked into this rule is now handled
+     by the section shell + sibling .txt-map-toolbar-divider element. */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
-  /* Subtle divider from the page-level controls on its left. */
-  margin-left: var(--space-md);
-  padding-left: var(--space-md);
-  border-left: 1px solid var(--border);
 }
 .txt-map-toolbar-element[hidden] { display: none; }
 .txt-map-element-toolbar-label {

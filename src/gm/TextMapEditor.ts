@@ -65,9 +65,14 @@ const DEFAULT_CONFIG: TextMapConfig = {
 
 const FALLBACK_FONTS: ReadonlyArray<string> = ['Cinzel', 'Georgia', 'Times New Roman'];
 
-// Inline Lucide-style SVGs used for the clipboard icon cluster. Stroked
-// monochrome, currentColor, 14px viewport — matches the rest of the
-// app's flat-icon aesthetic.
+// Inline Lucide-style SVGs used for the clipboard + edit icon buttons.
+// Stroked monochrome, currentColor, 14px viewport — matches the rest of
+// the app's flat-icon aesthetic.
+const SVG_EDIT =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" '
+  + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+  + '<path d="M12 20h9"/>'
+  + '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
 const SVG_SCISSORS =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" '
   + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
@@ -111,6 +116,8 @@ export class TextMapEditor {
 
   private pageEl:        HTMLElement | null = null;
   private elementToolbarEl: HTMLElement | null = null;
+  private elementSectionEl: HTMLElement | null = null;
+  private animationNameEl:  HTMLElement | null = null;
   private elementNodes   = new Map<string, HTMLElement>();
   private selectedId:    string | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -316,12 +323,69 @@ export class TextMapEditor {
     const tb = document.createElement('div');
     tb.className = 'txt-map-toolbar';
 
-    // ── LEFT — Name + add buttons + clipboard icon buttons ──────────────
+    // ── LEFT — Name section | Add Content section | Clipboard section
     const left = document.createElement('div');
     left.className = 'txt-map-toolbar-left';
-    const nameLabel = document.createElement('label');
-    nameLabel.className = 'txt-map-toolbar-name-label';
-    nameLabel.textContent = 'Name:';
+    left.appendChild(this._buildNameSection());
+    left.appendChild(this._buildToolbarDivider());
+    left.appendChild(this._buildAddContentSection());
+    left.appendChild(this._buildToolbarDivider());
+    left.appendChild(this._buildClipboardSection());
+    tb.appendChild(left);
+
+    // ── CENTRE — Element Properties section (label + slot). Hidden
+    //            when nothing is selected.
+    const centre = document.createElement('div');
+    centre.className = 'txt-map-toolbar-centre';
+    const centreSection = document.createElement('div');
+    centreSection.className = 'txt-map-toolbar-section';
+    centreSection.hidden = true;
+    const centreLabel = document.createElement('span');
+    centreLabel.className = 'txt-map-toolbar-section-label';
+    centreLabel.textContent = 'Element Properties:';
+    centreSection.appendChild(centreLabel);
+    const elSlot = document.createElement('div');
+    elSlot.className = 'txt-map-toolbar-section-row txt-map-toolbar-element';
+    centreSection.appendChild(elSlot);
+    centre.appendChild(centreSection);
+    tb.appendChild(centre);
+    this.elementToolbarEl = elSlot;
+    this.elementSectionEl = centreSection;
+
+    // ── RIGHT — Layout section | Animation section ─────────────────────
+    const right = document.createElement('div');
+    right.className = 'txt-map-toolbar-right';
+    right.appendChild(this._buildLayoutSection());
+    right.appendChild(this._buildToolbarDivider());
+    right.appendChild(this._buildAnimationSection());
+    tb.appendChild(right);
+
+    return tb;
+  }
+
+  /** Generic "section heading + content row below" wrapper. The
+   *  toolbar uses this pattern for every section so labels align and
+   *  vertical rhythm is consistent. */
+  private _buildSectionShell(labelText: string): { section: HTMLElement; row: HTMLElement } {
+    const section = document.createElement('div');
+    section.className = 'txt-map-toolbar-section';
+    const label = document.createElement('span');
+    label.className = 'txt-map-toolbar-section-label';
+    label.textContent = labelText;
+    const row = document.createElement('div');
+    row.className = 'txt-map-toolbar-section-row';
+    section.append(label, row);
+    return { section, row };
+  }
+
+  private _buildToolbarDivider(): HTMLElement {
+    const d = document.createElement('div');
+    d.className = 'txt-map-toolbar-divider';
+    return d;
+  }
+
+  private _buildNameSection(): HTMLElement {
+    const { section, row } = this._buildSectionShell('Name:');
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.className = 'txt-map-input txt-map-toolbar-name';
@@ -329,33 +393,34 @@ export class TextMapEditor {
     nameInput.placeholder = 'Handout name';
     // Suppress browser autofill — without this it'll happily offer up
     // phone numbers / email / whatever else it's stored for a generic
-    // text input on this page, dropping that overlay right beside the
-    // Name input.
+    // text input on this page.
     nameInput.autocomplete = 'off';
     nameInput.setAttribute('autocomplete', 'off');
     nameInput.name = 'mappadux-handout-name';
     nameInput.spellcheck = false;
     nameInput.addEventListener('input', () => { this.name = nameInput.value; });
-    left.append(nameLabel, nameInput);
+    row.appendChild(nameInput);
+    return section;
+  }
 
-    // + Text
+  private _buildAddContentSection(): HTMLElement {
+    const { section, row } = this._buildSectionShell('Add Content:');
+
     const addText = document.createElement('button');
     addText.type = 'button';
     addText.className = 'btn btn--ghost btn--sm';
     addText.textContent = '+ Text';
     addText.addEventListener('click', () => this._addNewText());
-    left.appendChild(addText);
+    row.appendChild(addText);
 
-    // + Image Asset — pick from the Small Assets Library.
     const addImg = document.createElement('button');
     addImg.type = 'button';
     addImg.className = 'btn btn--ghost btn--sm';
     addImg.textContent = '+ Image Asset';
     addImg.title = 'Pick an image from the Small Assets Library';
     addImg.addEventListener('click', () => void this._addNewImage());
-    left.appendChild(addImg);
+    row.appendChild(addImg);
 
-    // + Upload New Image — load a raster file straight from disk.
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
     uploadBtn.className = 'btn btn--ghost btn--sm';
@@ -368,46 +433,29 @@ export class TextMapEditor {
     fileInput.addEventListener('change', () => {
       const f = fileInput.files?.[0];
       if (f) void this._uploadAndAddImage(f);
-      fileInput.value = ''; // allow the same file to be picked again
+      fileInput.value = '';
     });
     uploadBtn.addEventListener('click', () => fileInput.click());
-    left.append(uploadBtn, fileInput);
+    row.append(uploadBtn, fileInput);
 
-    // Clipboard icon group — same actions as Ctrl+C / Ctrl+X / Ctrl+V
-    // on the selected element. Inline monochrome Lucide-style SVGs.
-    const clipGroup = document.createElement('div');
-    clipGroup.className = 'txt-map-toolbar-clipboard';
+    return section;
+  }
+
+  private _buildClipboardSection(): HTMLElement {
+    const { section, row } = this._buildSectionShell('Clipboard:');
     const cutBtn   = this._mkIconBtn(SVG_SCISSORS,  'Cut selected element (Ctrl+X)',
       () => { if (this.selectedId) { this._copySelected(); this._deleteSelected(); } });
     const copyBtn  = this._mkIconBtn(SVG_COPY,      'Copy selected element (Ctrl+C)',
       () => { if (this.selectedId) this._copySelected(); });
     const pasteBtn = this._mkIconBtn(SVG_CLIPBOARD, 'Paste element (Ctrl+V)',
       () => { if (this.clipboardElement) this._pasteFromClipboard(); });
-    clipGroup.append(cutBtn, copyBtn, pasteBtn);
-    left.appendChild(clipGroup);
+    row.append(cutBtn, copyBtn, pasteBtn);
+    return section;
+  }
 
-    tb.appendChild(left);
+  private _buildLayoutSection(): HTMLElement {
+    const { section, row } = this._buildSectionShell('Layout:');
 
-    // ── CENTRE — per-element contextual controls (when something is
-    //            selected). Empty + hidden when nothing is selected.
-    const centre = document.createElement('div');
-    centre.className = 'txt-map-toolbar-centre';
-    const elSlot = document.createElement('div');
-    elSlot.className = 'txt-map-toolbar-element';
-    elSlot.hidden = true;
-    centre.appendChild(elSlot);
-    tb.appendChild(centre);
-    this.elementToolbarEl = elSlot;
-
-    // ── RIGHT — Layout group (paper size + colour) ──────────────────────
-    const right = document.createElement('div');
-    right.className = 'txt-map-toolbar-right';
-    const layoutLabel = document.createElement('span');
-    layoutLabel.className = 'txt-map-toolbar-group-label';
-    layoutLabel.textContent = 'Layout';
-    right.appendChild(layoutLabel);
-
-    // Aspect ratio (paper size)
     const aspectSel = document.createElement('select');
     aspectSel.className = 'txt-map-input';
     aspectSel.title = 'Paper size / aspect ratio';
@@ -424,33 +472,75 @@ export class TextMapEditor {
       const h = parts[1];
       if (w && h) { this.cfg.width = w; this.cfg.height = h; this._fitPage(); }
     });
-    right.appendChild(aspectSel);
+    row.appendChild(aspectSel);
 
-    // Paper colour (page background)
-    right.appendChild(this._buildColourInput('Paper colour', this.cfg.backgroundColor, (v) => {
+    row.appendChild(this._buildColourInput('Paper colour', this.cfg.backgroundColor, (v) => {
       this.cfg.backgroundColor = v;
       if (this.pageEl) this.pageEl.style.backgroundColor = v;
     }));
 
-    // Animation — opens a popover for picking a handout-reveal
-    // transition + duration. The reveal runs at map-load time from
-    // "background + noAnimate elements" to "background + all elements"
-    // using the existing transition catalogue (the same one map → map
-    // changes use), filtered to transitions tagged as handout-suitable.
-    // Wiring to the actual transition engine lands next commit; this
-    // button stub gets the UI in place so the rest of the design can
-    // come together around it.
-    const animBtn = document.createElement('button');
-    animBtn.type = 'button';
-    animBtn.className = 'btn btn--ghost btn--sm';
-    animBtn.textContent = 'Animation…';
-    animBtn.title = 'Configure the handout reveal animation';
-    animBtn.addEventListener('click', () => this._openAnimationPicker());
-    right.appendChild(animBtn);
+    return section;
+  }
 
-    tb.appendChild(right);
+  private _buildAnimationSection(): HTMLElement {
+    const { section, row } = this._buildSectionShell('Animation:');
 
-    return tb;
+    // Enable checkbox — mirror of the master switch in the picker
+    // modal. Toggling on populates cfg.animation with defaults if
+    // empty; toggling off keeps the saved config but flags it
+    // disabled, so flipping back on restores the previous picked
+    // transition.
+    const enableLabel = document.createElement('label');
+    enableLabel.className = 'txt-map-toolbar-checkbox';
+    const enableCheck = document.createElement('input');
+    enableCheck.type = 'checkbox';
+    enableCheck.checked = this.cfg.animation?.enabled === true;
+    enableCheck.addEventListener('change', () => {
+      if (enableCheck.checked) {
+        if (!this.cfg.animation) {
+          this.cfg.animation = {
+            enabled: true, autoReveal: true,
+            transitionId: 'written_reveal',
+            params: { ...transitionRegistry.defaultParams('written_reveal') },
+          };
+        } else {
+          this.cfg.animation.enabled = true;
+        }
+      } else {
+        if (this.cfg.animation) this.cfg.animation.enabled = false;
+      }
+      this._refreshAnimationSection();
+    });
+    enableLabel.append(enableCheck, document.createTextNode(' Enable'));
+    row.appendChild(enableLabel);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'txt-map-animation-name';
+    row.appendChild(nameSpan);
+    this.animationNameEl = nameSpan;
+
+    const editBtn = this._mkIconBtn(SVG_EDIT, 'Edit animation settings', () => {
+      this._openAnimationPicker();
+    });
+    row.appendChild(editBtn);
+
+    this._refreshAnimationSection();
+    return section;
+  }
+
+  /** Update the Animation section's name span + checkbox to reflect the
+   *  current cfg.animation. Called on init, on the Enable checkbox
+   *  change, and after the animation picker closes. */
+  private _refreshAnimationSection(): void {
+    if (!this.animationNameEl) return;
+    if (!this.cfg.animation?.enabled) {
+      this.animationNameEl.textContent = '(disabled)';
+      this.animationNameEl.style.opacity = '0.55';
+    } else {
+      const def = transitionRegistry.get(this.cfg.animation.transitionId);
+      this.animationNameEl.textContent = def?.label ?? this.cfg.animation.transitionId;
+      this.animationNameEl.style.opacity = '1';
+    }
   }
 
   /** Open the reveal-animation picker. Lets the GM enable the reveal,
@@ -491,6 +581,10 @@ export class TextMapEditor {
           void _a;
           this.cfg = rest as TextMapConfig;
         }
+        // Keep the toolbar's Animation row in sync with the saved
+        // config — the Enable checkbox + name span both pull from
+        // cfg.animation.
+        this._refreshAnimationSection();
       }
       overlay.remove();
     };
@@ -837,25 +931,20 @@ export class TextMapEditor {
     this._renderElementToolbar();
   }
 
-  /** Rebuild the per-element toolbar based on what's selected. Hides the
-   *  bar entirely when nothing is selected so it doesn't take vertical
-   *  space. Re-runs after every selection change AND after async font
-   *  loads complete (so the font picker can fill in). */
+  /** Rebuild the per-element toolbar based on what's selected. The
+   *  containing section ("Element Properties:") hides entirely when
+   *  nothing is selected so the centre column collapses. Re-runs
+   *  after every selection change AND after async font loads complete
+   *  (so the font picker can fill in). */
   private _renderElementToolbar(): void {
     const tb = this.elementToolbarEl;
-    if (!tb) return;
+    const section = this.elementSectionEl;
+    if (!tb || !section) return;
     tb.innerHTML = '';
-    if (!this.selectedId) { tb.hidden = true; return; }
+    if (!this.selectedId) { section.hidden = true; return; }
     const el = this.elements.find((x) => x.id === this.selectedId);
-    if (!el) { tb.hidden = true; return; }
-    tb.hidden = false;
-
-    // Leading group label — "Element Properties:" sits at the head of
-    // the centre section so it's clear what the controls apply to.
-    const groupLabel = document.createElement('span');
-    groupLabel.className = 'txt-map-toolbar-group-label';
-    groupLabel.textContent = 'Element Properties:';
-    tb.appendChild(groupLabel);
+    if (!el) { section.hidden = true; return; }
+    section.hidden = false;
 
     if (el.type === 'text')  this._buildTextElementToolbar(tb, el);
     if (el.type === 'image') this._buildImageElementToolbar(tb, el);
@@ -971,18 +1060,24 @@ export class TextMapEditor {
     tb.append(size, sizeVal);
 
     // Font family — pulls from the Image Library's font registry.
+    // Each option is rendered in its OWN font so the user previews the
+    // glyph shapes in the dropdown rather than guessing from family
+    // names. The closed select also mirrors the picked font.
     tb.appendChild(this._toolbarLabel('Font'));
     const fontSel = document.createElement('select');
     fontSel.className = 'txt-map-input';
     const currentFamily = el.fontFamily ?? this.cfg.fontFamily;
+    fontSel.style.fontFamily = `'${currentFamily}', sans-serif`;
     for (const f of this.libraryFonts.length > 0 ? this.libraryFonts : FALLBACK_FONTS) {
       const o = document.createElement('option');
       o.value = f; o.textContent = f;
+      o.style.fontFamily = `'${f}', sans-serif`;
       if (f === currentFamily) o.selected = true;
       fontSel.appendChild(o);
     }
     fontSel.addEventListener('change', () => {
       el.fontFamily = fontSel.value;
+      fontSel.style.fontFamily = `'${fontSel.value}', sans-serif`;
       const node = this.elementNodes.get(el.id);
       const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
       if (body) this._applyTextStyle(body, el);
