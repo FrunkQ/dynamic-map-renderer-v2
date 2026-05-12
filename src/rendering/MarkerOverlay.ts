@@ -1,24 +1,37 @@
 /**
- * MarkerOverlay — HTML screen-space layer that holds per-marker UI elements
- * positioned over the canvas.
+ * MarkerOverlay — HTML screen-space layer for GM canvas chrome.
  *
- * One root `<div>` per marker that's present in the current update list.
- * Sub-elements (label, move handle, badges, selection handles) sit inside
- * that root and are positioned in CSS px so they stay screen-fixed
- * regardless of map zoom. The whole stack lives above every canvas (z-index
- * 5 in main.css) and most of it is pointer-events:none — only interactive
- * handles opt back in via their own CSS rules.
+ * NAMING NOTE: the file is called MarkerOverlay for historical reasons (it
+ * started life in v2.11/A3a as labels-only, then grew the marker handle
+ * stack), but as of v2.11/A8 it ALSO hosts the player + projector viewport
+ * rectangle handles. Same screen-space layer, same handle CSS, same pointer
+ * juggling — markers and rectangles share infrastructure deliberately so
+ * the design language stays consistent. The class name is left alone to
+ * avoid a churny rename across many callers; mental model is "all
+ * screen-space GM chrome lives here."
+ *
+ * Layout: one root `<div>` per item (marker OR viewport rectangle) that's
+ * present in the current update list. Sub-elements (label, move handle,
+ * badges, selection handles, resize / aspect / maximise buttons) sit
+ * inside that root and are positioned in CSS px so they stay
+ * screen-fixed regardless of map zoom. The whole stack lives above every
+ * canvas (z-index 5 in main.css) and most of it is pointer-events:none —
+ * only interactive handles opt back in via their own CSS rules.
  *
  * Event handlers are set once via setHandlers() and dispatched by the
  * overlay when the user interacts with a handle. The overlay does the
  * pointer-event juggling (setPointerCapture, window-level move/up); the
- * consumer (MarkerEditor via GMApp) handles the marker-state mutation
- * given the marker id + raw client coords.
+ * consumer (MarkerEditor / ViewportEditor / ProjectorViewportEditor via
+ * GMApp) handles the state mutation given the item id + raw client coords.
  *
- * A3a introduced the overlay with labels only. A3b extends it with the
- * GM marker UX rebuild — A3b1 (this revision): adds the move handle.
- * Later A3b sub-steps fold in badges, selection handles, rotation, and
- * lock enforcement.
+ * Update API:
+ *   - update(markerItems)          — full sync of per-marker chrome
+ *   - updateRect(kind, rectItem)   — single viewport rectangle's chrome
+ *                                     (kind: 'player' | 'projector')
+ *
+ * Both update paths are idempotent — DOM mutations only happen when
+ * something actually changed, critical for performance during motion-
+ * tracker animation and camera pan/zoom where redraws fire ~60 Hz.
  */
 
 export type BadgeKind =
@@ -97,6 +110,29 @@ export type RotateDragHandler = (
   phase:    'start' | 'move' | 'end',
 ) => void;
 
+export type RectKind = 'player' | 'projector';
+
+export interface RectOverlayItem {
+  /** Rect bounds in CSS px, relative to overlay container. */
+  x: number; y: number; w: number; h: number;
+  /** Move-handle and selection-ring colour (matches the rect's stroke). */
+  color: string;
+  /** Whether the rect is currently selected. Controls visibility of the
+   *  player-only resize handle + maximise / aspect-lock buttons. */
+  selected: boolean;
+  /** Player-only: show resize handle (bottom-right). */
+  showResize?: boolean;
+  /** Show maximise / restore toggle. State drives the icon swap. */
+  maximise?: 'normal' | 'maximised';
+  /** Player-only: show aspect-lock button. `pendingUndo` swaps the icon
+   *  to "undo" so a second click reverts to the pre-snap bounds. */
+  aspectLock?: 'apply' | 'undo';
+}
+
+export type RectMoveHandler   = (kind: RectKind, clientX: number, clientY: number, phase: 'start' | 'move' | 'end') => void;
+export type RectResizeHandler = (kind: RectKind, clientX: number, clientY: number, phase: 'start' | 'move' | 'end') => void;
+export type RectClickHandler  = (kind: RectKind) => void;
+
 export interface OverlayHandlers {
   /** Move handle drag — fires for the entire pointerdown → pointerup arc. */
   onMoveDrag?: MoveDragHandler;
@@ -106,6 +142,15 @@ export interface OverlayHandlers {
   onResizeDrag?: ResizeDragHandler;
   /** Rotate handle drag — angle-based rotation of the selected marker. */
   onRotateDrag?: RotateDragHandler;
+
+  /** Viewport rectangle move-handle drag. */
+  onRectMoveDrag?:    RectMoveHandler;
+  /** Player viewport resize-handle drag. */
+  onRectResizeDrag?:  RectResizeHandler;
+  /** Click on a rectangle's maximise / restore button. */
+  onRectMaximise?:    RectClickHandler;
+  /** Click on the aspect-lock button (player only). */
+  onRectAspectLock?:  RectClickHandler;
 }
 
 // ── Badge icon SVG fragments (Lucide-inspired strokes) ───────────────────────
@@ -156,9 +201,21 @@ interface MarkerElements {
   lockGlyph:     HTMLDivElement | null;
 }
 
+interface RectElements {
+  root:        HTMLDivElement;
+  moveHandle:  HTMLDivElement;
+  resizeHandle:  HTMLDivElement | null;
+  maximiseBtn:   HTMLDivElement | null;
+  aspectBtn:     HTMLDivElement | null;
+  /** Cached state strings for idempotent DOM updates. */
+  lastMaximise: 'normal' | 'maximised' | null;
+  lastAspect:   'apply'  | 'undo'      | null;
+}
+
 export class MarkerOverlay {
   private container: HTMLElement;
   private items     = new Map<string, MarkerElements>();
+  private rects     = new Map<RectKind, RectElements>();
   private handlers: OverlayHandlers = {};
 
   constructor(container: HTMLElement) {
@@ -193,10 +250,180 @@ export class MarkerOverlay {
     }
   }
 
-  /** Remove every marker element. */
+  /** Remove every marker + rect element — used on hard resets. */
   clear(): void {
     for (const el of this.items.values()) el.root.remove();
     this.items.clear();
+    for (const r of this.rects.values()) r.root.remove();
+    this.rects.clear();
+  }
+
+  /**
+   * Sync the screen-space chrome for one viewport rectangle. Pass `null`
+   * to remove (e.g. projector disconnected). The move handle is always
+   * present when the rect is visible; selection-gated handles (resize,
+   * maximise, aspect-lock) appear / disappear based on `item.selected`.
+   */
+  updateRect(kind: RectKind, item: RectOverlayItem | null): void {
+    let r = this.rects.get(kind);
+    if (!item) {
+      if (r) { r.root.remove(); this.rects.delete(kind); }
+      return;
+    }
+    if (!r) {
+      r = this._createRect(kind);
+      this.rects.set(kind, r);
+    }
+    this._applyRect(r, kind, item);
+  }
+
+  private _createRect(kind: RectKind): RectElements {
+    const root = document.createElement('div');
+    root.className = `marker-overlay-rect marker-overlay-rect--${kind}`;
+    root.dataset['rectKind'] = kind;
+    const moveHandle = document.createElement('div');
+    moveHandle.className = 'marker-handle marker-handle--rect-move';
+    moveHandle.title = 'Drag to move';
+    moveHandle.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="5 9 2 12 5 15"/>
+        <polyline points="9 5 12 2 15 5"/>
+        <polyline points="15 19 12 22 9 19"/>
+        <polyline points="19 9 22 12 19 15"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <line x1="12" y1="2" x2="12" y2="22"/>
+      </svg>
+    `;
+    this._bindRectHandle(moveHandle, kind, 'move');
+    root.appendChild(moveHandle);
+    this.container.appendChild(root);
+    return {
+      root, moveHandle,
+      resizeHandle: null, maximiseBtn: null, aspectBtn: null,
+      lastMaximise: null, lastAspect: null,
+    };
+  }
+
+  private _applyRect(r: RectElements, kind: RectKind, item: RectOverlayItem): void {
+    r.root.style.left   = `${item.x}px`;
+    r.root.style.top    = `${item.y}px`;
+    r.root.style.width  = `${item.w}px`;
+    r.root.style.height = `${item.h}px`;
+    r.root.style.setProperty('--rect-color', item.color);
+    r.root.classList.toggle('marker-overlay-rect--selected', item.selected);
+
+    this._toggleRectAux(r, 'resizeHandle', !!item.showResize, () => {
+      const el = document.createElement('div');
+      el.className = 'marker-handle marker-handle--rect-resize';
+      el.title = 'Drag to resize';
+      el.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 3 21 3 21 9"/>
+          <polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3"  x2="14" y2="10"/>
+          <line x1="3"  y1="21" x2="10" y2="14"/>
+        </svg>
+      `;
+      this._bindRectHandle(el, kind, 'resize');
+      return el;
+    });
+
+    const wantMax = item.maximise !== undefined;
+    this._toggleRectAux(r, 'maximiseBtn', wantMax, () => {
+      const el = document.createElement('div');
+      el.className = 'marker-handle marker-handle--rect-maximise';
+      this._bindRectClick(el, kind, 'maximise');
+      return el;
+    });
+    if (r.maximiseBtn && wantMax && item.maximise !== r.lastMaximise) {
+      r.lastMaximise = item.maximise!;
+      r.maximiseBtn.title = item.maximise === 'maximised' ? 'Restore' : 'Maximise (fill the map)';
+      r.maximiseBtn.innerHTML = item.maximise === 'maximised'
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <rect x="7" y="3"  width="14" height="14" rx="1"/>
+             <rect x="3" y="7"  width="14" height="14" rx="1" fill="rgba(20, 24, 36, 0.85)"/>
+           </svg>`
+        : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <rect x="4" y="4" width="16" height="16" rx="1"/>
+           </svg>`;
+    }
+
+    const wantAspect = item.aspectLock !== undefined;
+    this._toggleRectAux(r, 'aspectBtn', wantAspect, () => {
+      const el = document.createElement('div');
+      el.className = 'marker-handle marker-handle--rect-aspect';
+      this._bindRectClick(el, kind, 'aspect');
+      return el;
+    });
+    if (r.aspectBtn && wantAspect && item.aspectLock !== r.lastAspect) {
+      r.lastAspect = item.aspectLock!;
+      r.aspectBtn.title = item.aspectLock === 'undo'
+        ? 'Restore previous size'
+        : 'Snap to 16:9 (short edge defines)';
+      r.aspectBtn.innerHTML = item.aspectLock === 'undo'
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <path d="M3 12a9 9 0 1 0 3-6.7"/>
+             <polyline points="3 4 3 9 8 9"/>
+           </svg>`
+        : `<span style="font: 700 8px/1 system-ui,sans-serif; letter-spacing:-0.5px;">16:9</span>`;
+    }
+  }
+
+  private _toggleRectAux(
+    r: RectElements,
+    key: 'resizeHandle' | 'maximiseBtn' | 'aspectBtn',
+    want: boolean,
+    factory: () => HTMLDivElement,
+  ): void {
+    if (want && !r[key]) {
+      const el = factory();
+      r.root.appendChild(el);
+      r[key] = el;
+    } else if (!want && r[key]) {
+      r[key]!.remove();
+      r[key] = null;
+      if (key === 'maximiseBtn') r.lastMaximise = null;
+      if (key === 'aspectBtn')   r.lastAspect   = null;
+    }
+  }
+
+  private _bindRectHandle(handle: HTMLDivElement, kind: RectKind, action: 'move' | 'resize'): void {
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { handle.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+      const fire = (phase: 'start' | 'move' | 'end', clientX: number, clientY: number) => {
+        if (action === 'move')   this.handlers.onRectMoveDrag?.(kind, clientX, clientY, phase);
+        if (action === 'resize') this.handlers.onRectResizeDrag?.(kind, clientX, clientY, phase);
+      };
+      fire('start', e.clientX, e.clientY);
+      const onMove = (ev: PointerEvent) => fire('move', ev.clientX, ev.clientY);
+      const onEnd  = (ev: PointerEvent) => {
+        fire('end', ev.clientX, ev.clientY);
+        handle.removeEventListener('pointermove',   onMove);
+        handle.removeEventListener('pointerup',     onEnd);
+        handle.removeEventListener('pointercancel', onEnd);
+      };
+      handle.addEventListener('pointermove',   onMove);
+      handle.addEventListener('pointerup',     onEnd);
+      handle.addEventListener('pointercancel', onEnd);
+    });
+  }
+
+  private _bindRectClick(btn: HTMLDivElement, kind: RectKind, action: 'maximise' | 'aspect'): void {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (action === 'maximise') this.handlers.onRectMaximise?.(kind);
+      if (action === 'aspect')   this.handlers.onRectAspectLock?.(kind);
+    });
+    btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
   }
 
   private _create(id: string): MarkerElements {

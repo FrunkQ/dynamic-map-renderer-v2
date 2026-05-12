@@ -296,6 +296,54 @@ body.projector-view .marker-overlay {
 .marker-overlay-item--locked .marker-badge:hover  { filter: none; }
 .marker-overlay-item--locked .marker-badge:active { transform: translate(0, 0); }
 
+/* ── Viewport rectangle chrome (player + projector) ─────────────────────
+   The rect itself is rendered on viewport-canvas / projector-viewport-
+   canvas by their respective editors (marching ants). This overlay
+   provides the screen-space CSS handles + action buttons sitting on
+   the rect's corners + top edge. Each rect has a root container sized
+   + positioned to the rect bounds; handles inside use CSS percentages
+   so they automatically follow when the rect moves or resizes. */
+.marker-overlay-rect {
+  position: absolute;
+  pointer-events: none; /* rect body itself is non-interactive — handles only */
+}
+.marker-overlay-rect .marker-handle {
+  background: var(--rect-color, rgba(20, 24, 36, 0.85));
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.marker-overlay-rect .marker-handle:hover {
+  filter: brightness(1.15);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+/* Move handle — top-left corner. Always visible while the rect is shown. */
+.marker-handle--rect-move {
+  top: 0;
+  left: 0;
+  cursor: move;
+}
+
+/* Resize handle — bottom-right corner (opposite move). Player only. */
+.marker-handle--rect-resize {
+  top: 100%;
+  left: 100%;
+  cursor: nwse-resize;
+}
+
+/* Maximise / aspect-lock buttons — top edge, in a row to the right of the
+   move handle. Move centre at (0,0); each subsequent 26 px circle is
+   offset by 30 px (handle width + 4 px gap). */
+.marker-handle--rect-maximise {
+  top: 0;
+  left: 30px;
+  cursor: pointer;
+}
+.marker-handle--rect-aspect {
+  top: 0;
+  left: 60px;
+  cursor: pointer;
+}
+
 /* Selection ring — dashed rectangle around the icon body, plus a small
    padding so the dash sits clear of the icon. Rounded corners so it
    looks acceptable on both square (token) and wide (dragon) icons. */

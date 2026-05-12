@@ -93,6 +93,19 @@ export class GMApp {
    * ProjectorViewportEditor) or via direct setter (MarkerLayer).
    */
   private gmTransform = new CanvasTransform({ minScale: 0.5, maxScale: 8 });
+
+  /** Reference to the shared overlay layer so non-marker code paths
+   *  (viewport rect chrome, workspace pan, etc.) can push updates. */
+  private _markerOverlay: MarkerOverlay | null = null;
+
+  /** Active overlay-handle drag for a viewport rectangle. Records the
+   *  cursor position in map-norm space + the rect's centre at start so
+   *  the rect tracks the cursor offset (matches the marker drag pattern). */
+  private _rectMoveDrag: {
+    kind: 'player' | 'projector';
+    startNorm: { x: number; y: number };
+    startCenter: { x: number; y: number };
+  } | null = null;
   /**
    * Connected projectors keyed by their per-window clientId. The first entry
    * (insertion order) is the primary; everyone after is a monitor. The map
@@ -329,7 +342,8 @@ export class GMApp {
    * Push the current CanvasTransform out to every consumer: Three.js
    * camera (via Renderer), MarkerLayer's internal frustum, and trigger
    * re-renders on the editor canvases that draw with map-relative
-   * positions (fog, viewport, projector-viewport).
+   * positions (fog, viewport, projector-viewport). Also refreshes the
+   * viewport rect overlay so handle positions track the camera.
    */
   private _applyWorkspaceTransform(): void {
     const t = this.gmTransform;
@@ -341,6 +355,69 @@ export class GMApp {
     this.fogEditor?.redraw();
     this.viewportEditor?.redrawExternal();
     this.projectorEditor?.redrawExternal();
+    this._refreshRectOverlays();
+  }
+
+  /**
+   * Sync the viewport-rectangle chrome (move handle now; resize / maximise
+   * / aspect-lock later in A8.x) for both player + projector rects. Pulls
+   * the current canvas-CSS-px bounds from each editor and pushes them to
+   * the shared overlay; null bounds (e.g., no map / no projector) cause
+   * the chrome to disappear.
+   */
+  private _refreshRectOverlays(): void {
+    if (!this._markerOverlay) return;
+    // Player rect — always shown when a map is loaded.
+    const playerBounds = this.viewportEditor?.getRectBounds() ?? null;
+    this._markerOverlay.updateRect('player', playerBounds
+      ? { ...playerBounds, color: '#ff8c00', selected: false }
+      : null,
+    );
+    // Projector rect — only when a projector is connected + calibrated.
+    const projBounds = this.projectorEditor?.getRectBounds() ?? null;
+    this._markerOverlay.updateRect('projector', projBounds
+      ? { ...projBounds, color: '#22c55e', selected: false }
+      : null,
+    );
+  }
+
+  /**
+   * Translate an overlay move-handle drag into a centre-shift on the
+   * targeted viewport. Records cursor position + rect centre in
+   * map-normalised space at start so the rect glides with the cursor
+   * regardless of where the user grabbed it.
+   */
+  private _handleRectMoveDrag(kind: 'player' | 'projector', clientX: number, clientY: number, phase: 'start' | 'move' | 'end'): void {
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (!wrapper) return;
+    const wrect = wrapper.getBoundingClientRect();
+    const norm  = this.renderer.canvasCssToMapNorm(clientX - wrect.left, clientY - wrect.top);
+    if (phase === 'start') {
+      if (!norm) return;
+      const startCenter = kind === 'player'
+        ? { x: this.viewportEditor.getView().centerX,    y: this.viewportEditor.getView().centerY    }
+        : { x: this.projectorEditor.getViewport().centerX, y: this.projectorEditor.getViewport().centerY };
+      this._rectMoveDrag = { kind, startNorm: norm, startCenter };
+      return;
+    }
+    if (phase === 'end') { this._rectMoveDrag = null; return; }
+    if (!this._rectMoveDrag || !norm) return;
+    const dx = norm.x - this._rectMoveDrag.startNorm.x;
+    const dy = norm.y - this._rectMoveDrag.startNorm.y;
+    const newCx = Math.max(0, Math.min(1, this._rectMoveDrag.startCenter.x + dx));
+    const newCy = Math.max(0, Math.min(1, this._rectMoveDrag.startCenter.y + dy));
+    if (this._rectMoveDrag.kind === 'player') {
+      const v = this.viewportEditor.getView();
+      const next = { ...v, centerX: newCx, centerY: newCy };
+      this.viewportEditor.setView(next);
+      this.state.setView(next);
+    } else {
+      const vp = this.projectorEditor.getViewport();
+      const next = { ...vp, centerX: newCx, centerY: newCy };
+      this.projectorEditor.setViewport(next);
+      this.state.setProjectorViewport(next);
+    }
+    this._refreshRectOverlays();
   }
 
   private _setBrokerErrorVisible(visible: boolean): void {
@@ -1298,6 +1375,7 @@ export class GMApp {
       this.markerEditor.update(this.state.getState().markers, aspect);
       this.motionTracker.setMapAspect(aspect);
       this.updateMarkerPanel();
+      this._refreshRectOverlays();
       // Push the loaded map's calibration + intrinsic width to the projector
       // editor so it can size its rectangle correctly.
       void this.refreshProjectorMapInfo();
@@ -1446,6 +1524,7 @@ export class GMApp {
     this.projectorEditor.onChange((vp) => {
       this.state.setProjectorViewport(vp);
       this.host.broadcast({ type: 'projector_viewport_update', payload: vp });
+      this._refreshRectOverlays();
     });
 
     // Edit Projection View toggle (mirrors the player viewport edit-mode flow).
@@ -1837,6 +1916,7 @@ export class GMApp {
     // Live drag → push view to state (and on to players via P2P)
     this.viewportEditor.onChange((view) => {
       this.state.setView(view);
+      this._refreshRectOverlays();
     });
 
     // Click outside the viewport canvas / OK-Cancel buttons implicitly
@@ -2353,6 +2433,7 @@ export class GMApp {
     this.viewportEditor.setView(state.view);
     this.viewBgColour.value = state.view.backgroundColor;
     if (state.projectorViewport) this.projectorEditor.setViewport(state.projectorViewport);
+    this._refreshRectOverlays();
     this.refreshRotationButtons();
     this.refreshProjectionModeButtons();
     const vp = state.projectorViewport ?? defaultProjectorViewport();
@@ -2445,10 +2526,9 @@ export class GMApp {
       () => this.iconCache,
     );
 
-    // HTML overlay layer for marker labels + move handle (A3b1).
-    // MarkerLayer drives positions out of _draw — pass the overlay in once
-    // and it stays in sync with every redraw. The overlay's move-handle
-    // drag is routed back to MarkerEditor's overlay-drag methods.
+    // HTML overlay layer for marker labels + handles AND viewport rect
+    // chrome (player + projector). The overlay class is GM-wide screen-
+    // space chrome — see its doc comment for why the name is historical.
     const overlayEl = document.getElementById('marker-overlay');
     if (overlayEl) {
       const overlay = new MarkerOverlay(overlayEl);
@@ -2469,8 +2549,14 @@ export class GMApp {
           else if (phase === 'move') this.markerEditor.updateOverlayRotate(clientX, clientY);
           else                       this.markerEditor.endOverlayRotate();
         },
+        onRectMoveDrag: (kind, clientX, clientY, phase) => this._handleRectMoveDrag(kind, clientX, clientY, phase),
       });
       this.markerEditor.layer.setOverlay(overlay);
+      this._markerOverlay = overlay;
+      // Push the rects in once any state lands; subsequent state changes
+      // (viewport edit, projector connection, camera pan/zoom) all funnel
+      // back to _refreshRectOverlays().
+      this._refreshRectOverlays();
     }
 
     this.markerEditor.setFogSelectCallback((pos) => this.fogEditor.trySelectAt(pos));

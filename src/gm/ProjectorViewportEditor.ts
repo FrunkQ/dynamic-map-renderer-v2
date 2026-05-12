@@ -105,6 +105,15 @@ export class ProjectorViewportEditor {
     this.redraw();
   }
 
+  /** Current projector rectangle in canvas CSS pixels — null when no
+   *  projector connected or map not yet calibrated. */
+  getRectBounds(): { x: number; y: number; w: number; h: number } | null {
+    return this.rectInCanvas();
+  }
+
+  /** Current projector viewport snapshot. */
+  getViewport(): ProjectorViewport { return { ...this.viewport }; }
+
   private liveMapBounds(): MapBounds {
     if (this.renderer) {
       const tl = this.renderer.mapNormToCanvasCss(0, 0);

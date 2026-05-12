@@ -110,6 +110,17 @@ export class ViewportEditor {
     this.redraw();
   }
 
+  /** Current viewport rectangle in canvas CSS pixels — used by the
+   *  screen-space overlay to position handles. Null when no map. */
+  getRectBounds(): { x: number; y: number; w: number; h: number } | null {
+    if (!this.hasMap) return null;
+    return this.viewToRect();
+  }
+
+  /** Current ViewState snapshot — for overlay drag handlers that need a
+   *  starting point. */
+  getView(): ViewState { return { ...this.view }; }
+
   setView(view: ViewState): void {
     this.view = { ...view };
     this.redraw();
