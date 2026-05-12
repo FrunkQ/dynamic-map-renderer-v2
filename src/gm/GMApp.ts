@@ -5,6 +5,8 @@ import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { IconPicker } from './IconPicker.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
+import { MapAssetStore } from '../maps/MapAssetStore.ts';
+import { TextMapEditor } from './TextMapEditor.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
 import { HamburgerMenu } from './HamburgerMenu.ts';
@@ -123,6 +125,7 @@ export class GMApp {
   // DOM references (assigned in init)
   private mapSelect!:               HTMLSelectElement;
   private mapNameInput!:            HTMLInputElement;
+  private editTextMapBtn!:          HTMLButtonElement;
   private packNameInput!:           HTMLInputElement;
   /** Debounce timer for the in-panel pack-name input. */
   private _packNameSaveTimer: number | null = null;
@@ -656,7 +659,15 @@ export class GMApp {
   // ─── Map selection ────────────────────────────────────────────────────────
 
   private async populateMapList(): Promise<void> {
-    const [maps, session] = await Promise.all([this.maps.getAll(), loadSession()]);
+    const [maps, session, mapAssets] = await Promise.all([
+      this.maps.getAll(),
+      loadSession(),
+      MapAssetStore.getAll(),
+    ]);
+    // Build assetId → source lookup so we can flag text-map entries in
+    // the dropdown. Cheap (small N) and saves a round-trip per option.
+    const sourceByAssetId = new Map<string, string>();
+    for (const a of mapAssets) sourceByAssetId.set(a.id, a.source);
     this.mapSelect.innerHTML = '';
     if (maps.length === 0) {
       const placeholder = document.createElement('option');
@@ -667,7 +678,11 @@ export class GMApp {
     for (const m of maps) {
       const opt = document.createElement('option');
       opt.value = m.id;
-      opt.textContent = m.name;
+      // Prefix text-map (handout) entries with [T] so they stand out
+      // from regular image maps in the dropdown — matches the same
+      // distinguisher used on the My Library row.
+      const isTextMap = sourceByAssetId.get(m.mapAssetId) === 'text-map';
+      opt.textContent = isTextMap ? `[T] ${m.name}` : m.name;
       this.mapSelect.appendChild(opt);
     }
 
@@ -685,12 +700,37 @@ export class GMApp {
     }
   }
 
+  /** Open the Text Map editor for the currently displayed handout.
+   *  Wired to the inline Edit button next to the Name field — only
+   *  visible when the active map is a text-map (set in loadMap below).
+   *  On save the editor preserves the asset id and clears the
+   *  rasterisation cache, so we just need to re-fetch the blob and
+   *  repaint the texture. */
+  private async _editCurrentTextMap(): Promise<void> {
+    const currentId = this.state.snapshot().map?.id;
+    if (!currentId) return;
+    const storedMap = await getMap(currentId);
+    if (!storedMap) return;
+    const asset = await MapAssetStore.get(storedMap.mapAssetId);
+    if (!asset || asset.source !== 'text-map') return;
+    const result = await new TextMapEditor().open({ existing: asset });
+    if (!result) return;
+    MapAssetStore.invalidateRuntimeCache(asset.id);
+    await this.loadMap(storedMap);
+    await this.populateMapList(); // refresh the dropdown in case name changed
+  }
+
   private async loadMap(map: StoredMap): Promise<void> {
     // Flush any unsaved state from the previous map before switching
     await this.state.flushSave();
     this.setStatus(`Loading ${map.name}…`, 'ok');
     this.mapNameInput.value = map.name;
     this.activeFilterId = ''; // force panel rebuild for new map's saved filter
+    // Show the inline "Edit" button next to the Name field iff this is a
+    // text-map handout — gives a one-click route into the editor without
+    // hunting through the Add Map library.
+    const mapAssetForButton = await MapAssetStore.get(map.mapAssetId);
+    if (this.editTextMapBtn) this.editTextMapBtn.hidden = mapAssetForButton?.source !== 'text-map';
     const blob = await this.maps.getBlob(map.id);
     if (!blob) { this.setStatus('Map blob not found', 'error'); return; }
 
@@ -806,6 +846,8 @@ export class GMApp {
 
     this.mapSelect                  = q<HTMLSelectElement>('#map-select');
     this.mapNameInput               = q<HTMLInputElement>('#map-name-input');
+    this.editTextMapBtn             = q<HTMLButtonElement>('#edit-textmap-btn');
+    this.editTextMapBtn.addEventListener('click', () => void this._editCurrentTextMap());
     this.packNameInput              = q<HTMLInputElement>('#pack-name-input');
     this.transitionSelect           = q<HTMLSelectElement>('#transition-select');
     this.transitionParamsContainer  = q('#transition-params');
