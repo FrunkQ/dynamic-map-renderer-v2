@@ -174,16 +174,10 @@ export function drawMarkerShape(
   const halfH   = r;
   const halfW   = r * aspect;
 
-  // 2. Dashed selection ring — ellipse around the rectangle bounds
-  if (selected) {
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, halfW + 5, halfH + 5, 0, 0, Math.PI * 2);
-    ctx.setLineDash([6, 3]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth   = 2;
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // 2. Selection ring — moved to the HTML overlay in v2.11/A3b4
+  //    (.marker-selection-ring) so it stays crisp / screen-fixed and the
+  //    selection chrome (resize / rotate handles) can sit alongside it.
+  void selected;
 
   // 3. Icon rendering — rect with the icon's natural aspect ratio
   if (isImage) {
@@ -377,6 +371,7 @@ export class MarkerLayer {
       // Locked GM markers keep their status badges (display-only via CSS)
       // but lose the move handle. Unlocked markers get both.
       const badges = isGM ? buildBadges(m) : undefined;
+      const isSelected = isGM && m.id === this._selectedId && !m.locked;
       items.push({
         id:               m.id,
         anchorX:          pos.x    * pxToCssX,
@@ -392,6 +387,7 @@ export class MarkerLayer {
           : {}),
         ...(badges && badges.length > 0 ? { badges } : {}),
         ...(m.locked ? { locked: true } : {}),
+        ...(isSelected ? { selected: true } : {}),
       });
     }
     this._overlay.update(items);

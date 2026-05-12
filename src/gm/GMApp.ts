@@ -173,8 +173,8 @@ export class GMApp {
   private markerLabelInput!:       HTMLInputElement;
   private markerIconBtn!:          HTMLButtonElement;
   private markerColorInput!:       HTMLInputElement;
-  private markerSizeInput!:        HTMLInputElement;
-  private markerSizeVal!:          HTMLElement;
+  // Marker size slider removed in v2.11/A3b4 — visual resize handle on the
+  // selected marker (MarkerOverlay) replaces it.
   private markerHiddenToggle!:     HTMLInputElement;
   private markerShowLabelToggle!:  HTMLInputElement;
   private markerLockedToggle!:     HTMLInputElement;
@@ -1306,8 +1306,6 @@ export class GMApp {
     this.markerLabelInput      = q<HTMLInputElement>('#marker-label');
     this.markerIconBtn         = q<HTMLButtonElement>('#marker-icon-btn');
     this.markerColorInput      = q<HTMLInputElement>('#marker-color');
-    this.markerSizeInput       = q<HTMLInputElement>('#marker-size');
-    this.markerSizeVal         = q('#marker-size-val');
     this.markerHiddenToggle    = q<HTMLInputElement>('#marker-hidden');
     this.markerShowLabelToggle = q<HTMLInputElement>('#marker-show-label');
     this.markerLockedToggle    = q<HTMLInputElement>('#marker-locked');
@@ -2338,6 +2336,11 @@ export class GMApp {
           else                        this.markerEditor.endOverlayDrag();
         },
         onBadgeClick: (id, kind) => this.markerEditor.toggleOverlayBadge(id, kind),
+        onResizeDrag: (id, clientX, clientY, phase) => {
+          if (phase === 'start')     this.markerEditor.beginOverlayResize(id, clientX, clientY);
+          else if (phase === 'move') this.markerEditor.updateOverlayResize(clientX, clientY);
+          else                       this.markerEditor.endOverlayResize();
+        },
       });
       this.markerEditor.layer.setOverlay(overlay);
     }
@@ -2424,12 +2427,6 @@ export class GMApp {
 
     this.markerColorInput.addEventListener('input', () => {
       this.updateSelectedMarker({ color: this.markerColorInput.value });
-    });
-
-    this.markerSizeInput.addEventListener('input', () => {
-      const val = parseFloat(this.markerSizeInput.value);
-      this.markerSizeVal.textContent = `${val.toFixed(1)}×`;
-      this.updateSelectedMarker({ size: val });
     });
 
     this.markerHiddenToggle.addEventListener('change', () => {
@@ -3184,8 +3181,6 @@ export class GMApp {
     if (sel) {
       this.markerLabelInput.value     = sel.label;
       this.markerColorInput.value     = sel.color;
-      this.markerSizeInput.value      = String(sel.size);
-      this.markerSizeVal.textContent  = `${sel.size.toFixed(1)}×`;
       this.markerHiddenToggle.checked    = sel.hidden;
       this.markerShowLabelToggle.checked = sel.showLabel ?? false;
       this.markerLockedToggle.checked    = sel.locked ?? false;

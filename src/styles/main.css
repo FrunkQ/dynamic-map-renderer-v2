@@ -288,6 +288,30 @@ body.projector-view .marker-overlay {
 }
 .marker-overlay-item--locked .marker-badge:hover  { filter: none; }
 .marker-overlay-item--locked .marker-badge:active { transform: translate(0, 0); }
+
+/* Selection ring — dashed rectangle around the icon body, plus a small
+   padding so the dash sits clear of the icon. Rounded corners so it
+   looks acceptable on both square (token) and wide (dragon) icons. */
+.marker-selection-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width:  calc(2 * var(--icon-half-w, 0px) + 10px);
+  height: calc(2 * var(--icon-half-h, 0px) + 10px);
+  transform: translate(-50%, -50%);
+  border: 2px dashed rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Resize handle — appears below the icon when selected. Drag away from /
+   toward the marker centre to scale; A3b5 will add a rotate sibling. */
+.marker-handle--resize {
+  top:  calc(var(--icon-half-h, 0px) + 14px);
+  left: 0;
+  cursor: nwse-resize;
+}
 #projector-viewport-canvas {
   position: absolute;
   inset: 0;

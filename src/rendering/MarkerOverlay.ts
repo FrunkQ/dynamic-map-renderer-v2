@@ -68,9 +68,22 @@ export interface OverlayItem {
    * handle the layout shift.
    */
   locked?: boolean;
+
+  /**
+   * When true, render the selection ring around the icon and show the
+   * selection-only handles (resize now; rotate in A3b5) below it.
+   */
+  selected?: boolean;
 }
 
 export type MoveDragHandler = (
+  markerId: string,
+  clientX:  number,
+  clientY:  number,
+  phase:    'start' | 'move' | 'end',
+) => void;
+
+export type ResizeDragHandler = (
   markerId: string,
   clientX:  number,
   clientY:  number,
@@ -82,6 +95,8 @@ export interface OverlayHandlers {
   onMoveDrag?: MoveDragHandler;
   /** Single tap on an action badge — should toggle its state and select. */
   onBadgeClick?: (markerId: string, kind: BadgeKind) => void;
+  /** Resize handle drag — distance-based scaling of the selected marker. */
+  onResizeDrag?: ResizeDragHandler;
 }
 
 // ── Badge icon SVG fragments (Lucide-inspired strokes) ───────────────────────
@@ -120,12 +135,14 @@ function badgeColor(kind: BadgeKind, on: boolean): string {
 }
 
 interface MarkerElements {
-  root:        HTMLDivElement;
-  label:       HTMLDivElement | null;
-  moveHandle:  HTMLDivElement | null;
-  badgesRow:   HTMLDivElement | null;
+  root:          HTMLDivElement;
+  label:         HTMLDivElement | null;
+  moveHandle:    HTMLDivElement | null;
+  badgesRow:     HTMLDivElement | null;
   /** Map of badge kind → button element so we can reuse / restyle each. */
-  badges:      Map<BadgeKind, HTMLButtonElement>;
+  badges:        Map<BadgeKind, HTMLButtonElement>;
+  selectionRing: HTMLDivElement | null;
+  resizeHandle:  HTMLDivElement | null;
 }
 
 export class MarkerOverlay {
@@ -176,7 +193,10 @@ export class MarkerOverlay {
     root.className = 'marker-overlay-item';
     root.dataset['markerId'] = id;
     this.container.appendChild(root);
-    return { root, label: null, moveHandle: null, badgesRow: null, badges: new Map() };
+    return {
+      root, label: null, moveHandle: null, badgesRow: null,
+      badges: new Map(), selectionRing: null, resizeHandle: null,
+    };
   }
 
   private _applyItem(el: MarkerElements, item: OverlayItem): void {
@@ -186,11 +206,71 @@ export class MarkerOverlay {
     el.root.style.top  = `${item.anchorY}px`;
     el.root.style.setProperty('--icon-half-w', `${item.iconHalfWidthPx}px`);
     el.root.style.setProperty('--icon-half-h', `${item.iconHalfHeightPx}px`);
-    el.root.classList.toggle('marker-overlay-item--locked', !!item.locked);
+    el.root.classList.toggle('marker-overlay-item--locked',   !!item.locked);
+    el.root.classList.toggle('marker-overlay-item--selected', !!item.selected);
 
     this._applyLabel(el, item);
     this._applyMoveHandle(el, item);
     this._applyBadges(el, item);
+    this._applySelectionAffordances(el, item);
+  }
+
+  /** Selection-only chrome: dashed ring around the icon + resize handle below it. */
+  private _applySelectionAffordances(el: MarkerElements, item: OverlayItem): void {
+    const want = !!item.selected && !item.locked;
+
+    // Selection ring — purely visual, no interaction.
+    if (want && !el.selectionRing) {
+      el.selectionRing = document.createElement('div');
+      el.selectionRing.className = 'marker-selection-ring';
+      el.root.appendChild(el.selectionRing);
+    } else if (!want && el.selectionRing) {
+      el.selectionRing.remove();
+      el.selectionRing = null;
+    }
+
+    // Resize handle — press-and-drag to scale the marker by cursor distance
+    // from its centre. Below the icon so it stays out of the badge / move
+    // handle stack above.
+    if (want && !el.resizeHandle) {
+      el.resizeHandle = document.createElement('div');
+      el.resizeHandle.className = 'marker-handle marker-handle--resize';
+      el.resizeHandle.title = 'Drag away from / toward the marker to resize';
+      el.resizeHandle.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 3 21 3 21 9"/>
+          <polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3"  x2="14" y2="10"/>
+          <line x1="3"  y1="21" x2="10" y2="14"/>
+        </svg>
+      `;
+      this._bindResizeHandle(el.resizeHandle, item.id);
+      el.root.appendChild(el.resizeHandle);
+    } else if (!want && el.resizeHandle) {
+      el.resizeHandle.remove();
+      el.resizeHandle = null;
+    }
+  }
+
+  private _bindResizeHandle(handle: HTMLDivElement, markerId: string): void {
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { handle.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+      this.handlers.onResizeDrag?.(markerId, e.clientX, e.clientY, 'start');
+      const onMove = (ev: PointerEvent) => this.handlers.onResizeDrag?.(markerId, ev.clientX, ev.clientY, 'move');
+      const onEnd  = (ev: PointerEvent) => {
+        this.handlers.onResizeDrag?.(markerId, ev.clientX, ev.clientY, 'end');
+        handle.removeEventListener('pointermove',   onMove);
+        handle.removeEventListener('pointerup',     onEnd);
+        handle.removeEventListener('pointercancel', onEnd);
+      };
+      handle.addEventListener('pointermove',   onMove);
+      handle.addEventListener('pointerup',     onEnd);
+      handle.addEventListener('pointercancel', onEnd);
+    });
   }
 
   private _applyLabel(el: MarkerElements, item: OverlayItem): void {

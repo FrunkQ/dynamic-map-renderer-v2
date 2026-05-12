@@ -197,11 +197,9 @@
             </div>
             <button type="button" id="marker-icon-btn" class="marker-icon-btn marker-icon-btn--lg" title="Click to choose an icon">&#9670;</button>
           </div>
-          <div class="param-row">
-            <label for="marker-size">Size</label>
-            <input type="range" id="marker-size" min="0.2" max="8" step="0.1" value="1" />
-            <span id="marker-size-val" class="param-value">1.0×</span>
-          </div>
+          <!-- Size slider removed in v2.11/A3b4 — drag the resize handle
+               below the marker on the canvas to scale it visually. -->
+
           <div class="param-row param-row--toggle">
             <label for="marker-show-label">Show Name on player map</label>
             <label class="toggle-switch">

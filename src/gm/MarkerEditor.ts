@@ -247,6 +247,59 @@ export class MarkerEditor {
     this._onChange([...this.markers]);
   }
 
+  // ── Overlay-driven resize (only available while selected) ─────────────────
+
+  /** State for the active distance-based resize started from the overlay handle. */
+  private _overlayResize: {
+    id:          string;
+    initialDist: number;
+    initialSize: number;
+  } | null = null;
+
+  /**
+   * Begin a marker resize from the overlay's resize handle. Records the
+   * cursor's distance from the marker centre at press; the move handler
+   * scales m.size by current/initial distance ratio so dragging away
+   * from the marker grows it and dragging toward shrinks it.
+   */
+  beginOverlayResize(markerId: string, clientX: number, clientY: number): void {
+    const marker = this.markers.find((m) => m.id === markerId);
+    if (!marker || marker.locked) return;
+    const center = this.layer.project(marker.position.x, marker.position.y, null);
+    if (!center) return;
+    const rect = this.layer.canvas.getBoundingClientRect();
+    // Convert center from canvas-buffer px to CSS px so the distance
+    // comparison uses the same units as the cursor's clientX/Y.
+    const centerCssX = rect.left + center.x * (rect.width  / this.layer.canvas.width);
+    const centerCssY = rect.top  + center.y * (rect.height / this.layer.canvas.height);
+    const dist0 = Math.max(20, Math.hypot(clientX - centerCssX, clientY - centerCssY));
+    this._overlayResize = { id: markerId, initialDist: dist0, initialSize: marker.size };
+  }
+
+  updateOverlayResize(clientX: number, clientY: number): void {
+    if (!this._overlayResize) return;
+    const marker = this.markers.find((m) => m.id === this._overlayResize!.id);
+    if (!marker) return;
+    const center = this.layer.project(marker.position.x, marker.position.y, null);
+    if (!center) return;
+    const rect = this.layer.canvas.getBoundingClientRect();
+    const centerCssX = rect.left + center.x * (rect.width  / this.layer.canvas.width);
+    const centerCssY = rect.top  + center.y * (rect.height / this.layer.canvas.height);
+    const dist = Math.hypot(clientX - centerCssX, clientY - centerCssY);
+    const ratio = dist / this._overlayResize.initialDist;
+    const newSize = Math.max(0.2, Math.min(8, this._overlayResize.initialSize * ratio));
+    this.markers = this.markers.map((m) =>
+      m.id !== this._overlayResize!.id ? m : { ...m, size: newSize },
+    );
+    this._redraw();
+  }
+
+  endOverlayResize(): void {
+    if (!this._overlayResize) return;
+    this._overlayResize = null;
+    this._onChange([...this.markers]);
+  }
+
   /**
    * Tap an overlay action badge — toggles its state AND selects the marker
    * (matches the v2.11/A3b spec: every badge tap is both an action and a
