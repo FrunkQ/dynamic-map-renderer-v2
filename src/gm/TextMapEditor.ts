@@ -96,18 +96,77 @@ export class TextMapEditor {
   private resizeObserver: ResizeObserver | null = null;
   private dragState: DragState | null = null;
   private libraryFonts: string[] = [];
+  /** Internal clipboard for Ctrl+C / Ctrl+X / Ctrl+V on whole elements.
+   *  Stores a snapshot of the source element's data (not a live ref) so
+   *  paste creates a true duplicate. */
+  private clipboardElement: TextMapElement | null = null;
 
   private onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && !this.dragState) this._resolve(null);
-    if ((e.key === 'Delete' || e.key === 'Backspace')
-        && this.selectedId
-        && document.activeElement?.tagName !== 'INPUT'
-        && document.activeElement?.tagName !== 'SELECT'
-        && !this._editingActiveSelection()) {
+    if (e.key === 'Escape' && !this.dragState) {
+      this._resolve(null);
+      return;
+    }
+    // Skip everything below when the user is typing into an input /
+    // select / contenteditable so the browser's native behaviour wins
+    // (typing characters, copy/paste of text inside a text element).
+    const t = document.activeElement;
+    if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement
+        || t instanceof HTMLTextAreaElement || this._editingActiveSelection()) {
+      return;
+    }
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (this.selectedId) {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        this._deleteSelected();
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        this._copySelected();
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        this._copySelected();
+        this._deleteSelected();
+        return;
+      }
+    }
+    if (ctrl && e.key.toLowerCase() === 'v' && this.clipboardElement) {
       e.preventDefault();
-      this._deleteSelected();
+      this._pasteFromClipboard();
     }
   };
+
+  /** Snapshot the selected element into the internal clipboard. Deep
+   *  enough — TextMapElement values are flat (primitives + string
+   *  fields), so a shallow spread is a true copy. */
+  private _copySelected(): void {
+    if (!this.selectedId) return;
+    const el = this.elements.find((e) => e.id === this.selectedId);
+    if (!el) return;
+    this.clipboardElement = { ...el };
+  }
+
+  /** Duplicate the clipboard element with a fresh id, slightly offset
+   *  so it doesn't sit exactly on top of the original. Select the new
+   *  element so the user can immediately drag / type into it. */
+  private _pasteFromClipboard(): void {
+    const src = this.clipboardElement;
+    if (!src) return;
+    const offsetX = Math.max(0, Math.min(100 - src.w, src.x + 5));
+    const offsetY = Math.max(0, Math.min(100 - src.h, src.y + 5));
+    let fresh: TextMapElement;
+    if (src.type === 'text') {
+      fresh = { ...src, id: 'text-' + generateId(), x: offsetX, y: offsetY };
+    } else {
+      fresh = { ...src, id: 'img-' + generateId(), x: offsetX, y: offsetY };
+    }
+    this.elements.push(fresh);
+    this._mountElement(fresh);
+    this._select(fresh.id);
+  }
 
   open(opts: { existing?: MapAsset } = {}): Promise<TextMapEditorResult | null> {
     if (opts.existing?.textMap) {
@@ -178,16 +237,11 @@ export class TextMapEditor {
     dialog.appendChild(header);
 
     // ── Toolbar ──────────────────────────────────────────────────────────
-    const toolbar = this._buildToolbar();
-    dialog.appendChild(toolbar);
-    // Per-element controls slot lives INSIDE the top toolbar — when an
-    // element is selected, its controls append here so everything you
-    // can change is in one place at the top of the screen.
-    const elSlot = document.createElement('div');
-    elSlot.className = 'txt-map-toolbar-element';
-    elSlot.hidden = true;
-    toolbar.appendChild(elSlot);
-    this.elementToolbarEl = elSlot;
+    // Three sections: left (Name), centre (add buttons + contextual
+    // element controls), right (Layout = paper size + colour). The
+    // per-element controls slot is appended inside the centre section
+    // by _buildToolbar() so they sit next to the add buttons.
+    dialog.appendChild(this._buildToolbar());
 
     // ── Canvas wrap ──────────────────────────────────────────────────────
     const canvasWrap = document.createElement('div');
@@ -242,85 +296,47 @@ export class TextMapEditor {
     const tb = document.createElement('div');
     tb.className = 'txt-map-toolbar';
 
-    // Name input
+    // ── LEFT — Name ──────────────────────────────────────────────────────
+    const left = document.createElement('div');
+    left.className = 'txt-map-toolbar-left';
+    const nameLabel = document.createElement('label');
+    nameLabel.className = 'txt-map-toolbar-name-label';
+    nameLabel.textContent = 'Name:';
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.className = 'txt-map-input txt-map-toolbar-name';
     nameInput.value = this.name;
     nameInput.placeholder = 'Handout name';
     nameInput.addEventListener('input', () => { this.name = nameInput.value; });
-    tb.appendChild(nameInput);
+    left.append(nameLabel, nameInput);
+    tb.appendChild(left);
 
-    // Aspect ratio
-    const aspectSel = document.createElement('select');
-    aspectSel.className = 'txt-map-input';
-    aspectSel.title = 'Aspect ratio';
-    for (const p of ASPECT_PRESETS) {
-      const o = document.createElement('option');
-      o.value = `${p.w}x${p.h}`;
-      o.textContent = p.label;
-      if (p.w === this.cfg.width && p.h === this.cfg.height) o.selected = true;
-      aspectSel.appendChild(o);
-    }
-    aspectSel.addEventListener('change', () => {
-      const parts = aspectSel.value.split('x').map((n) => parseInt(n, 10));
-      const w = parts[0];
-      const h = parts[1];
-      if (w && h) { this.cfg.width = w; this.cfg.height = h; this._fitPage(); }
-    });
-    tb.appendChild(aspectSel);
+    // ── CENTRE — add-element buttons + contextual element controls ──────
+    // The element-specific controls slot in here when something is
+    // selected (see _renderElementToolbar). When nothing is selected,
+    // only the three add buttons sit in the centre.
+    const centre = document.createElement('div');
+    centre.className = 'txt-map-toolbar-centre';
+    tb.appendChild(centre);
 
-    // Background colour — the ONE page-level colour. Every text
-    // element carries its own colour in its toolbar; an extra
-    // page-level "Text colour" here would just be a second knob
-    // doing the same job. cfg.textColor still exists in the model as
-    // the inherited default for a new text element that hasn't been
-    // recoloured yet.
-    tb.appendChild(this._buildColourInput('Background', this.cfg.backgroundColor, (v) => {
-      this.cfg.backgroundColor = v;
-      if (this.pageEl) this.pageEl.style.backgroundColor = v;
-    }));
-
-    // Default font
-    const fontSel = document.createElement('select');
-    fontSel.className = 'txt-map-input';
-    fontSel.title = 'Default font (text elements inherit unless overridden)';
-    for (const f of FALLBACK_FONTS) {
-      const o = document.createElement('option');
-      o.value = f; o.textContent = f;
-      if (f === this.cfg.fontFamily) o.selected = true;
-      fontSel.appendChild(o);
-    }
-    void this._populateFontSelect(fontSel);
-    fontSel.addEventListener('change', () => {
-      this.cfg.fontFamily = fontSel.value;
-      if (this.pageEl) this.pageEl.style.fontFamily = `'${fontSel.value}', serif`;
-    });
-    tb.appendChild(fontSel);
-
-
-    // Add Text button
+    // + Text
     const addText = document.createElement('button');
     addText.type = 'button';
     addText.className = 'btn btn--ghost btn--sm';
     addText.textContent = '+ Text';
     addText.addEventListener('click', () => this._addNewText());
-    tb.appendChild(addText);
+    centre.appendChild(addText);
 
-    // Add Image button — picks from the Small Assets Library.
+    // + Image
     const addImg = document.createElement('button');
     addImg.type = 'button';
     addImg.className = 'btn btn--ghost btn--sm';
     addImg.textContent = '+ Image';
     addImg.title = 'Pick an image from the Small Assets Library';
     addImg.addEventListener('click', () => void this._addNewImage());
-    tb.appendChild(addImg);
+    centre.appendChild(addImg);
 
-    // + Upload — one-click path that loads an image file straight from
-    // disk into the Textmap category and drops it on the page. For
-    // colour raster images (photos, painted maps, etc.) — no need to
-    // round-trip through the Small Assets Library modal. The asset is
-    // saved with tintable: false so its native colours are preserved.
+    // + Upload New Image
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
     uploadBtn.className = 'btn btn--ghost btn--sm';
@@ -336,7 +352,52 @@ export class TextMapEditor {
       fileInput.value = ''; // allow the same file to be picked again
     });
     uploadBtn.addEventListener('click', () => fileInput.click());
-    tb.append(uploadBtn, fileInput);
+    centre.append(uploadBtn, fileInput);
+
+    // Per-element controls slot — populated by _renderElementToolbar
+    // when an element is selected. Lives inside the centre group so
+    // contextual controls appear next to the add buttons, not on the
+    // far right with the layout controls.
+    const elSlot = document.createElement('div');
+    elSlot.className = 'txt-map-toolbar-element';
+    elSlot.hidden = true;
+    centre.appendChild(elSlot);
+    this.elementToolbarEl = elSlot;
+
+    // ── RIGHT — Layout group (paper size + colour) ──────────────────────
+    const right = document.createElement('div');
+    right.className = 'txt-map-toolbar-right';
+    const layoutLabel = document.createElement('span');
+    layoutLabel.className = 'txt-map-toolbar-group-label';
+    layoutLabel.textContent = 'Layout';
+    right.appendChild(layoutLabel);
+
+    // Aspect ratio (paper size)
+    const aspectSel = document.createElement('select');
+    aspectSel.className = 'txt-map-input';
+    aspectSel.title = 'Paper size / aspect ratio';
+    for (const p of ASPECT_PRESETS) {
+      const o = document.createElement('option');
+      o.value = `${p.w}x${p.h}`;
+      o.textContent = p.label;
+      if (p.w === this.cfg.width && p.h === this.cfg.height) o.selected = true;
+      aspectSel.appendChild(o);
+    }
+    aspectSel.addEventListener('change', () => {
+      const parts = aspectSel.value.split('x').map((n) => parseInt(n, 10));
+      const w = parts[0];
+      const h = parts[1];
+      if (w && h) { this.cfg.width = w; this.cfg.height = h; this._fitPage(); }
+    });
+    right.appendChild(aspectSel);
+
+    // Paper colour (page background)
+    right.appendChild(this._buildColourInput('Paper colour', this.cfg.backgroundColor, (v) => {
+      this.cfg.backgroundColor = v;
+      if (this.pageEl) this.pageEl.style.backgroundColor = v;
+    }));
+
+    tb.appendChild(right);
 
     return tb;
   }
@@ -373,27 +434,9 @@ export class TextMapEditor {
     return input;
   }
 
-  private async _populateFontSelect(sel: HTMLSelectElement): Promise<void> {
-    const all = await ImageAssetStore.getAll();
-    const fonts = all
-      .filter((a) => a.source === 'font' && a.fontFamily)
-      .sort((a, b) => a.name.localeCompare(b.name));
-    if (fonts.length === 0) return;
-    sel.innerHTML = '';
-    for (const f of fonts) {
-      const o = document.createElement('option');
-      o.value = f.fontFamily!; o.textContent = f.name;
-      if (f.fontFamily === this.cfg.fontFamily) o.selected = true;
-      sel.appendChild(o);
-    }
-    if (!fonts.some((f) => f.fontFamily === this.cfg.fontFamily)) {
-      const o = document.createElement('option');
-      o.value = this.cfg.fontFamily;
-      o.textContent = `${this.cfg.fontFamily} (missing)`;
-      o.selected = true;
-      sel.insertBefore(o, sel.firstChild);
-    }
-  }
+  // (page-level font picker removed — font is a per-element concern.
+  //  The per-element font select builds its list from this.libraryFonts
+  //  in _buildTextElementToolbar.)
 
   // ─── Page fit ───────────────────────────────────────────────────────────
 

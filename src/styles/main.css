@@ -1726,17 +1726,45 @@ option.select-option--add {
 }
 .txt-map-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
+  gap: var(--space-md);
   align-items: center;
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
   flex-shrink: 0;
 }
+/* Three sections: name on the left, contextual + add controls in the
+   middle, Layout (paper size + colour) anchored on the right. */
+.txt-map-toolbar-left,
+.txt-map-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 0 0 auto;
+}
+.txt-map-toolbar-centre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+}
+.txt-map-toolbar-name-label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
 .txt-map-toolbar-name {
-  flex: 1 1 200px;
-  min-width: 160px;
+  width: 220px;
+  min-width: 120px;
+}
+.txt-map-toolbar-group-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
 }
 .txt-map-canvas-wrap {
   flex: 1;
