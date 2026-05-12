@@ -1073,6 +1073,38 @@ option.select-option--add {
 .marker-icon-btn:hover { border-color: var(--border-focus); }
 .marker-icon-btn img { width: 20px; height: 20px; object-fit: contain; }
 
+/* Two-column marker icon block: Icon + Colour labels stacked on the
+   left, double-height icon preview button on the right. Colour row
+   hides when the picked icon is a non-tintable raster — the preview
+   button keeps its full height regardless. */
+.marker-icon-block {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+.marker-icon-labels {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+.marker-icon-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.marker-icon-label-row[hidden] { display: none; }
+.marker-icon-btn--lg {
+  width: 64px;
+  height: 64px;
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+.marker-icon-btn--lg img { width: 48px; height: 48px; }
+
 /* ── Marker role buttons ─────────────────────────────────────────────────── */
 .marker-role-btns {
   display: flex;

@@ -158,13 +158,17 @@
           </div>
 
           <p class="map-section-label map-section-label--gap">Marker Icon</p>
-          <div class="param-row">
-            <label>Icon</label>
-            <button type="button" id="marker-icon-btn" class="marker-icon-btn">&#9670;</button>
-          </div>
-          <div class="param-row">
-            <label for="marker-color">Colour</label>
-            <input type="color" id="marker-color" value="#e03e3e" />
+          <div class="marker-icon-block">
+            <div class="marker-icon-labels">
+              <div class="marker-icon-label-row">
+                <label>Icon</label>
+              </div>
+              <div class="marker-icon-label-row" id="marker-color-row">
+                <label for="marker-color">Colour</label>
+                <input type="color" id="marker-color" value="#e03e3e" />
+              </div>
+            </div>
+            <button type="button" id="marker-icon-btn" class="marker-icon-btn marker-icon-btn--lg" title="Click to choose an icon">&#9670;</button>
           </div>
           <div class="param-row">
             <label for="marker-size">Size</label>

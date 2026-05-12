@@ -2891,21 +2891,33 @@ export class GMApp {
       this.markerShowLabelToggle.checked = sel.showLabel ?? false;
       this.markerLockedToggle.checked    = sel.locked ?? false;
 
-      // Update icon button display
+      // Update icon button display — rendered at 96×96 px for the
+      // new double-height preview button (.marker-icon-btn--lg). The
+      // button itself is 64×64 visually; rendering at 1.5× the visual
+      // size keeps the icon crisp on high-DPI displays.
       this.markerIconBtn.innerHTML = '';
-      if (sel.icon.startsWith('asset:') || sel.icon.startsWith('data:')) {
+      const isAsset = sel.icon.startsWith('asset:') || sel.icon.startsWith('data:');
+      if (isAsset) {
         const bmp = this.iconPicker.iconCache.get(sel.icon);
         const img = document.createElement('img');
         if (bmp) {
           const cv = document.createElement('canvas');
-          cv.width = 20; cv.height = 20;
-          cv.getContext('2d')!.drawImage(bmp, 0, 0, 20, 20);
+          cv.width = 96; cv.height = 96;
+          cv.getContext('2d')!.drawImage(bmp, 0, 0, 96, 96);
           img.src = cv.toDataURL();
         }
         this.markerIconBtn.appendChild(img);
       } else {
         this.markerIconBtn.textContent = sel.icon;
       }
+      // Tintability: unicode glyphs respect marker.color (rendered as
+      // tinted text); raster assets from the legacy 'icon' store render
+      // verbatim — colour has no visible effect. Hide the Colour row
+      // for those so the GM isn't presented with a swatch that does
+      // nothing.
+      const tintable = !isAsset;
+      const colorRow = document.getElementById('marker-color-row');
+      if (colorRow) colorRow.hidden = !tintable;
 
       // Audio role buttons — translate legacy data-role values to the current audio role
       document.querySelectorAll<HTMLElement>('.marker-audio-role-btns .marker-role-btn').forEach((btn) => {
