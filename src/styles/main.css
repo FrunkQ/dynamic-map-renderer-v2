@@ -273,14 +273,20 @@ body.projector-view .marker-overlay {
 .marker-badge:active { transform: scale(0.94); }
 .marker-badge svg    { display: block; }
 
-/* Locked markers: no move handle, so the badge row shifts down to where
-   the handle would have been. Badges become display-only — they still
-   communicate state but no longer accept clicks. Opacity matches the
-   icon body's 0.4 dim from drawMarkerShape so the whole marker reads
-   as faded together. */
-.marker-overlay-item--locked .marker-badges {
-  top: calc(-1 * var(--icon-half-h, 0px) - 4px);
+/* Locked markers: a padlock glyph sits where the move handle would have
+   been (so the stack height matches an unlocked marker — badges stay in
+   their normal row above), and the badges drop to display-only.
+   Opacity 0.4 across the chrome matches the icon body's 0.4 dim from
+   drawMarkerShape so the whole marker reads as faded together. */
+.marker-handle--lock {
+  top:  calc(-1 * var(--icon-half-h, 0px) - 4px);
+  left: 0;
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.4;
 }
+.marker-handle--lock:hover  { filter: none; background: rgba(20, 24, 36, 0.85); border-color: rgba(255, 255, 255, 0.55); }
+.marker-handle--lock:active { transform: translate(-50%, -50%); }
 .marker-overlay-item--locked .marker-badge {
   pointer-events: none;
   cursor: default;

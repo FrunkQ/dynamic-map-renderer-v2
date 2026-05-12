@@ -153,6 +153,7 @@ interface MarkerElements {
   selectionRing: HTMLDivElement | null;
   resizeHandle:  HTMLDivElement | null;
   rotateHandle:  HTMLDivElement | null;
+  lockGlyph:     HTMLDivElement | null;
 }
 
 export class MarkerOverlay {
@@ -206,6 +207,7 @@ export class MarkerOverlay {
     return {
       root, label: null, moveHandle: null, badgesRow: null,
       badges: new Map(), selectionRing: null, resizeHandle: null, rotateHandle: null,
+      lockGlyph: null,
     };
   }
 
@@ -221,8 +223,32 @@ export class MarkerOverlay {
 
     this._applyLabel(el, item);
     this._applyMoveHandle(el, item);
+    this._applyLockGlyph(el, item);
     this._applyBadges(el, item);
     this._applySelectionAffordances(el, item);
+  }
+
+  /** Locked-marker padlock — sits where the move handle would be. Purely
+   *  visual; clicks pass through (pointer-events:none in CSS). */
+  private _applyLockGlyph(el: MarkerElements, item: OverlayItem): void {
+    const want = !!item.locked;
+    if (!want) {
+      if (el.lockGlyph) { el.lockGlyph.remove(); el.lockGlyph = null; }
+      return;
+    }
+    if (!el.lockGlyph) {
+      el.lockGlyph = document.createElement('div');
+      el.lockGlyph.className = 'marker-handle marker-handle--lock';
+      el.lockGlyph.title = 'Locked — unlock from the side panel to edit';
+      el.lockGlyph.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      `;
+      el.root.appendChild(el.lockGlyph);
+    }
   }
 
   /** Selection-only chrome: dashed ring around the icon + resize handle below it. */
