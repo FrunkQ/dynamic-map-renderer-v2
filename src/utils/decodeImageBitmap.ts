@@ -10,23 +10,35 @@
  * universally reliable across formats.
  *
  * The output preserves the source aspect ratio with the longer side capped
- * at 64 px. For SVGs we read viewBox / width-height attributes directly
- * because `img.naturalWidth/Height` falls back to the W3C 300×150 default
- * for viewBox-only SVGs and would give the wrong aspect. Non-square aspect
- * is honoured so markers can render as rectangles (a 2:1 dragon stays 2:1).
+ * at 256 px (vector sources always render at the cap; rasters respect their
+ * natural dimensions so we don't waste memory upscaling a 64-px PNG). The
+ * cap was raised from 64 in v2.10.28 because the v2.10.27 sizing change
+ * lets markers grow to 8× — at the old cap the bitmap was upscaled 6× on
+ * the projector and looked heavily pixelated.
+ *
+ * For SVGs we read viewBox / width-height attributes directly because
+ * `img.naturalWidth/Height` falls back to the W3C 300×150 default for
+ * viewBox-only SVGs and would give the wrong aspect. Non-square aspect is
+ * honoured so markers can render as rectangles (a 2:1 dragon stays 2:1).
  */
 export async function decodeImageBitmap(dataUrl: string): Promise<ImageBitmap> {
   const img = new Image();
   img.src = dataUrl;
   await img.decode();
 
-  const MAX = 64;
-  const aspect = dataUrl.startsWith('data:image/svg')
+  const HARD_CAP = 256;
+  const isSvg    = dataUrl.startsWith('data:image/svg');
+  const aspect   = isSvg
     ? (getSvgAspect(dataUrl) ?? 1)
     : (img.naturalWidth || 1) / (img.naturalHeight || 1);
+  // SVGs are vector — render at the full cap. Rasters use min(cap, natural)
+  // so small source images aren't pointlessly upscaled at decode time.
+  const longSide = isSvg
+    ? HARD_CAP
+    : Math.min(HARD_CAP, Math.max(img.naturalWidth, img.naturalHeight) || HARD_CAP);
 
-  const w = aspect >= 1 ? MAX : Math.max(1, Math.round(MAX * aspect));
-  const h = aspect >= 1 ? Math.max(1, Math.round(MAX / aspect)) : MAX;
+  const w = aspect >= 1 ? longSide : Math.max(1, Math.round(longSide * aspect));
+  const h = aspect >= 1 ? Math.max(1, Math.round(longSide / aspect)) : longSide;
 
   const canvas = document.createElement('canvas');
   canvas.width  = w;

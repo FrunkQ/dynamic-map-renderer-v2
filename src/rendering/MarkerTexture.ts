@@ -10,16 +10,22 @@ import { drawMarkerShape, type MotionOverlay } from './MarkerLayer.ts';
  * THREE.CanvasTexture from it. After each render() call the caller should
  * invoke renderer.markMarkersDirty() to upload the new pixels to the GPU.
  *
- * The texture is square (1024×1024) but the plane it's mapped onto is
+ * The texture is square (2048×2048) but the plane it's mapped onto is
  * `aspect × 1` world units. To keep circles looking like circles after that
  * stretch, the overlay drawing uses an X-radius scaled by 1/aspect.
+ *
+ * Size was bumped from 1024 in v2.10.28 — at the previous resolution a
+ * default-sized marker only got ~26 texture px of real estate and the GPU
+ * stretch onto a calibrated projector turned that into visible chunkiness.
+ * 2048 gives ~51 px per default marker (~205 at size=8), which the source
+ * bitmaps (256 px longest side from decodeImageBitmap) can fill cleanly.
  */
 export class MarkerTexture {
   readonly canvas: OffscreenCanvas;
   private aspect = 1;
 
   constructor() {
-    this.canvas = new OffscreenCanvas(1024, 1024);
+    this.canvas = new OffscreenCanvas(2048, 2048);
   }
 
   setAspectRatio(ar: number): void {
