@@ -468,7 +468,9 @@ export class GMApp {
    * icons that aren't yet in IconPicker's caches. Tintable assets render
    * one bitmap per (asset, colour) pair; raster assets render once.
    * Returns true if at least one new entry landed in the cache so the
-   * caller can decide whether to re-broadcast.
+   * caller can decide whether to re-broadcast. Also opportunistically
+   * records each asset's tintability so updateMarkerPanel's Colour-row
+   * decision stays synchronous on later renders.
    */
   private async _ensureLibIcons(markers: Marker[]): Promise<boolean> {
     let added = false;
@@ -484,9 +486,32 @@ export class GMApp {
       if (!rendered) continue;
       this.iconCache.set(rendered.key, rendered.bitmap);
       this.iconDataUrls.set(rendered.key, rendered.dataUrl);
+      this._libAssetTintable.set(m.icon.slice('libAsset:'.length), rendered.tintable);
       added = true;
     }
     return added;
+  }
+
+  /**
+   * Local + remote refresh after _ensureLibIcons has filled new bitmaps.
+   * Both onStateChange branches that pre-render libAsset icons (map load,
+   * markers change) call this so the player gets the freshly-decoded
+   * bitmaps and the GM canvas + icon-button preview pick them up too.
+   */
+  private _rebroadcastMarkersWithFreshIconData(): void {
+    const state = this.state.getState();
+    const freshVisible   = state.markers.filter((m) => !m.hidden);
+    const freshBroadcast = state.markers.filter((m) =>
+      !m.hidden || m.roles.audio === 'source' || m.roles.motion === 'source');
+    const freshIconData  = this._collectIconData(freshVisible);
+    this.host.broadcast({
+      type: 'marker_update',
+      payload: freshBroadcast,
+      ...(freshIconData.length > 0 ? { iconData: freshIconData } : {}),
+    });
+    this.markerEditor.redraw();
+    this.updateMarkerPanel();
+    this.renderer.markDirty();
   }
 
   /**
@@ -750,21 +775,7 @@ export class GMApp {
       // (which are colour-dependent and not in the preload pass) draw as
       // fallback circles until the user nudges the marker.
       void this._ensureLibIcons(broadcastMarkers).then((added) => {
-        if (!added) return;
-        this.markerEditor.redraw();
-        this.updateMarkerPanel();
-        // Players don't have these markers in iconData yet either — push
-        // a fresh marker_update with the now-rendered bitmaps in tow.
-        const freshState = this.state.getState();
-        const freshVisible = freshState.markers.filter((m) => !m.hidden);
-        const freshBroadcast = freshState.markers.filter((m) =>
-          !m.hidden || m.roles.audio === 'source' || m.roles.motion === 'source');
-        const freshIconData = this._collectIconData(freshVisible);
-        this.host.broadcast({
-          type: 'marker_update',
-          payload: freshBroadcast,
-          ...(freshIconData.length > 0 ? { iconData: freshIconData } : {}),
-        });
+        if (added) this._rebroadcastMarkersWithFreshIconData();
       });
     }
 
@@ -783,23 +794,7 @@ export class GMApp {
       // a fallback circle). Kick off the async render and re-broadcast
       // once the cache has caught up so the player updates.
       void this._ensureLibIcons(broadcastMarkers).then((added) => {
-        if (!added) return;
-        const freshVisible = this.state.getState().markers.filter((m) => !m.hidden);
-        const freshBroadcast = this.state.getState().markers.filter((m) =>
-          !m.hidden || m.roles.audio === 'source' || m.roles.motion === 'source');
-        const freshIconData = this._collectIconData(freshVisible);
-        this.host.broadcast({
-          type: 'marker_update',
-          payload: freshBroadcast,
-          ...(freshIconData.length > 0 ? { iconData: freshIconData } : {}),
-        });
-        // GM marker canvas + icon-button preview both need redrawing
-        // now that the per-(asset, colour) bitmap has landed in cache —
-        // otherwise the canvas stays on the fallback circle and the
-        // preview button shows the stale (or empty) image.
-        this.markerEditor.redraw();
-        this.updateMarkerPanel();
-        this.renderer.markDirty();
+        if (added) this._rebroadcastMarkersWithFreshIconData();
       });
     }
 
