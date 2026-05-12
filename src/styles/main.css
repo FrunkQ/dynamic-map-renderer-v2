@@ -398,10 +398,13 @@ body.player-view #renderer-canvas {
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  /* Anchor for absolutely-positioned panel-header overlays (bypass
-     toggle). Without this the toggle escapes its panel and lands on
-     whichever positioned ancestor it finds — usually the main layout
-     container, which puts the green dot somewhere in the map area. */
+}
+
+/* Wraps the panel-title button plus any panel-toggle that sits beside
+   it. Establishes the positioning context for the toggle so the toggle
+   stays anchored to the header row rather than re-centering against the
+   full panel when the panel-body opens below. */
+.panel-header {
   position: relative;
 }
 
@@ -884,7 +887,7 @@ option.select-option--add {
    under the toggle that sits in front of the chevron. Chevron itself
    is absolutely positioned by .panel-title::after — it stays at
    right: var(--space-md) regardless of this padding. */
-.panel:has(.panel-toggle) .panel-title { padding-right: 80px; }
+.panel-header:has(.panel-toggle) .panel-title { padding-right: 80px; }
 
 .toggle-switch--warning input:checked + .toggle-slider {
   background: rgba(249, 115, 22, 0.25);

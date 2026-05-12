@@ -83,11 +83,13 @@
     </section>
 
     <section class="panel" id="transition-panel">
-      <button type="button" class="panel-title" aria-expanded="false">Map Transition</button>
-      <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Enable map transition. Off = bypass (equivalent to None)">
-        <input type="checkbox" id="transition-bypass-toggle" checked />
-        <span class="toggle-slider"></span>
-      </label>
+      <div class="panel-header">
+        <button type="button" class="panel-title" aria-expanded="false">Map Transition</button>
+        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Enable map transition. Off = bypass (equivalent to None)">
+          <input type="checkbox" id="transition-bypass-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <div class="panel-body" hidden>
         <select id="transition-select" class="select-full"></select>
         <div id="transition-params" class="transition-params-container"></div>
@@ -107,11 +109,13 @@
     </section>
 
     <section class="panel" id="soundboard-panel">
-      <button type="button" class="panel-title" aria-expanded="false">Soundboard</button>
-      <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Enable soundboard audio. Off = Mute all (bypass)">
-        <input type="checkbox" id="mute-all-toggle" checked />
-        <span class="toggle-slider"></span>
-      </label>
+      <div class="panel-header">
+        <button type="button" class="panel-title" aria-expanded="false">Soundboard</button>
+        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Enable soundboard audio. Off = Mute all (bypass)">
+          <input type="checkbox" id="mute-all-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <div class="panel-body" hidden>
         <div class="param-row param-row--toggle sb-remote-row">
           <label for="remote-audio-toggle">Broadcast to players</label>
@@ -404,11 +408,13 @@
     </section>
 
     <section class="panel" id="filter-panel-section">
-      <button type="button" class="panel-title" aria-expanded="false">Visual Filter</button>
-      <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Enable visual filter. Off = bypass (no filter applied)">
-        <input type="checkbox" id="filter-bypass-toggle" checked />
-        <span class="toggle-slider"></span>
-      </label>
+      <div class="panel-header">
+        <button type="button" class="panel-title" aria-expanded="false">Visual Filter</button>
+        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Enable visual filter. Off = bypass (no filter applied)">
+          <input type="checkbox" id="filter-bypass-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <div class="panel-body" hidden>
         <select id="filter-select" class="select-full"></select>
         <div id="filter-params" class="filter-params-container"></div>

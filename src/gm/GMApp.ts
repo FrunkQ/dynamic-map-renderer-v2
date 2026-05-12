@@ -1944,7 +1944,7 @@ export class GMApp {
       btn.addEventListener('click', () => {
         const expanded = btn.getAttribute('aria-expanded') === 'true';
         btn.setAttribute('aria-expanded', String(!expanded));
-        const body = btn.parentElement?.querySelector<HTMLElement>('.panel-body') ?? null;
+        const body = btn.closest('.panel')?.querySelector<HTMLElement>('.panel-body') ?? null;
         if (body) body.hidden = expanded;
       });
     });
