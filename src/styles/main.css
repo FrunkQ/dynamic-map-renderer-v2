@@ -229,23 +229,24 @@ body.projector-view .marker-overlay {
 }
 .marker-handle svg { display: block; }
 
-/* Move handle — centred above the icon, allowed to overlap the icon's
-   top edge slightly so the whole handle/badge stack sits closer to the
-   token rather than floating well above it. */
+/* Move handle — sits at the icon's top-left corner (revised in v2.11/A3b7
+   to align with the viewport-rectangle UX). The handle centre overlaps
+   the corner of the icon by a few pixels so it visually anchors there. */
 .marker-handle--move {
   top:  calc(-1 * var(--icon-half-h, 0px) - 4px);
-  left: 0;
+  left: calc(-1 * var(--icon-half-w, 0px) - 4px);
   cursor: move;
 }
 
-/* Action-badge row — sits above the move handle. The container is
-   click-through; each badge child opts back in. Flex layout auto-centres
-   the row regardless of badge count (1–3). */
+/* Action-badge row — flows to the RIGHT of the move handle along the
+   icon's top edge. The flex container's left anchors to just past the
+   move handle's right edge; vertical centre aligns with the move handle
+   centre. translate(0, -50%) keeps left-edge alignment + vertical centre. */
 .marker-badges {
   position: absolute;
-  top:  calc(-1 * var(--icon-half-h, 0px) - 32px);
-  left: 0;
-  transform: translate(-50%, -50%);
+  top:  calc(-1 * var(--icon-half-h, 0px) - 4px);
+  left: calc(-1 * var(--icon-half-w, 0px) + 13px);
+  transform: translate(0, -50%);
   display: flex;
   gap: 4px;
   pointer-events: none;
@@ -280,7 +281,7 @@ body.projector-view .marker-overlay {
    drawMarkerShape so the whole marker reads as faded together. */
 .marker-handle--lock {
   top:  calc(-1 * var(--icon-half-h, 0px) - 4px);
-  left: 0;
+  left: calc(-1 * var(--icon-half-w, 0px) - 4px);
   pointer-events: none;
   cursor: default;
   opacity: 0.4;
@@ -311,17 +312,18 @@ body.projector-view .marker-overlay {
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
 }
 
-/* Resize + rotate handles — pair sits below the icon when selected.
-   Resize on the left, rotate on the right, both 26 px circles with a
-   4 px gap between them. */
+/* Resize handle — bottom-right corner of the icon (opposite the move
+   handle). Drag away from / toward the marker centre to scale. */
 .marker-handle--resize {
-  top:  calc(var(--icon-half-h, 0px) + 14px);
-  left: -15px;
+  top:  calc(var(--icon-half-h, 0px) + 4px);
+  left: calc(var(--icon-half-w, 0px) + 4px);
   cursor: nwse-resize;
 }
+/* Rotate handle — bottom-centre below the icon. Drag in a circle around
+   the marker centre to rotate. */
 .marker-handle--rotate {
-  top:  calc(var(--icon-half-h, 0px) + 14px);
-  left: 15px;
+  top:  calc(var(--icon-half-h, 0px) + 4px);
+  left: 0;
   cursor: grab;
 }
 .marker-handle--rotate:active { cursor: grabbing; }
