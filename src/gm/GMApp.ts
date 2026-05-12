@@ -129,6 +129,14 @@ export class GMApp {
   private startAnimationBtn!:       HTMLButtonElement;
   private revealProgressEl!:        HTMLElement;
   private revealProgressBarEl!:     HTMLElement;
+  /** Animation lifecycle on the active handout:
+   *    idle    — at starting frame; click Start runs the reveal.
+   *    running — reveal in flight; click Cancel skips to the end.
+   *    done    — reveal complete; click Reset returns to starting. */
+  private _animationButtonState: 'idle' | 'running' | 'done' = 'idle';
+  /** setTimeout id for the "running → done" auto-progression; held
+   *  so a manual Cancel can clear it before it fires. */
+  private _animationDoneTimer: ReturnType<typeof setTimeout> | null = null;
   private packNameInput!:           HTMLInputElement;
   /** Debounce timer for the in-panel pack-name input. */
   private _packNameSaveTimer: number | null = null;
@@ -705,6 +713,80 @@ export class GMApp {
     }
   }
 
+  /** Single click handler for the Start / Cancel / Reset button.
+   *  Dispatches to the right action based on the current animation
+   *  lifecycle state. */
+  private async _onAnimationButtonClick(): Promise<void> {
+    switch (this._animationButtonState) {
+      case 'idle':    return this._triggerHandoutReveal();
+      case 'running': return this._cancelHandoutReveal();
+      case 'done':    return this._resetHandoutReveal();
+    }
+  }
+
+  /** Apply a button-state transition: update label + colour, store
+   *  the new state, and clear any pending auto-progression timer. */
+  private _setAnimationButtonState(state: 'idle' | 'running' | 'done'): void {
+    this._animationButtonState = state;
+    if (this._animationDoneTimer !== null) {
+      clearTimeout(this._animationDoneTimer);
+      this._animationDoneTimer = null;
+    }
+    const btn = this.startAnimationBtn;
+    if (!btn) return;
+    btn.classList.remove('btn--primary', 'btn--ghost');
+    switch (state) {
+      case 'idle':
+        btn.textContent = '▶ Start Animation';
+        btn.classList.add('btn--primary');
+        btn.title = 'Trigger the handout reveal animation on the player + projector';
+        break;
+      case 'running':
+        btn.textContent = '■ Cancel Animation';
+        btn.classList.add('btn--ghost');
+        btn.title = 'Skip to the end of the reveal (instant cut to final frame)';
+        break;
+      case 'done':
+        btn.textContent = '↻ Reset Animation';
+        btn.classList.add('btn--ghost');
+        btn.title = 'Return to the starting frame so the reveal can play again';
+        break;
+    }
+  }
+
+  /** Skip the reveal: broadcast a handout_reveal with transition=none,
+   *  which makes the receivers cut straight to the final frame. The
+   *  bar disappears immediately. */
+  private async _cancelHandoutReveal(): Promise<void> {
+    const currentId = this.state.snapshot().map?.id;
+    if (!currentId) return;
+    const finalBlob = await this.maps.getBlob(currentId);
+    if (!finalBlob) return;
+    this.host.broadcast({
+      type: 'handout_reveal',
+      mapId: currentId,
+      transition: { transitionId: 'none', params: {} },
+      mapBlob: finalBlob,
+    });
+    if (this.revealProgressEl) this.revealProgressEl.hidden = true;
+    this._setAnimationButtonState('done');
+  }
+
+  /** Send receivers back to the starting frame. Re-broadcasts the
+   *  current map (which carries the starting frame for animated
+   *  handouts via the loadMap broadcast/local divergence). Suppresses
+   *  the autoReveal auto-fire so the GM has a chance to click Start
+   *  again rather than getting an immediate replay. */
+  private async _resetHandoutReveal(): Promise<void> {
+    const currentId = this.state.snapshot().map?.id;
+    if (!currentId) return;
+    const storedMap = await getMap(currentId);
+    if (!storedMap) return;
+    this._suppressAutoReveal = true;
+    await this.loadMap(storedMap);
+    this._setAnimationButtonState('idle');
+  }
+
   /** Kick off the handout reveal animation on every connected player +
    *  projector. The GM's own canvas already shows the FINAL frame so
    *  no local texture swap is needed — we just broadcast and show a
@@ -744,6 +826,13 @@ export class GMApp {
       mapBlob: finalBlob,
     });
     this._showRevealProgress(durationMs);
+    this._setAnimationButtonState('running');
+    // Auto-progress to "done" when the reveal duration elapses, so the
+    // button switches to Reset without GM input. Cancel clears this
+    // timer in _setAnimationButtonState.
+    this._animationDoneTimer = setTimeout(() => {
+      this._setAnimationButtonState('done');
+    }, durationMs + 50);
   }
 
   /** Show the GM-side progress bar for the reveal animation. The bar
@@ -815,7 +904,13 @@ export class GMApp {
     if (this.editTextMapBtn) this.editTextMapBtn.hidden = !isTextMap;
     // Show the Start Animation button only when this handout has a
     // reveal animation configured. Hidden in every other case.
-    if (this.startAnimationBtn) this.startAnimationBtn.hidden = !hasReveal;
+    // Reset to 'idle' state (Start Animation label) — every fresh map
+    // load starts the lifecycle over.
+    if (this.startAnimationBtn) {
+      this.startAnimationBtn.hidden = !hasReveal;
+      this._setAnimationButtonState('idle');
+    }
+    if (this.revealProgressEl) this.revealProgressEl.hidden = true;
     const finalBlob = await this.maps.getBlob(map.id);
     if (!finalBlob) { this.setStatus('Map blob not found', 'error'); return; }
     // For animated handouts the player + projector receive the STARTING
@@ -890,7 +985,14 @@ export class GMApp {
     // renderer.loadMap to complete. Manual reveal (autoReveal=false)
     // waits for the GM to click Start Animation.
     if (hasReveal && mapAssetForButton?.textMap?.animation?.autoReveal === true) {
-      setTimeout(() => { void this._triggerHandoutReveal(); }, 350);
+      // Reset (manual replay) suppresses auto-fire so the GM gets a
+      // chance to click Start themselves instead of getting an
+      // immediate replay.
+      if (this._suppressAutoReveal) {
+        this._suppressAutoReveal = false;
+      } else {
+        setTimeout(() => { void this._triggerHandoutReveal(); }, 350);
+      }
     }
 
     // Show / hide the Fix Missing Map button based on whether the asset blob
@@ -939,7 +1041,14 @@ export class GMApp {
       ...(asset?.imageWidth            ? { mapImageWidth:      asset.imageWidth     } : {}),
       ...(asset?.imageHeight           ? { mapImageHeight:     asset.imageHeight    } : {}),
       projectorViewport: nextProjVp,
-      mapBlob:    blob,
+      // For animated handouts, the broadcast carries the STARTING frame
+      // (background + noAnimate elements) so the player + projector
+      // display the pre-reveal state. The handout_reveal message
+      // delivered separately on Start Animation carries the final
+      // frame for the transition. broadcastBlob computed above is
+      // either the starting frame (handouts with animation enabled)
+      // or the final frame (everything else).
+      mapBlob:    broadcastBlob,
       transition: this.buildTransitionConfig(),
     });
 
@@ -958,7 +1067,7 @@ export class GMApp {
     this.editTextMapBtn             = q<HTMLButtonElement>('#edit-textmap-btn');
     this.editTextMapBtn.addEventListener('click', () => void this._editCurrentTextMap());
     this.startAnimationBtn          = q<HTMLButtonElement>('#start-animation-btn');
-    this.startAnimationBtn.addEventListener('click', () => void this._triggerHandoutReveal());
+    this.startAnimationBtn.addEventListener('click', () => void this._onAnimationButtonClick());
     this.revealProgressEl           = q<HTMLElement>('#reveal-progress');
     this.revealProgressBarEl        = q<HTMLElement>('#reveal-progress-bar');
     this.packNameInput              = q<HTMLInputElement>('#pack-name-input');
@@ -1581,6 +1690,11 @@ export class GMApp {
    *  re-target). Consumed and cleared by the next buildTransitionConfig
    *  call. */
   private _suppressNextMapTransition = false;
+  /** One-shot flag — set true before a loadMap() when we don't want
+   *  the handout autoReveal to fire (Reset Animation path: we want the
+   *  GM to manually click Start again rather than the reveal replaying
+   *  the moment they reset). */
+  private _suppressAutoReveal = false;
 
   private bindUIControls(): void {
     this.mapAssetModal = new MapAssetModal(

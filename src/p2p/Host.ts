@@ -153,6 +153,14 @@ export class Host {
       this.lastSoundboardActive = [];
       this.lastPositionalActive.clear();
     }
+    if (msg.type === 'handout_reveal') {
+      // Update the cached blob to the FINAL frame so a late-joining
+      // player sees the revealed state (rather than the starting
+      // frame that was cached at map_change time). They miss the
+      // transition itself, but that's natural for late joiners — same
+      // as they'd miss any in-flight effect.
+      this.lastMapBlob = msg.mapBlob;
+    }
     if (msg.type === 'positional_play' && msg.dataUrl) {
       this.lastPositionalActive.set(msg.markerId, {
         markerId: msg.markerId, assetId: msg.assetId, loop: msg.loop, volume: msg.volume, dataUrl: msg.dataUrl,
