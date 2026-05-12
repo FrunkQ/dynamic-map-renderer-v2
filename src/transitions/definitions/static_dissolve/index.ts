@@ -52,7 +52,7 @@ export default {
     },
   ],
 
-  async play({ overlay, snapshot, params }) {
+  async play({ overlay, snapshot, params, signal }) {
     const duration  = (params['duration']   as number) ?? 700;
     const blockSize = Math.round((params['block_size'] as number) ?? 8);
     const ctx = overlay.getContext('2d')!;
@@ -88,6 +88,6 @@ export default {
           if (Math.random() < 0.35) ctx.fillRect(0, y, w, 1);
         }
       }
-    }, linear);
+    }, linear, signal);
   },
 } satisfies TransitionDefinition;

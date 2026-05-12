@@ -17,6 +17,21 @@ import type { TransitionDefinition } from './schema.ts';
  */
 export class TransitionEngine {
   private overlay: HTMLCanvasElement;
+  /** AbortController for the currently-running transition, if any.
+   *  cancel() aborts it so the in-flight animation can bail; the next
+   *  run() opens a fresh one. */
+  private _abort: AbortController | null = null;
+
+  /** Abort any in-flight transition. Tells the rAF loop in animate()
+   *  to exit on its next tick, and clears the overlay so the receiver
+   *  jumps to whatever's already loaded underneath (typically the
+   *  final frame, which the caller will have just decoded). */
+  cancel(): void {
+    this._abort?.abort();
+    this._abort = null;
+    const ctx = this.overlay.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, this.overlay.width, this.overlay.height);
+  }
 
   constructor(overlayCanvas: HTMLCanvasElement) {
     this.overlay = overlayCanvas;
@@ -59,9 +74,17 @@ export class TransitionEngine {
   ): Promise<void> {
     // 'none' skips the overlay entirely — just apply immediately
     if (def.id === 'none') {
+      // Also abort any in-flight transition so a cancel (which
+      // arrives as a 'none' transition) actually stops the prior one.
+      this.cancel();
       await applyChange();
       return;
     }
+
+    // Cancel any previous in-flight transition before starting this one.
+    this._abort?.abort();
+    this._abort = new AbortController();
+    const signal = this._abort.signal;
 
     // Sync overlay dimensions to the source canvas CSS size before capturing
     this.overlay.width  = sourceCanvas.clientWidth  || window.innerWidth;
@@ -88,12 +111,14 @@ export class TransitionEngine {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
     try {
-      await def.play({ overlay: this.overlay, snapshot, params });
+      await def.play({ overlay: this.overlay, snapshot, params, signal });
     } finally {
       // Always clear the overlay when done, even if the transition threw
       const ctx2 = this.overlay.getContext('2d');
       if (ctx2) ctx2.clearRect(0, 0, this.overlay.width, this.overlay.height);
       snapshot.close();
+      // Clear the controller reference if this is the run that owns it.
+      if (this._abort?.signal === signal) this._abort = null;
     }
   }
 }

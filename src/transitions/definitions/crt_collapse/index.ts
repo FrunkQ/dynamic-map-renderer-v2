@@ -52,7 +52,7 @@ export default {
     },
   ],
 
-  async play({ overlay, snapshot, params }) {
+  async play({ overlay, snapshot, params, signal }) {
     const duration  = (params['duration']   as number) ?? 1200;
     const glowMix   = (params['glow_color'] as number) ?? 0;
     const ctx = overlay.getContext('2d')!;
@@ -78,7 +78,8 @@ export default {
 
       ctx.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, y0, w, stripH);
       drawPhosphorGlow(ctx, y0, stripH, w, t);
-    }, easeIn);
+    }, easeIn, signal);
+    if (signal?.aborted) return;
 
     // ── Brief pause at the bright dot ──────────────────────────────────────
     await animate(duration * 0.1, (t) => {
@@ -95,7 +96,8 @@ export default {
       radial.addColorStop(1,   'transparent');
       ctx.fillStyle = radial;
       ctx.fillRect(w / 2 - dotR * 4, h / 2 - dotR * 4, dotR * 8, dotR * 8);
-    });
+    }, undefined, signal);
+    if (signal?.aborted) return;
 
     // ── Phase 2: Expand from dot to full new frame (already loaded underneath) ──
     await animate(duration * 0.45, (t) => {
@@ -115,6 +117,6 @@ export default {
       ctx.restore();
 
       drawPhosphorGlow(ctx, y0, stripH, w, 1 - t);
-    }, easeOut);
+    }, easeOut, signal);
   },
 } satisfies TransitionDefinition;

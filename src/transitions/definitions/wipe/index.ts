@@ -81,7 +81,7 @@ export default {
     },
   ],
 
-  async play({ overlay, snapshot, params }) {
+  async play({ overlay, snapshot, params, signal }) {
     const direction = (params['direction'] as string) ?? 'left';
     const duration  = (params['duration']  as number) ?? 600;
     const ctx = overlay.getContext('2d')!;
@@ -173,6 +173,6 @@ export default {
       if (['left', 'right', 'up', 'down'].includes(direction)) {
         drawEdge(ctx, direction, t, w, h);
       }
-    }, easeInOut);
+    }, easeInOut, signal);
   },
 } satisfies TransitionDefinition;

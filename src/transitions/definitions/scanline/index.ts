@@ -36,7 +36,7 @@ export default {
     },
   ],
 
-  async play({ overlay, snapshot, params }) {
+  async play({ overlay, snapshot, params, signal }) {
     const duration = (params['duration'] as number) ?? 2000;
     const cols     = Math.max(1, Math.round((params['cols'] as number) ?? 80));
     const rows     = Math.max(1, Math.round((params['rows'] as number) ?? 25));
@@ -107,6 +107,6 @@ export default {
 
         ctx.restore();
       }
-    }, linear);
+    }, linear, signal);
   },
 } satisfies TransitionDefinition;

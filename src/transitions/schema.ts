@@ -38,6 +38,11 @@ export interface TransitionContext {
   overlay: HTMLCanvasElement;
   snapshot: ImageBitmap;
   params: Record<string, number | string>;
+  /** Aborted when the engine receives a cancel() request — typically
+   *  because the GM clicked Cancel Animation on a handout reveal.
+   *  Transition implementations should pass this through to animate()
+   *  so the rAF loop exits early on cancellation. */
+  signal?: AbortSignal;
 }
 
 // ─── Transition Definition ────────────────────────────────────────────────────

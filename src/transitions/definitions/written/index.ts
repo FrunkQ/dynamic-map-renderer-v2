@@ -56,7 +56,7 @@ export default {
     },
   ],
 
-  async play({ overlay, snapshot, params }) {
+  async play({ overlay, snapshot, params, signal }) {
     const duration  = (params['duration']   as number) ?? 30000;
     const lineWidth = (params['line_width'] as number) ?? 8;
     const direction = (params['direction']  as string) ?? 'down';
@@ -153,6 +153,6 @@ export default {
       }
 
       ctx.restore();
-    }, linear);
+    }, linear, signal);
   },
 } satisfies TransitionDefinition;
