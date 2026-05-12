@@ -54,7 +54,7 @@ import type { MotionOverlay } from '../rendering/MarkerLayer.ts';
 import { MarkerOverlay } from '../rendering/MarkerOverlay.ts';
 import { CanvasTransform } from '../utils/CanvasTransform.ts';
 import { attachGestures } from '../utils/Gestures.ts';
-import type { SessionState, StoredMap, TransitionConfig, FilterState, Marker, MarkerIconData, AudioAsset, AudioRole, MotionRole, ProjectorConnection, ProjectorViewport, GMMessage } from '../types.ts';
+import type { SessionState, StoredMap, TransitionConfig, FilterState, Marker, MarkerIconData, AudioAsset, AudioRole, MotionRole, ProjectorConnection, ProjectorViewport, ViewState, GMMessage } from '../types.ts';
 import { defaultProjectorViewport } from '../types.ts';
 import QRCode from 'qrcode';
 
@@ -123,6 +123,18 @@ export class GMApp {
    *  with the marker selection: selecting a rect deselects any marker,
    *  and selecting a marker deselects any rect. */
   private _selectedViewport: 'player' | 'projector' | null = null;
+
+  /**
+   * Snapshots taken when the user applies a one-shot snap action so a
+   * second click on the same button restores the previous state.
+   * Cleared on rect deselect, on a manual move/resize, and whenever
+   * the snap is reverted. Player has both an aspect-lock undo (16:9
+   * snap) and a maximise undo (full-map snap); projector only has a
+   * maximise undo (snap to full-map projection mode).
+   */
+  private _playerAspectUndo:    ViewState         | null = null;
+  private _playerMaxRestore:    ViewState         | null = null;
+  private _projectorMaxRestore: ProjectorViewport | null = null;
   /**
    * Connected projectors keyed by their per-window clientId. The first entry
    * (insertion order) is the primary; everyone after is a monitor. The map
@@ -397,7 +409,15 @@ export class GMApp {
       };
       return;
     }
-    if (phase === 'end') { this._rectResizeDrag = null; return; }
+    if (phase === 'end') {
+      this._rectResizeDrag = null;
+      // A user-driven size change invalidates the aspect-lock undo
+      // baseline and the maximise restore — both would return to a
+      // state that's no longer what the user expects.
+      this._clearSnapUndo('player');
+      this._refreshRectOverlays();
+      return;
+    }
     if (!this._rectResizeDrag || !norm) return;
     const a = this._rectResizeDrag.anchor;
     // Cursor is the new bottom-right corner; clamp inside map bounds
@@ -474,16 +494,27 @@ export class GMApp {
           color:      '#ff8c00',
           selected:   playerSelected,
           showResize: playerSelected,
+          ...(playerSelected ? {
+            aspectLock: this._playerAspectUndo ? 'undo' : 'apply',
+            maximise:   this._playerMaxRestore ? 'maximised' : 'normal',
+          } : {}),
         }
       : null,
     );
     // Projector rect — only when a projector is connected + calibrated.
+    // Maximise on the projector toggles projection mode ('full' ↔ 'scaled'),
+    // so it's only meaningful when the map is calibrated (locked to 'full'
+    // otherwise per A8.3).
     const projBounds = this.projectorEditor?.getRectBounds() ?? null;
+    const projMaxAvailable = projSelected && this._isActiveMapCalibrated();
     this._markerOverlay.updateRect('projector', projBounds
       ? {
           ...projBounds,
           color:    '#22c55e',
           selected: projSelected,
+          ...(projMaxAvailable ? {
+            maximise: this._projectorMaxRestore ? 'maximised' : 'normal',
+          } : {}),
         }
       : null,
     );
@@ -492,12 +523,116 @@ export class GMApp {
   /**
    * Set the active viewport selection. Enforces mutual exclusion with the
    * marker selection (selecting a viewport clears any selected marker).
-   * Pass null to deselect.
+   * Pass null to deselect. Deselecting also clears any pending snap-undo
+   * state — per the spec, "if the marker is unselected it resets and the
+   * 16:9 icon will be back."
    */
   private _selectViewport(kind: 'player' | 'projector' | null): void {
     if (this._selectedViewport === kind) return;
+    const prev = this._selectedViewport;
     this._selectedViewport = kind;
+    if (prev !== null) this._clearSnapUndo(prev);
     if (kind !== null) this.markerEditor?.selectById(null);
+    this._refreshRectOverlays();
+  }
+
+  /** Discard snap-undo / max-restore state for a rect — called when the
+   *  rect is moved, resized, or deselected so the undo button doesn't
+   *  promise to revert to a state the user has since changed. */
+  private _clearSnapUndo(kind: 'player' | 'projector'): void {
+    if (kind === 'player') {
+      this._playerAspectUndo = null;
+      this._playerMaxRestore = null;
+    } else {
+      this._projectorMaxRestore = null;
+    }
+  }
+
+  /**
+   * 16:9 snap (player only). First click: record the current view, snap
+   * the rect to physical 16:9 keeping the short edge fixed. Second click:
+   * revert to the recorded state. Any move/resize between clicks clears
+   * the undo so the button starts fresh.
+   */
+  private _handleRectAspect(kind: 'player' | 'projector'): void {
+    if (kind !== 'player') return;
+    const current = this.viewportEditor.getView();
+    if (this._playerAspectUndo) {
+      // Undo path — restore the pre-snap view.
+      const restore = this._playerAspectUndo;
+      this._playerAspectUndo = null;
+      this.viewportEditor.setView(restore);
+      this.state.setView(restore);
+      this._refreshRectOverlays();
+      return;
+    }
+    // Apply path. Compute 16:9 in PHYSICAL space (accounts for map aspect)
+    // and keep the short edge fixed so the user gets a sensible-sized
+    // rect either way around. centerX/Y stay put.
+    const mapAspect = this.mapAspectRatio || 1;
+    const physW = current.viewNW * mapAspect;
+    const physH = current.viewNH;
+    let newViewNW = current.viewNW;
+    let newViewNH = current.viewNH;
+    if (physW > physH) {
+      // Wide rect — short edge is height; widen to 16:9. Cap so the rect
+      // can't escape the map (clamp newViewNW ≤ 1).
+      const targetPhysW = physH * 16 / 9;
+      newViewNW = Math.min(1, targetPhysW / mapAspect);
+    } else {
+      // Tall (or square) rect — short edge is width; lengthen height.
+      const targetPhysH = physW * 9 / 16;
+      newViewNH = Math.min(1, targetPhysH);
+    }
+    this._playerAspectUndo = current;
+    const next: ViewState = { ...current, viewNW: newViewNW, viewNH: newViewNH };
+    this.viewportEditor.setView(next);
+    this.state.setView(next);
+    this._refreshRectOverlays();
+  }
+
+  /**
+   * Maximise toggle. For the player rect: first click expands to full map
+   * and saves the prior view; second click restores. For the projector
+   * rect: first click flips projection mode to 'full' (saving prior mode);
+   * second click restores. Calibration lock from A8.3 prevents the
+   * restore from re-entering 'scaled' when calibration is missing — the
+   * mode-button logic will quietly keep it on 'full' until the map is
+   * calibrated.
+   */
+  private _handleRectMaximise(kind: 'player' | 'projector'): void {
+    if (kind === 'player') {
+      const current = this.viewportEditor.getView();
+      if (this._playerMaxRestore) {
+        const restore = this._playerMaxRestore;
+        this._playerMaxRestore = null;
+        this.viewportEditor.setView(restore);
+        this.state.setView(restore);
+      } else {
+        this._playerMaxRestore = current;
+        const next: ViewState = { ...current, centerX: 0.5, centerY: 0.5, viewNW: 1, viewNH: 1 };
+        this.viewportEditor.setView(next);
+        this.state.setView(next);
+      }
+      this._refreshRectOverlays();
+      return;
+    }
+    // Projector
+    const currentVp = this.projectorEditor.getViewport();
+    if (this._projectorMaxRestore) {
+      const restore = this._projectorMaxRestore;
+      this._projectorMaxRestore = null;
+      this.projectorEditor.setViewport(restore);
+      this.state.setProjectorViewport(restore);
+      this.host.broadcast({ type: 'projector_viewport_update', payload: restore });
+    } else {
+      this._projectorMaxRestore = currentVp;
+      const next: ProjectorViewport = { ...currentVp, mode: 'full' };
+      this.projectorEditor.setViewport(next);
+      this.state.setProjectorViewport(next);
+      this.host.broadcast({ type: 'projector_viewport_update', payload: next });
+    }
+    this.refreshProjectionModeButtons();
     this._refreshRectOverlays();
   }
 
@@ -523,7 +658,15 @@ export class GMApp {
       this._rectMoveDrag = { kind, startNorm: norm, startCenter };
       return;
     }
-    if (phase === 'end') { this._rectMoveDrag = null; return; }
+    if (phase === 'end') {
+      const dragKind = this._rectMoveDrag?.kind ?? kind;
+      this._rectMoveDrag = null;
+      // User-driven move invalidates the snap-back baselines (same
+      // reasoning as the resize end path).
+      this._clearSnapUndo(dragKind);
+      this._refreshRectOverlays();
+      return;
+    }
     if (!this._rectMoveDrag || !norm) return;
     const dx = norm.x - this._rectMoveDrag.startNorm.x;
     const dy = norm.y - this._rectMoveDrag.startNorm.y;
@@ -2717,6 +2860,8 @@ export class GMApp {
         },
         onRectMoveDrag:   (kind, clientX, clientY, phase) => this._handleRectMoveDrag(kind, clientX, clientY, phase),
         onRectResizeDrag: (kind, clientX, clientY, phase) => this._handleRectResizeDrag(kind, clientX, clientY, phase),
+        onRectAspectLock: (kind) => this._handleRectAspect(kind),
+        onRectMaximise:   (kind) => this._handleRectMaximise(kind),
       });
       this.markerEditor.layer.setOverlay(overlay);
       this._markerOverlay = overlay;
