@@ -328,7 +328,14 @@
     </section>
 
     <section class="panel" id="view-panel">
-      <button type="button" class="panel-title" aria-expanded="false">Player View</button>
+      <div class="panel-header">
+        <button type="button" class="panel-title" aria-expanded="false">Player View</button>
+        <span class="panel-toggle-icon" aria-hidden="true" title="Visual bypass"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Broadcast to players. Off = show placeholder (the GM is faffing)">
+          <input type="checkbox" id="player-broadcast-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <div class="panel-body" hidden>
         <p class="view-hint">The orange outline on the map shows what players currently see.</p>
         <div id="view-default-actions" class="viewport-actions">
@@ -346,7 +353,14 @@
     </section>
 
     <section class="panel" id="projection-panel">
-      <button type="button" class="panel-title" aria-expanded="false">Projection View</button>
+      <div class="panel-header">
+        <button type="button" class="panel-title" aria-expanded="false">Projection View</button>
+        <span class="panel-toggle-icon" aria-hidden="true" title="Visual bypass"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Broadcast to projector. Off = show placeholder (the GM is faffing)">
+          <input type="checkbox" id="projection-broadcast-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <div class="panel-body" hidden>
 
         <!-- Always-visible projector picker. Off / setup / + add new. -->

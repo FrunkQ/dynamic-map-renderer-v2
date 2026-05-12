@@ -1,0 +1,38 @@
+/**
+ * Cheerful one-liners shown when the GM has paused the player or
+ * projector view ("Hold on while the GM faffs..."). One is picked at
+ * random each time the bypass toggle flips on, so repeated short
+ * pauses don't read the same line twice in a row.
+ */
+export const FAFF_MESSAGES: readonly string[] = [
+  'Hold on… I dropped the dice. Again.',
+  'Help… I don’t know how this software works!',
+  'Please enjoy our free advert for Mappadux.',
+  'No image? A goblin did it and ran away!',
+  'And the GM said, "And let there be darkness…"',
+  'Just consulting the rulebook. It’s a thick one.',
+  'Negotiating with the cat to get off the map.',
+  'Refilling the GM’s tea / coffee / whisky.',
+  'Briefly questioning every life choice.',
+  'The dragon needed a bathroom break.',
+  'Stat blocks don’t read themselves.',
+  'Quickly retconning what just happened…',
+  'Plotting your characters’ inevitable demise.',
+  'Pretending I prepared for this.',
+  'Inventing a new NPC on the fly.',
+  'Yes, you can roll for that. Hold on…',
+  'Loading more dramatic music.',
+  'A wild Rules Lawyer appears!',
+  'Looking up that obscure spell you cast.',
+  'Adjusting the encounter difficulty. Quietly.',
+];
+
+let _lastIndex = -1;
+export function randomFaffMessage(): string {
+  if (FAFF_MESSAGES.length === 0) return '';
+  let i = Math.floor(Math.random() * FAFF_MESSAGES.length);
+  // Avoid immediate repeats so back-to-back pauses feel varied.
+  if (i === _lastIndex) i = (i + 1) % FAFF_MESSAGES.length;
+  _lastIndex = i;
+  return FAFF_MESSAGES[i]!;
+}

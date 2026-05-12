@@ -46,6 +46,7 @@ import { MarkerInteractionRegistry, type InteractionContext } from './markerInte
 import { PositionalAudioInteraction } from './markerInteractions/PositionalAudioInteraction.ts';
 import { MotionTrackerInteraction } from './markerInteractions/MotionTrackerInteraction.ts';
 import { TrackerAudioPlayer } from '../audio/TrackerAudioPlayer.ts';
+import { randomFaffMessage } from '../utils/faffMessages.ts';
 import { blobToDataUrl } from '../utils/blob.ts';
 import type { MotionOverlay } from '../rendering/MarkerLayer.ts';
 import type { SessionState, StoredMap, TransitionConfig, FilterState, Marker, MarkerIconData, AudioAsset, AudioRole, MotionRole, ProjectorConnection, ProjectorViewport, GMMessage } from '../types.ts';
@@ -1986,6 +1987,23 @@ export class GMApp {
         this.host.broadcast({ type: 'positional_mute_all', muted });
       });
     }
+    // Player View + Projection View bypass switches. Off broadcasts a
+    // full-screen "GM is faffing" placeholder to the downstream view;
+    // the underlying map state keeps streaming so flipping back is
+    // instant. A fresh funny message is picked on every off-flip.
+    this._wireBroadcastBypass('#player-broadcast-toggle', 'player');
+    this._wireBroadcastBypass('#projection-broadcast-toggle', 'projector');
+  }
+
+  private _wireBroadcastBypass(selector: string, target: 'player' | 'projector'): void {
+    const toggle = document.querySelector<HTMLInputElement>(selector);
+    if (!toggle) return;
+    toggle.addEventListener('click', (e) => e.stopPropagation());
+    toggle.addEventListener('change', () => {
+      const show = !toggle.checked;
+      const message = show ? randomFaffMessage() : '';
+      this.host.broadcast({ type: 'view_placeholder', target, show, message });
+    });
   }
 
   /** Sample the top-left pixel of a map image blob and return a CSS hex colour. */

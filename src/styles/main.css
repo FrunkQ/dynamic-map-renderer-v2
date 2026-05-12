@@ -906,6 +906,42 @@ option.select-option--add {
    right: var(--space-md) regardless of this padding. */
 .panel-header:has(.panel-toggle) .panel-title { padding-right: 100px; }
 
+/* "Hold on while the GM faffs…" overlay used on player and projector
+   views when the GM toggles the broadcast bypass on those panels. Sits
+   above everything, hides whatever the receiver was last showing, and
+   carries a random funny one-liner from FAFF_MESSAGES. */
+.faff-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 2rem;
+  background: radial-gradient(circle at center, #1a2540 0%, #0a0f1d 75%);
+  color: #f3e9d2;
+  font-family: ui-serif, Georgia, 'Times New Roman', serif;
+  text-align: center;
+  pointer-events: none;
+}
+.faff-overlay__logo {
+  width: 160px;
+  height: 160px;
+  border-radius: 24px;
+  filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.5));
+  opacity: 0.92;
+}
+.faff-overlay__message {
+  font-size: clamp(1.25rem, 2.5vw, 2rem);
+  font-style: italic;
+  max-width: min(80vw, 720px);
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  opacity: 0.92;
+}
+
 .toggle-switch--warning input:checked + .toggle-slider {
   background: rgba(249, 115, 22, 0.25);
   border-color: #f97316;

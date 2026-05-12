@@ -470,6 +470,12 @@ export class PlayerApp {
         break;
       }
 
+      case 'view_placeholder': {
+        if (msg.target !== 'player') break;
+        this._showFaffOverlay(msg.show, msg.message);
+        break;
+      }
+
       case 'tracker_scan': {
         this._trackerScans.push({
           startTime: performance.now(),
@@ -639,6 +645,29 @@ export class PlayerApp {
       }
       this._sbPausedByMute.clear();
     }
+  }
+
+  private _faffOverlayEl: HTMLElement | null = null;
+
+  /** Renders the "Hold on while the GM faffs…" placeholder over the map.
+   *  The map continues to update underneath so resuming is instant. */
+  private _showFaffOverlay(show: boolean, message: string): void {
+    if (!show) {
+      this._faffOverlayEl?.remove();
+      this._faffOverlayEl = null;
+      return;
+    }
+    if (!this._faffOverlayEl) {
+      const el = document.createElement('div');
+      el.className = 'faff-overlay';
+      el.innerHTML =
+        '<img class="faff-overlay__logo" src="/icons/icon-192.png" alt="Mappadux" />' +
+        '<div class="faff-overlay__message"></div>';
+      document.body.appendChild(el);
+      this._faffOverlayEl = el;
+    }
+    const msgEl = this._faffOverlayEl.querySelector<HTMLElement>('.faff-overlay__message');
+    if (msgEl) msgEl.textContent = message;
   }
 
   private _showMuteIndicator(): void {

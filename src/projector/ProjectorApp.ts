@@ -419,6 +419,11 @@ export class ProjectorApp {
         window.close();
         break;
       }
+      case 'view_placeholder': {
+        if (msg.target !== 'projector') break;
+        this._showFaffOverlay(msg.show, msg.message);
+        break;
+      }
       case 'view_update': {
         // The projector computes its own crop from calibration and ignores
         // the player's centre / viewN dimensions, but the background colour
@@ -435,6 +440,30 @@ export class ProjectorApp {
       }
       // audio messages: intentionally ignored — audio plays on player / GM only.
     }
+  }
+
+  private _faffOverlayEl: HTMLElement | null = null;
+
+  /** Renders the "Hold on while the GM faffs…" placeholder over the
+   *  projector output. The map continues to update underneath so the
+   *  resume is instant. */
+  private _showFaffOverlay(show: boolean, message: string): void {
+    if (!show) {
+      this._faffOverlayEl?.remove();
+      this._faffOverlayEl = null;
+      return;
+    }
+    if (!this._faffOverlayEl) {
+      const el = document.createElement('div');
+      el.className = 'faff-overlay';
+      el.innerHTML =
+        '<img class="faff-overlay__logo" src="/icons/icon-192.png" alt="Mappadux" />' +
+        '<div class="faff-overlay__message"></div>';
+      document.body.appendChild(el);
+      this._faffOverlayEl = el;
+    }
+    const msgEl = this._faffOverlayEl.querySelector<HTMLElement>('.faff-overlay__message');
+    if (msgEl) msgEl.textContent = message;
   }
 
   /**

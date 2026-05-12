@@ -489,6 +489,17 @@ export interface MsgPositionalMuteAll {
   muted: boolean;
 }
 
+/** GM paused / resumed broadcasting visuals to a downstream view. Players
+ *  / projectors render a full-screen "Hold on while the GM faffs…"
+ *  placeholder when `show` is true; underlying map state still updates
+ *  beneath the overlay so resuming is instant. */
+export interface MsgViewPlaceholder {
+  type:    'view_placeholder';
+  target:  'player' | 'projector';
+  show:    boolean;
+  message: string;
+}
+
 /** GM changed volume on a playing slot — update without interrupting playback */
 export interface MsgSoundboardVolume {
   type: 'soundboard_volume';
@@ -668,6 +679,7 @@ export type GMMessage =
   | MsgPositionalVolume
   | MsgPositionalStop
   | MsgPositionalMuteAll
+  | MsgViewPlaceholder
   | MsgTrackerScan
   | MsgTrackerBlob
   | MsgProjectorHello
