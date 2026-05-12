@@ -95,6 +95,10 @@
           <div id="reveal-progress-bar" class="reveal-progress-bar"></div>
         </div>
         <button id="fix-missing-map-btn" class="btn btn--danger btn--sm btn--full" hidden>⚠ Fix Missing Map</button>
+        <div class="param-row">
+          <label for="view-bg-colour">Background Colour</label>
+          <input type="color" id="view-bg-colour" value="#000000" title="Background colour behind the map (letterbox fill)" />
+        </div>
         <div class="btn-row">
           <button id="clone-map-btn"  class="btn btn--ghost   btn--sm">Clone Map</button>
           <button id="delete-map-btn" class="btn btn--danger  btn--sm">Delete Map</button>
@@ -436,16 +440,6 @@
       <div class="panel-body" hidden>
         <select id="filter-select" class="select-full"></select>
         <div id="filter-params" class="filter-params-container"></div>
-      </div>
-    </section>
-
-    <section class="panel" id="bg-colour-panel">
-      <button type="button" class="panel-title" aria-expanded="false">Background Colour</button>
-      <div class="panel-body" hidden>
-        <div class="param-row">
-          <label for="view-bg-colour">Colour</label>
-          <input type="color" id="view-bg-colour" value="#000000" title="Background colour behind the map" />
-        </div>
       </div>
     </section>
 
