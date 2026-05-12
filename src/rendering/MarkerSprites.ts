@@ -41,7 +41,10 @@ interface MarkerEntry {
   mesh:     THREE.Mesh;
   texture:  THREE.CanvasTexture;
   canvas:   OffscreenCanvas;
-  pxSize:   number;
+  /** Canvas dimensions — kept rectangular so the icon's aspect is honoured
+   *  without the texture needing to stretch onto a non-matching plane. */
+  pxW:      number;
+  pxH:      number;
   /** Hash of marker state — used to skip redraws when nothing visible changed. */
   digest:   string;
 }
@@ -85,28 +88,38 @@ export class MarkerSprites {
 
       const aspect = getMarkerAspect(m, iconCache);
 
-      // Per-marker canvas size: scales with m.size and DPR, clamped.
-      const targetPx = Math.min(MAX_PX, Math.max(
-        MIN_PX,
-        Math.ceil(m.size * BASE_PX_PER_SIZE * dpr),
-      ));
-
       // World-space plane footprint. halfH_world = 0.025 × m.size matches
       // the legacy formula H × 0.025 × m.size on the aspect:1 plane. Apply
       // PAD_FACTOR so the plane covers the badges / label / selection ring,
-      // not just the icon body.
+      // not just the icon body. halfW scales with the ICON aspect so a wide
+      // dragon icon renders into a wide plane (and a wide canvas, below) —
+      // no texture stretching needed.
       const halfH_world = 0.025 * m.size * PAD_FACTOR;
       const halfW_world = halfH_world * aspect;
       const planeW = halfW_world * 2;
       const planeH = halfH_world * 2;
 
+      // Canvas matches the plane aspect so texture sampling is 1:1 with no
+      // horizontal stretching. The longer side is bucketed for memory
+      // sanity; the shorter side falls out of aspect.
+      const longPx = Math.min(MAX_PX, Math.max(
+        MIN_PX,
+        Math.ceil(m.size * BASE_PX_PER_SIZE * dpr),
+      ));
+      const canvasW = aspect >= 1
+        ? longPx
+        : Math.max(1, Math.round(longPx * aspect));
+      const canvasH = aspect >= 1
+        ? Math.max(1, Math.round(longPx / aspect))
+        : longPx;
+
       let entry = this.entries.get(m.id);
 
       // Create or resize. Texture is recreated whenever canvas dims change;
       // the geometry is rebuilt whenever the plane dims change (cheap).
-      if (!entry || entry.pxSize !== targetPx) {
+      if (!entry || entry.pxW !== canvasW || entry.pxH !== canvasH) {
         if (entry) this._disposeEntry(entry);
-        const canvas  = new OffscreenCanvas(targetPx, targetPx);
+        const canvas  = new OffscreenCanvas(canvasW, canvasH);
         const texture = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter  = THREE.LinearFilter;
@@ -119,11 +132,11 @@ export class MarkerSprites {
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.z = 0.02;
         this.group.add(mesh);
-        entry = { mesh, texture, canvas, pxSize: targetPx, digest: '' };
+        entry = { mesh, texture, canvas, pxW: canvasW, pxH: canvasH, digest: '' };
         this.entries.set(m.id, entry);
       } else {
-        // Same canvas size, possibly different plane size (size changed in a
-        // way that didn't push us into a new pxSize bucket).
+        // Same canvas dims, possibly different plane size (size changed in a
+        // way that didn't push us into a new pxW/H bucket).
         const g = entry.mesh.geometry as THREE.PlaneGeometry;
         const params = g.parameters;
         if (params.width !== planeW || params.height !== planeH) {
@@ -139,7 +152,7 @@ export class MarkerSprites {
         m.audioMuted ? 1 : 0, m.motionMuted ? 1 : 0,
         m.roles.audio ?? '', m.roles.motion ?? '',
         isGM ? 1 : 0,
-        targetPx,
+        canvasW, canvasH,
       ].join('|');
 
       if (entry.digest !== digest || dprChanged) {
@@ -187,8 +200,9 @@ export class MarkerSprites {
 
   /**
    * Draw the marker centered in its own canvas. `r` is the icon-body
-   * half-height in canvas pixels; the surrounding PAD_FACTOR margin is
-   * already baked into pxSize so badges / labels / selection ring fit.
+   * half-height in canvas pixels — driven by the canvas's shorter side
+   * so a wide-aspect rectangular canvas still fits the icon comfortably
+   * (PAD_FACTOR margin reserved for badges / label / ring).
    */
   private _redraw(
     entry: MarkerEntry,
@@ -196,13 +210,14 @@ export class MarkerSprites {
     isGM: boolean,
     iconCache: Map<string, ImageBitmap> | undefined,
   ): void {
-    const { canvas, pxSize } = entry;
+    const { canvas, pxW, pxH } = entry;
     const ctx = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
-    ctx.clearRect(0, 0, pxSize, pxSize);
+    ctx.clearRect(0, 0, pxW, pxH);
 
-    const r = pxSize / (2 * PAD_FACTOR);
+    const shortSide = Math.min(pxW, pxH);
+    const r = shortSide / (2 * PAD_FACTOR);
     // selection is always false here — selection rings only render on the
     // GM HTML canvas (MarkerLayer), never on the broadcast textures.
-    drawMarkerShape(ctx, m, pxSize / 2, pxSize / 2, r, false, isGM, iconCache);
+    drawMarkerShape(ctx, m, pxW / 2, pxH / 2, r, false, isGM, iconCache);
   }
 }
