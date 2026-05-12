@@ -64,6 +64,25 @@ const DEFAULT_CONFIG: TextMapConfig = {
 
 const FALLBACK_FONTS: ReadonlyArray<string> = ['Cinzel', 'Georgia', 'Times New Roman'];
 
+// Inline Lucide-style SVGs used for the clipboard icon cluster. Stroked
+// monochrome, currentColor, 14px viewport — matches the rest of the
+// app's flat-icon aesthetic.
+const SVG_SCISSORS =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" '
+  + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+  + '<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/>'
+  + '<circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></svg>';
+const SVG_COPY =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" '
+  + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+  + '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>'
+  + '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+const SVG_CLIPBOARD =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" '
+  + 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+  + '<rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>'
+  + '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>';
+
 type DragMode = 'move' | 'resize';
 
 interface DragState {
@@ -296,7 +315,7 @@ export class TextMapEditor {
     const tb = document.createElement('div');
     tb.className = 'txt-map-toolbar';
 
-    // ── LEFT — Name ──────────────────────────────────────────────────────
+    // ── LEFT — Name + add buttons + clipboard icon buttons ──────────────
     const left = document.createElement('div');
     left.className = 'txt-map-toolbar-left';
     const nameLabel = document.createElement('label');
@@ -307,17 +326,16 @@ export class TextMapEditor {
     nameInput.className = 'txt-map-input txt-map-toolbar-name';
     nameInput.value = this.name;
     nameInput.placeholder = 'Handout name';
+    // Suppress browser autofill — without this it'll happily offer up
+    // phone numbers / email / whatever else it's stored for a generic
+    // text input on this page, dropping that overlay right beside the
+    // Name input.
+    nameInput.autocomplete = 'off';
+    nameInput.setAttribute('autocomplete', 'off');
+    nameInput.name = 'mappadux-handout-name';
+    nameInput.spellcheck = false;
     nameInput.addEventListener('input', () => { this.name = nameInput.value; });
     left.append(nameLabel, nameInput);
-    tb.appendChild(left);
-
-    // ── CENTRE — add-element buttons + contextual element controls ──────
-    // The element-specific controls slot in here when something is
-    // selected (see _renderElementToolbar). When nothing is selected,
-    // only the three add buttons sit in the centre.
-    const centre = document.createElement('div');
-    centre.className = 'txt-map-toolbar-centre';
-    tb.appendChild(centre);
 
     // + Text
     const addText = document.createElement('button');
@@ -325,18 +343,18 @@ export class TextMapEditor {
     addText.className = 'btn btn--ghost btn--sm';
     addText.textContent = '+ Text';
     addText.addEventListener('click', () => this._addNewText());
-    centre.appendChild(addText);
+    left.appendChild(addText);
 
-    // + Image
+    // + Image Asset — pick from the Small Assets Library.
     const addImg = document.createElement('button');
     addImg.type = 'button';
     addImg.className = 'btn btn--ghost btn--sm';
-    addImg.textContent = '+ Image';
+    addImg.textContent = '+ Image Asset';
     addImg.title = 'Pick an image from the Small Assets Library';
     addImg.addEventListener('click', () => void this._addNewImage());
-    centre.appendChild(addImg);
+    left.appendChild(addImg);
 
-    // + Upload New Image
+    // + Upload New Image — load a raster file straight from disk.
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
     uploadBtn.className = 'btn btn--ghost btn--sm';
@@ -352,16 +370,32 @@ export class TextMapEditor {
       fileInput.value = ''; // allow the same file to be picked again
     });
     uploadBtn.addEventListener('click', () => fileInput.click());
-    centre.append(uploadBtn, fileInput);
+    left.append(uploadBtn, fileInput);
 
-    // Per-element controls slot — populated by _renderElementToolbar
-    // when an element is selected. Lives inside the centre group so
-    // contextual controls appear next to the add buttons, not on the
-    // far right with the layout controls.
+    // Clipboard icon group — same actions as Ctrl+C / Ctrl+X / Ctrl+V
+    // on the selected element. Inline monochrome Lucide-style SVGs.
+    const clipGroup = document.createElement('div');
+    clipGroup.className = 'txt-map-toolbar-clipboard';
+    const cutBtn   = this._mkIconBtn(SVG_SCISSORS,  'Cut selected element (Ctrl+X)',
+      () => { if (this.selectedId) { this._copySelected(); this._deleteSelected(); } });
+    const copyBtn  = this._mkIconBtn(SVG_COPY,      'Copy selected element (Ctrl+C)',
+      () => { if (this.selectedId) this._copySelected(); });
+    const pasteBtn = this._mkIconBtn(SVG_CLIPBOARD, 'Paste element (Ctrl+V)',
+      () => { if (this.clipboardElement) this._pasteFromClipboard(); });
+    clipGroup.append(cutBtn, copyBtn, pasteBtn);
+    left.appendChild(clipGroup);
+
+    tb.appendChild(left);
+
+    // ── CENTRE — per-element contextual controls (when something is
+    //            selected). Empty + hidden when nothing is selected.
+    const centre = document.createElement('div');
+    centre.className = 'txt-map-toolbar-centre';
     const elSlot = document.createElement('div');
     elSlot.className = 'txt-map-toolbar-element';
     elSlot.hidden = true;
     centre.appendChild(elSlot);
+    tb.appendChild(centre);
     this.elementToolbarEl = elSlot;
 
     // ── RIGHT — Layout group (paper size + colour) ──────────────────────
@@ -432,6 +466,19 @@ export class TextMapEditor {
     input.value = value;
     input.addEventListener('input', () => onInput(input.value));
     return input;
+  }
+
+  /** Build a small icon button — inline monochrome SVG, ghost-style
+   *  background. Used for the cut/copy/paste cluster next to the add
+   *  buttons. */
+  private _mkIconBtn(svg: string, title: string, onClick: () => void): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn--ghost btn--sm txt-map-icon-btn';
+    b.title = title;
+    b.innerHTML = svg;
+    b.addEventListener('click', onClick);
+    return b;
   }
 
   // (page-level font picker removed — font is a per-element concern.
@@ -509,6 +556,9 @@ export class TextMapEditor {
         e.preventDefault();
         this._select(el.id);
       });
+      // Apply persisted tint so currentColor inside the SVG resolves
+      // correctly on mount, not just on edit.
+      if (el.tint) host.style.color = el.tint;
     }
     host.appendChild(body);
 
@@ -588,8 +638,8 @@ export class TextMapEditor {
     if (!el) { tb.hidden = true; return; }
     tb.hidden = false;
 
-    if (el.type === 'text') this._buildTextElementToolbar(tb, el);
-    else if (el.type === 'image') this._buildImageElementToolbar(tb, el);
+    if (el.type === 'text')  this._buildTextElementToolbar(tb, el);
+    if (el.type === 'image') this._buildImageElementToolbar(tb, el);
   }
 
   private _buildTextElementToolbar(tb: HTMLElement, el: TextMapTextElement): void {
@@ -631,26 +681,19 @@ export class TextMapEditor {
     });
     tb.append(size, sizeVal);
 
-    // Font family — pulls from the Image Library's font registry (same
-    // list as the page-level default). "Default" entry returns to the
-    // page-level font.
+    // Font family — pulls from the Image Library's font registry.
     tb.appendChild(this._toolbarLabel('Font'));
     const fontSel = document.createElement('select');
     fontSel.className = 'txt-map-input';
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = '';
-    defaultOpt.textContent = `(use page default: ${this.cfg.fontFamily})`;
-    fontSel.appendChild(defaultOpt);
+    const currentFamily = el.fontFamily ?? this.cfg.fontFamily;
     for (const f of this.libraryFonts.length > 0 ? this.libraryFonts : FALLBACK_FONTS) {
       const o = document.createElement('option');
       o.value = f; o.textContent = f;
-      if (f === el.fontFamily) o.selected = true;
+      if (f === currentFamily) o.selected = true;
       fontSel.appendChild(o);
     }
-    if (!el.fontFamily) defaultOpt.selected = true;
     fontSel.addEventListener('change', () => {
-      if (fontSel.value === '') delete el.fontFamily;
-      else el.fontFamily = fontSel.value;
+      el.fontFamily = fontSel.value;
       const node = this.elementNodes.get(el.id);
       const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
       if (body) this._applyTextStyle(body, el);
@@ -682,11 +725,27 @@ export class TextMapEditor {
     tb.appendChild(alignWrap);
   }
 
-  private _buildImageElementToolbar(tb: HTMLElement, _el: TextMapElement): void {
-    tb.appendChild(this._toolbarLabel('Image'));
+  private _buildImageElementToolbar(tb: HTMLElement, el: TextMapElement): void {
+    if (el.type !== 'image') return;
+    // Tint colour — applied to the host element's `color` so any inline
+    // SVG inside (Lucide / game-icons) using currentColor takes this
+    // colour. Has no visible effect on raster bitmaps; harmless to show
+    // anyway. The rasteriser persists this via el.tint.
+    tb.appendChild(this._toolbarLabel('Colour'));
+    const colour = document.createElement('input');
+    colour.type = 'color';
+    colour.className = 'txt-map-color';
+    colour.title = 'Tint colour for monochrome SVG icons (no effect on raster images)';
+    colour.value = el.tint ?? this.cfg.textColor;
+    colour.addEventListener('input', () => {
+      el.tint = colour.value;
+      const node = this.elementNodes.get(el.id);
+      if (node) (node as HTMLElement).style.color = colour.value;
+    });
+    tb.appendChild(colour);
     const hint = document.createElement('span');
     hint.className = 'txt-map-element-hint';
-    hint.textContent = 'Drag the bottom-right corner to resize. Drag the top bar to move.';
+    hint.textContent = 'Drag handle bar to move • corner to resize';
     tb.appendChild(hint);
   }
 

@@ -1766,6 +1766,25 @@ option.select-option--add {
   letter-spacing: 0.04em;
   margin-right: 4px;
 }
+/* Cut / Copy / Paste cluster — sits next to the add buttons in the
+   left section. Thin vertical divider in front of it so the icon
+   buttons feel separate from the labelled +Text/+Image/+Upload group. */
+.txt-map-toolbar-clipboard {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding-left: var(--space-sm);
+  border-left: 1px solid var(--border);
+}
+.txt-map-icon-btn {
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .txt-map-canvas-wrap {
   flex: 1;
   display: grid;
