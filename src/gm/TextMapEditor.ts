@@ -856,10 +856,12 @@ export class TextMapEditor {
       void renderAssetToInlineHtml(el.assetId, { sizeEm: 1 }).then((html) => {
         if (html) body.innerHTML = html;
       });
-      body.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        this._select(el.id);
-      });
+      // Image bodies are draggable from ANYWHERE in their frame.
+      // There's no text-edit mode to compete with, and the cursor
+      // already advertises grab. Without this, an image dragged to the
+      // page edge becomes unrecoverable because the drag-bar handle
+      // (positioned outside the element bounds) sits offscreen.
+      body.addEventListener('pointerdown', (e) => this._startDrag(e, el.id, 'move'));
       // Apply persisted tint so currentColor inside the SVG resolves
       // correctly on mount, not just on edit.
       if (el.tint) host.style.color = el.tint;
