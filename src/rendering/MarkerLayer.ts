@@ -540,30 +540,37 @@ export class MarkerLayer {
     this._updateOverlay(W, H, frustumH);
   }
 
-  /** Build the screen-space label set for the overlay layer. */
+  /** Build the screen-space overlay set (label + GM handles). */
   private _updateOverlay(W: number, H: number, frustumH: number): void {
     if (!this._overlay) return;
     void W;
-    const { _markers: markers, _view: view, _isGM: isGM } = this;
+    const { _markers: markers, _view: view, _isGM: isGM, _iconCache: iconCache } = this;
     const rect = this.canvas.getBoundingClientRect();
     const pxToCssX = rect.width  / Math.max(1, this.canvas.width);
     const pxToCssY = rect.height / Math.max(1, this.canvas.height);
     const items: OverlayItem[] = [];
     for (const m of markers) {
       const pos = this.project(m.position.x, m.position.y, view);
-      if (!pos) {
-        items.push({ id: m.id, text: '', x: 0, y: 0, visible: false });
-        continue;
-      }
-      // Icon's bottom edge in canvas-buffer px, then converted to CSS px
-      // so the label hangs just below the icon regardless of DPR.
-      const halfH = (H / frustumH) * 0.025 * m.size;
+      if (!pos) continue; // off-screen markers are simply absent from the overlay
+      const halfHBuf = (H / frustumH) * 0.025 * m.size;
+      const aspect   = getMarkerAspect(m, iconCache);
+      const halfWBuf = halfHBuf * aspect;
       items.push({
-        id:      m.id,
-        text:    m.label ?? '',
-        x:       pos.x * pxToCssX,
-        y:       (pos.y + halfH + 4) * pxToCssY,
-        visible: !!m.label && (isGM || !!m.showLabel) && !m.hidden,
+        id:               m.id,
+        anchorX:          pos.x    * pxToCssX,
+        anchorY:          pos.y    * pxToCssY,
+        iconHalfWidthPx:  halfWBuf * pxToCssX,
+        iconHalfHeightPx: halfHBuf * pxToCssY,
+        label: {
+          text:    m.label ?? '',
+          visible: !!m.label && (isGM || !!m.showLabel) && !m.hidden,
+        },
+        // GM only — players and projector get labels but no handles.
+        // Locked markers also skip the handle (A3b6 will replace it with
+        // a lock glyph instead).
+        ...(isGM && !m.locked
+          ? { moveHandle: { visible: true, interactive: true } }
+          : {}),
       });
     }
     this._overlay.update(items);

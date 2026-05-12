@@ -152,8 +152,8 @@ body.gm-view {
 }
 
 /* HTML screen-space layer sitting on top of every canvas. Used for marker
-   labels (and, in A3b, GM marker handles / badges / selection widgets).
-   Default to click-through; per-child opt back in with pointer-events:auto. */
+   labels and GM marker handles / badges / selection widgets.
+   Default to click-through; per-child opts back in with pointer-events:auto. */
 .marker-overlay {
   position: absolute;
   inset: 0;
@@ -168,11 +168,22 @@ body.projector-view .marker-overlay {
   z-index: 5;
 }
 
-/* Per-marker name label. Positioned via `left`/`top` on the icon's bottom
-   edge centre; transform recenters horizontally. Screen-fixed CSS px so the
-   label stays readable regardless of map zoom. */
+/* Per-marker container. Positioned at the icon centre (left/top set by JS);
+   children offset from there using --icon-half-w / --icon-half-h CSS vars
+   so badge/label positioning automatically tracks the rendered icon size. */
+.marker-overlay-item {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Per-marker name label below the icon, centered horizontally. Screen-fixed
+   CSS px so it stays readable regardless of map zoom. */
 .marker-label {
   position: absolute;
+  top:  calc(var(--icon-half-h, 0px) + 4px);
+  left: 0;
   transform: translate(-50%, 0);
   color: #fff;
   font: bold 11px var(--font-system, system-ui, sans-serif);
@@ -185,6 +196,44 @@ body.projector-view .marker-overlay {
     0 0 3px rgba(0, 0, 0, 0.8);
   pointer-events: none;
   user-select: none;
+}
+
+/* Common base for all clickable marker handles (move, badges, resize, rotate).
+   Touch-friendly minimum size; mid-tone dark fill so they read on any map. */
+.marker-handle {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(20, 24, 36, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  user-select: none;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 80ms ease;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
+.marker-handle:hover {
+  background: rgba(40, 50, 70, 0.95);
+  color: var(--accent, #fff);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+.marker-handle:active {
+  transform: translate(-50%, -50%) scale(0.94);
+}
+.marker-handle svg { display: block; }
+
+/* Move handle — sits just outside the icon's top-right corner. */
+.marker-handle--move {
+  top:  calc(-1 * var(--icon-half-h, 0px) - 4px);
+  left: calc(var(--icon-half-w, 0px) + 4px);
+  cursor: move;
 }
 #projector-viewport-canvas {
   position: absolute;

@@ -3,6 +3,7 @@ import { Renderer } from '../rendering/Renderer.ts';
 import { MarkerTexture } from '../rendering/MarkerTexture.ts';
 import { MarkerSprites } from '../rendering/MarkerSprites.ts';
 import { MarkerOverlay, type OverlayItem } from '../rendering/MarkerOverlay.ts';
+import { getMarkerAspect } from '../rendering/MarkerLayer.ts';
 import {
   type ProjectorSetup,
   getActiveSetup,
@@ -520,19 +521,24 @@ export class ProjectorApp {
   private _updateMarkerOverlay(): void {
     if (!this.currentMarkers) { this.markerOverlay.update([]); return; }
     const aspect = this.renderer.mapAspect;
+    const scale  = this.renderer.worldToScreenScale();
     const items: OverlayItem[] = [];
     for (const m of this.currentMarkers) {
-      if (m.hidden) { items.push({ id: m.id, text: '', x: 0, y: 0, visible: false }); continue; }
+      if (m.hidden) continue;
       const wx = (m.position.x - 0.5) * aspect;
-      const wy = -(m.position.y - 0.5) - 0.025 * m.size;
+      const wy = -(m.position.y - 0.5);
       const s  = this.renderer.worldToScreen(wx, wy);
-      if (!s)  { items.push({ id: m.id, text: '', x: 0, y: 0, visible: false }); continue; }
+      if (!s) continue;
+      const iconAspect = getMarkerAspect(m, this.playerIconCache);
+      const halfHWorld = 0.025 * m.size;
+      const halfWWorld = halfHWorld * iconAspect;
       items.push({
-        id:      m.id,
-        text:    m.label ?? '',
-        x:       s.x,
-        y:       s.y + 4,
-        visible: !!m.label && !!m.showLabel,
+        id:               m.id,
+        anchorX:          s.x,
+        anchorY:          s.y,
+        iconHalfWidthPx:  halfWWorld * scale.pxPerWorldX,
+        iconHalfHeightPx: halfHWorld * scale.pxPerWorldY,
+        label: { text: m.label ?? '', visible: !!m.showLabel && !!m.label },
       });
     }
     this.markerOverlay.update(items);

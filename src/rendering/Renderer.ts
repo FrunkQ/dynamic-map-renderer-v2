@@ -504,6 +504,20 @@ export class Renderer {
     };
   }
 
+  /**
+   * CSS pixels per world-unit on each axis at the current camera + canvas
+   * size. Used by the marker overlay to convert icon half-extents
+   * (expressed in world units) to screen px for handle positioning.
+   */
+  worldToScreenScale(): { pxPerWorldX: number; pxPerWorldY: number } {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return { pxPerWorldX: 0, pxPerWorldY: 0 };
+    return {
+      pxPerWorldX: rect.width  / Math.max(0.0001, this.camera.right - this.camera.left),
+      pxPerWorldY: rect.height / Math.max(0.0001, this.camera.top   - this.camera.bottom),
+    };
+  }
+
   // ─── Reveal-overlay (handout animation) ────────────────────────────────
   //
   // Sits as an extra plane mesh INSIDE the main scene (above the map +

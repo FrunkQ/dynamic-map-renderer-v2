@@ -2324,12 +2324,21 @@ export class GMApp {
       () => this.iconCache,
     );
 
-    // HTML overlay layer for marker labels (and, in A3b, handles + badges).
-    // MarkerLayer drives label positions out of _draw — pass the overlay
-    // in once and it stays in sync with every redraw.
+    // HTML overlay layer for marker labels + move handle (A3b1).
+    // MarkerLayer drives positions out of _draw — pass the overlay in once
+    // and it stays in sync with every redraw. The overlay's move-handle
+    // drag is routed back to MarkerEditor's overlay-drag methods.
     const overlayEl = document.getElementById('marker-overlay');
     if (overlayEl) {
-      this.markerEditor.layer.setOverlay(new MarkerOverlay(overlayEl));
+      const overlay = new MarkerOverlay(overlayEl);
+      overlay.setHandlers({
+        onMoveDrag: (id, clientX, clientY, phase) => {
+          if (phase === 'start')      this.markerEditor.beginOverlayDrag(id, clientX, clientY);
+          else if (phase === 'move')  this.markerEditor.updateOverlayDrag(clientX, clientY);
+          else                        this.markerEditor.endOverlayDrag();
+        },
+      });
+      this.markerEditor.layer.setOverlay(overlay);
     }
 
     this.markerEditor.setFogSelectCallback((pos) => this.fogEditor.trySelectAt(pos));

@@ -253,4 +253,64 @@ export class MarkerEditor {
       y: (e.clientY - rect.top)  * (this.layer.canvas.height / rect.height),
     };
   }
+
+  /** Same conversion as _toCanvas but for raw clientX/Y (used by overlay
+   *  handles since they don't have access to a PointerEvent in canvas space). */
+  private _clientToCanvas(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.layer.canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (this.layer.canvas.width  / rect.width),
+      y: (clientY - rect.top)  * (this.layer.canvas.height / rect.height),
+    };
+  }
+
+  // ── Overlay-driven drag (move handle on each marker) ─────────────────────
+
+  /** State for the active drag started from an overlay move handle. */
+  private _overlayDrag: { id: string; offsetX: number; offsetY: number } | null = null;
+
+  /**
+   * Begin a marker move-drag initiated from the screen-space move handle.
+   * Records the offset between the cursor and the marker centre so the
+   * marker stays glued to the cursor at that offset for the rest of the
+   * drag — instead of snapping its centre under the cursor (which would
+   * feel jumpy when the user grabbed the corner handle).
+   */
+  beginOverlayDrag(markerId: string, clientX: number, clientY: number): void {
+    const marker = this.markers.find((m) => m.id === markerId);
+    if (!marker || marker.locked) return;
+    const { x, y }   = this._clientToCanvas(clientX, clientY);
+    const cursorNorm = this.layer.unproject(x, y, null);
+    this._overlayDrag = {
+      id:      markerId,
+      offsetX: marker.position.x - cursorNorm.x,
+      offsetY: marker.position.y - cursorNorm.y,
+    };
+    if (this.selectedId !== markerId) {
+      this.selectedId = markerId;
+      this._onSelect(marker);
+    }
+    this._redraw();
+  }
+
+  /** Drive the in-flight overlay drag from a pointer move on the handle. */
+  updateOverlayDrag(clientX: number, clientY: number): void {
+    if (!this._overlayDrag) return;
+    const { x, y }   = this._clientToCanvas(clientX, clientY);
+    const cursorNorm = this.layer.unproject(x, y, null);
+    const newX = Math.max(0, Math.min(1, cursorNorm.x + this._overlayDrag.offsetX));
+    const newY = Math.max(0, Math.min(1, cursorNorm.y + this._overlayDrag.offsetY));
+    const id   = this._overlayDrag.id;
+    this.markers = this.markers.map((m) =>
+      m.id !== id ? m : { ...m, position: { x: newX, y: newY } },
+    );
+    this._redraw();
+  }
+
+  /** End the overlay drag and broadcast the final position. */
+  endOverlayDrag(): void {
+    if (!this._overlayDrag) return;
+    this._overlayDrag = null;
+    this._onChange([...this.markers]);
+  }
 }
