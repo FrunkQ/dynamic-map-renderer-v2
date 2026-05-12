@@ -306,6 +306,15 @@ body.projector-view .marker-overlay {
 .marker-overlay-rect {
   position: absolute;
   pointer-events: none; /* rect body itself is non-interactive — handles only */
+  transition: background-color 120ms ease;
+}
+/* Selected rect: subtle white veil fill + slightly thicker dashed outline
+   keyed off --rect-color so the selection reads as "this rect" without
+   competing with the marching ants underneath. */
+.marker-overlay-rect--selected {
+  background: rgba(255, 255, 255, 0.05);
+  outline: 2px dashed var(--rect-color, rgba(255, 255, 255, 0.9));
+  outline-offset: -1px;
 }
 .marker-overlay-rect .marker-handle {
   background: var(--rect-color, rgba(20, 24, 36, 0.85));

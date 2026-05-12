@@ -514,6 +514,9 @@ export class GMApp {
     const norm  = this.renderer.canvasCssToMapNorm(clientX - wrect.left, clientY - wrect.top);
     if (phase === 'start') {
       if (!norm) return;
+      // Dragging the move handle is also a selection gesture — matches
+      // the marker move-handle pattern (drag = move + select).
+      this._selectViewport(kind);
       const startCenter = kind === 'player'
         ? { x: this.viewportEditor.getView().centerX,    y: this.viewportEditor.getView().centerY    }
         : { x: this.projectorEditor.getViewport().centerX, y: this.projectorEditor.getViewport().centerY };
