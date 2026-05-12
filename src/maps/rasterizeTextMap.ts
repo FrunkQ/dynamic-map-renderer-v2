@@ -155,7 +155,10 @@ export async function rasterizeTextMap(
   // Resolve config → element array (synthesises a full-page text
   // element from the legacy bodyHtml if needed). Each element is
   // rendered as a positioned div inside the foreignObject.
-  const elements = ensureTextMapElements(cfg);
+  // staticOnly filters to elements flagged noAnimate — used to produce
+  // the "starting frame" for handout reveal animations.
+  let elements = ensureTextMapElements(cfg);
+  if (opts.staticOnly) elements = elements.filter((e) => e.noAnimate === true);
   // Build the inner HTML for the page in well-formed XHTML so
   // SVG-foreignObject (parsed as strict XML when loaded via <img>)
   // accepts it. HTML5 parses then XMLSerializer emits — `<br>`, `<img>`,
@@ -172,9 +175,27 @@ export async function rasterizeTextMap(
   // sideways. Embedding adds an external fetch (Google Fonts CSS + the
   // woff2 binary) and a big base64 blob inside the SVG — any failure
   // mode in that chain shouldn't break the rasterisation altogether.
+  //
+  // Collect EVERY font family used on the page — the page default plus
+  // any per-element overrides. Previously we only embedded the page
+  // default, so an element using a different font (e.g. Seaweed Script
+  // when the page default was Cinzel) fell back to system serif in the
+  // rasterised PNG even though the editor preview rendered it
+  // correctly. Embedding all unique families in parallel keeps the
+  // rasterise consistent with the preview.
+  const fontFamilies = new Set<string>();
+  if (cfg.fontFamily) fontFamilies.add(cfg.fontFamily);
+  for (const el of elements) {
+    if (el.type === 'text' && el.fontFamily) fontFamilies.add(el.fontFamily);
+  }
   let fontFaceCss: string | null = null;
   try {
-    fontFaceCss = await withTimeout(fetchFontFaceForSvg(cfg.fontFamily), 6000);
+    const blocks = await withTimeout(
+      Promise.all([...fontFamilies].map((f) => fetchFontFaceForSvg(f))),
+      6000,
+    );
+    const joined = blocks.filter((b): b is string => !!b).join('\n');
+    fontFaceCss = joined.length > 0 ? joined : null;
   } catch (err) {
     console.warn('[rasterizeTextMap] font embedding skipped:', err);
   }

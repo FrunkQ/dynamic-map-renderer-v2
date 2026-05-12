@@ -2,24 +2,23 @@ import type { TransitionDefinition } from '../../schema.ts';
 import { animate, linear } from '../../easing.ts';
 
 /**
- * "Written" — slow top-to-bottom soft reveal, like ink appearing on a
- * page line by line. The snapshot of the OLD frame (background +
- * "Don't animate" elements, in a handout reveal) is wiped away from
- * the top down with a soft gradient band; the new frame underneath
+ * "Slow Fade Wipe" — slow top-to-bottom soft reveal, like an ink edge
+ * gently descending across the page. The snapshot of the OLD frame
+ * (background + "Don't animate" elements, in a handout reveal) is
+ * wiped away with a soft gradient band; the new frame underneath
  * (background + ALL elements) shows through behind the band.
  *
- * Visually: a horizontal "ink edge" descends down the page at constant
- * speed; above it the page reads as fully revealed, below it the
- * starting frame is still showing, with a soft fade in between
- * (controlled by Line Width).
+ * Visually: a horizontal "ink edge" descends at constant speed; above
+ * it the page reads as fully revealed, below it the starting frame is
+ * still showing, with a soft fade in between.
  *
- * Designed for handout reveals — gentle, readable, evokes hand-
- * writing being inked across the page. Default 30s for a slow reveal
- * that feels deliberate; user can shorten or extend per handout.
+ * Originally called "Written" — renamed because it doesn't actually
+ * write line-by-line. The proper handwriting-style reveal lives in the
+ * `written_reveal` transition instead.
  */
 export default {
   id: 'written',
-  label: 'Written',
+  label: 'Slow Fade Wipe',
   forHandout: true,
   params: [
     {
@@ -31,16 +30,6 @@ export default {
       step: 1000,
       default: 30000,
       unit: 'ms',
-    },
-    {
-      type: 'slider',
-      id: 'line_width',
-      label: 'Line width',
-      min: 2,
-      max: 30,
-      step: 1,
-      default: 8,
-      unit: '% of page',
     },
     {
       type: 'select',
@@ -58,17 +47,17 @@ export default {
 
   async play({ overlay, snapshot, params, signal }) {
     const duration  = (params['duration']   as number) ?? 30000;
-    const lineWidth = (params['line_width'] as number) ?? 8;
     const direction = (params['direction']  as string) ?? 'down';
     const ctx = overlay.getContext('2d')!;
     const { width: w, height: h } = overlay;
 
-    // Soft-band half-thickness in pixels, computed from "% of page" along
-    // the sweep axis so the visual softness reads the same on different
-    // aspect ratios.
+    // Soft-band half-thickness — hardcoded at ~8% of the sweep axis.
+    // The line_width param was removed: this transition just needs a
+    // gentle fade-edge, not a configurable width (that's the
+    // written_reveal transition's job).
     const isVertical = direction === 'down' || direction === 'up';
     const axisLen    = isVertical ? h : w;
-    const bandHalf   = Math.max(2, Math.round((lineWidth / 100) * axisLen * 0.5));
+    const bandHalf   = Math.max(2, Math.round(0.08 * axisLen * 0.5));
 
     await animate(duration, (t) => {
       ctx.clearRect(0, 0, w, h);

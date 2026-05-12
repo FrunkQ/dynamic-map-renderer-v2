@@ -467,7 +467,7 @@ export class TextMapEditor {
     // Working copy — committed back to cfg.animation on Save.
     const cur: TextMapAnimation = this.cfg.animation
       ? { ...this.cfg.animation, params: { ...this.cfg.animation.params } }
-      : { enabled: false, autoReveal: true, transitionId: 'written', params: {} };
+      : { enabled: false, autoReveal: true, transitionId: 'written_reveal', params: {} };
 
     // Header
     const header = document.createElement('div');
