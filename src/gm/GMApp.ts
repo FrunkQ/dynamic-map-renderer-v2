@@ -416,6 +416,10 @@ export class GMApp {
       const next = { ...vp, centerX: newCx, centerY: newCy };
       this.projectorEditor.setViewport(next);
       this.state.setProjectorViewport(next);
+      // Mirror the projectorEditor.onChange path — the broadcast doesn't
+      // fan out from state.setProjectorViewport on its own, so the
+      // projector wouldn't actually see the new viewport without this.
+      this.host.broadcast({ type: 'projector_viewport_update', payload: next });
     }
     this._refreshRectOverlays();
   }
@@ -1787,6 +1791,8 @@ export class GMApp {
       this._refreshProjectionPanelMode();
       this.refreshProjectorSetupSelect();
       this._updatePlayerCount();
+      // Projector gone → green chrome should disappear too.
+      this._refreshRectOverlays();
       return;
     }
     if (msg.type === 'projector_hello') {
@@ -1830,6 +1836,10 @@ export class GMApp {
       // window can position itself correctly.
       const vp = this.state.snapshot().projectorViewport;
       if (vp) this.host.broadcast({ type: 'projector_viewport_update', payload: vp });
+
+      // A projector just appeared — its green rect now has bounds, so push
+      // the overlay handles in.
+      this._refreshRectOverlays();
     }
   }
 
