@@ -2625,6 +2625,12 @@ export class GMApp {
     });
     // Monitors care about the primary's resulting view fraction — push it so they re-crop.
     this._broadcastRoles(false);
+    // The projector rect's bounds depend on mapPixelsPerSquare we only
+    // resolved a moment ago (asset metadata is read async from IndexedDB),
+    // so getRectBounds() returned null during renderer.onMapLoaded's
+    // refresh. Re-push now that the calibration data has landed —
+    // otherwise the green chrome stays missing after a map swap.
+    this._refreshRectOverlays();
   }
 
   private setStatus(msg: string, level: 'ok' | 'warn' | 'error'): void {
