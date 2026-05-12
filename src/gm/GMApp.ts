@@ -678,11 +678,13 @@ export class GMApp {
     for (const m of maps) {
       const opt = document.createElement('option');
       opt.value = m.id;
-      // Prefix text-map (handout) entries with [T] so they stand out
-      // from regular image maps in the dropdown — matches the same
-      // distinguisher used on the My Library row.
+      // Tag text-map (handout) entries with a trailing [T] so they
+      // stand out from regular image maps in the dropdown — matches
+      // the My Library row's marker. Trailing (not leading) so an
+      // alphabetical sort by name still works the way the GM expects;
+      // a leading "[T]" would cluster every handout under '['.
       const isTextMap = sourceByAssetId.get(m.mapAssetId) === 'text-map';
-      opt.textContent = isTextMap ? `[T] ${m.name}` : m.name;
+      opt.textContent = isTextMap ? `${m.name} [T]` : m.name;
       this.mapSelect.appendChild(opt);
     }
 
