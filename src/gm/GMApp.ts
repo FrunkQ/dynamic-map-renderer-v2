@@ -21,7 +21,7 @@ import { TransitionPanel } from '../transitions/TransitionPanel.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode } from '../p2p/roomCode.ts';
-import { saveSession, loadSession, getAllMaps, getMap, deleteMap, clearAssetLibraries, clearEverything } from '../storage/db.ts';
+import { saveSession, loadSession, getAllMaps, getMap, saveMap, deleteMap, clearAssetLibraries, clearEverything } from '../storage/db.ts';
 import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY } from '../storage/localSettings.ts';
 import { seedDefaultMaps } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
@@ -718,8 +718,16 @@ export class GMApp {
     const result = await new TextMapEditor().open({ existing: asset });
     if (!result) return;
     MapAssetStore.invalidateRuntimeCache(asset.id);
-    await this.loadMap(storedMap);
-    await this.populateMapList(); // refresh the dropdown in case name changed
+    // Propagate the asset's new filename into the StoredMap so the
+    // dropdown + the Name input under it reflect the new name. The
+    // editor only touches the asset record; the StoredMap.name is
+    // what GMApp reads when rendering both surfaces.
+    if (storedMap.name !== result.asset.filename) {
+      await saveMap({ ...storedMap, name: result.asset.filename });
+    }
+    const refreshed = await getMap(currentId);
+    if (refreshed) await this.loadMap(refreshed);
+    await this.populateMapList();
   }
 
   private async loadMap(map: StoredMap): Promise<void> {

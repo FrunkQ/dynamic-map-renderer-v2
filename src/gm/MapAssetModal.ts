@@ -8,7 +8,7 @@ import { detectMapScale, autoApplyPatch } from '../utils/detectMapScale.ts';
 import { ScaleCandidateDialog } from './ScaleCandidateDialog.ts';
 import { generateId } from '../utils/id.ts';
 import { TextMapEditor } from './TextMapEditor.ts';
-import { saveMap as _saveMap } from '../storage/db.ts';
+import { saveMap as _saveMap, getAllMaps } from '../storage/db.ts';
 
 /** Standard licence options shared with the audio editor. */
 const LICENSE_OPTIONS: string[] = [
@@ -42,6 +42,23 @@ type MapPickedCallback = (map: StoredMap) => void;
  *   • Upload tab: drop file → save MapAsset with blob → create StoredMap
  *     and fire onPick (single-file, so the auto-use flow is sensible).
  */
+/** Friendly aspect-ratio label for a handout's textMap config. Falls
+ *  back to "W:H" when the ratio isn't one of the named presets. Kept
+ *  inline here rather than coupling MapAssetModal to TextMapEditor's
+ *  ASPECT_PRESETS — only a handful of pairs ever come through. */
+function textMapAspectLabel(w: number, h: number): string {
+  if (w === 210 && h === 297) return 'A4 Portrait';
+  if (w === 297 && h === 210) return 'A4 Landscape';
+  if (w === 16  && h === 9)   return '16:9';
+  if (w === 9   && h === 16)  return '9:16';
+  if (w === 4   && h === 3)   return '4:3';
+  if (w === 3   && h === 4)   return '3:4';
+  if (w === 1   && h === 1)   return '1:1';
+  if (w === 2   && h === 3)   return '2:3';
+  if (w === 3   && h === 2)   return '3:2';
+  return `${w}:${h}`;
+}
+
 export class MapAssetModal {
   private el!: HTMLElement;
   private onPick: MapPickedCallback;
@@ -316,8 +333,13 @@ export class MapAssetModal {
         ? ''
         : `<button class="btn btn--ghost btn--xs map-scale-btn" title="Calibrate map scale (pixels per 5' square)">Scale</button>`;
 
-    const dimText = isTextMap
-      ? `${asset.imageWidth ?? '?'} × ${asset.imageHeight ?? '?'} handout`
+    // For handouts: show the aspect ratio rather than the rasterised
+    // pixel dimensions. The pixel size is an implementation detail
+    // (longSide × cfg.width/height) and changes with whatever the
+    // rasteriser uses internally; the GM cares about the shape they
+    // picked in the editor (16:9, A4 Portrait, etc.).
+    const dimText = isTextMap && asset.textMap
+      ? `${textMapAspectLabel(asset.textMap.width, asset.textMap.height)} handout`
       : asset.imageWidth && asset.imageHeight
         ? `${asset.imageWidth} × ${asset.imageHeight}`
         : asset.source;
@@ -438,11 +460,19 @@ export class MapAssetModal {
     row.querySelector<HTMLButtonElement>('.map-edit-textmap-btn')?.addEventListener('click', async () => {
       const result = await new TextMapEditor().open({ existing: asset });
       if (!result) return;
-      // The element-canvas editor saves with the original asset id (no
-      // duplicate to clean up). Older code here deleted result.asset.id —
-      // but since that id IS asset.id now, that delete was wiping the
-      // freshly-saved handout. Bug: edit + save → handout vanished.
+      // Editor saves with the original id — invalidate the rasterisation
+      // cache so the next load picks up the edits.
       MapAssetStore.invalidateRuntimeCache(asset.id);
+      // Propagate the new asset filename into every StoredMap that
+      // references this handout (typically a 1:1 mapping). Without
+      // this the dropdown + the Name input under it keep showing the
+      // pre-edit name even after Save.
+      const allMaps = await getAllMaps();
+      for (const m of allMaps) {
+        if (m.mapAssetId === asset.id && m.name !== result.asset.filename) {
+          await _saveMap({ ...m, name: result.asset.filename });
+        }
+      }
       await this._renderLibrary();
       this.onAssetUpdated(asset.id);
     });
