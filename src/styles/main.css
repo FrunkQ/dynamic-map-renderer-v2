@@ -422,6 +422,11 @@ body.player-view #renderer-canvas {
   align-items: center;
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
+  /* Anchor for the chevron + toggle, both absolutely positioned in
+     the right margin so the title text stays on the left and the
+     chevron stays at the rightmost edge regardless of extra
+     right-padding added when a .panel-toggle is present. */
+  position: relative;
 }
 
 .panel-title:hover {
@@ -432,12 +437,19 @@ body.player-view #renderer-canvas {
 .panel-title::after {
   content: '▸';
   font-size: 0.65rem;
-  transition: transform 0.18s;
   flex-shrink: 0;
+  /* Pinned to the right edge so it stays in its standard place even
+     when the title's right padding is bumped to accommodate a header
+     toggle to its left. */
+  position: absolute;
+  right: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+  transition: transform 0.18s;
 }
 
 .panel-title[aria-expanded="true"]::after {
-  transform: rotate(90deg);
+  transform: translateY(-50%) rotate(90deg);
 }
 
 .panel-body {
@@ -846,9 +858,11 @@ option.select-option--add {
 .panel-toggle {
   position: absolute;
   top: 50%;
-  /* var(--space-md) for the panel-title's right padding + ~10px for
-     the chevron glyph + 8px breathing room before the toggle. */
-  right: calc(var(--space-md) + 18px);
+  /* Sit just to the LEFT of the chevron (which is anchored at right:
+     var(--space-md) by .panel-title::after). var(--space-md) for the
+     chevron's right offset + ~14px for the chevron glyph + 8px
+     breathing room before the toggle. */
+  right: calc(var(--space-md) + 22px);
   transform: translateY(-50%);
   z-index: 1;
 }
@@ -867,8 +881,10 @@ option.select-option--add {
   background: #2ecc71;
 }
 /* Panel titles need extra right padding so the title text doesn't run
-   under the toggle that sits in front of the chevron. */
-.panel:has(.panel-toggle) .panel-title { padding-right: 72px; }
+   under the toggle that sits in front of the chevron. Chevron itself
+   is absolutely positioned by .panel-title::after — it stays at
+   right: var(--space-md) regardless of this padding. */
+.panel:has(.panel-toggle) .panel-title { padding-right: 80px; }
 
 .toggle-switch--warning input:checked + .toggle-slider {
   background: rgba(249, 115, 22, 0.25);
