@@ -287,7 +287,10 @@ export class MarkerEditor {
     const centerCssY = rect.top  + center.y * (rect.height / this.layer.canvas.height);
     const dist = Math.hypot(clientX - centerCssX, clientY - centerCssY);
     const ratio = dist / this._overlayResize.initialDist;
-    const newSize = Math.max(0.2, Math.min(8, this._overlayResize.initialSize * ratio));
+    // Min 0.5 (was 0.2 from the slider era) — visual resize doesn't need
+    // a pixel-vanish floor; users wanting tiny markers can use 0.5 and a
+    // small-aspect icon. Max stays at 8 for huge creatures.
+    const newSize = Math.max(0.5, Math.min(8, this._overlayResize.initialSize * ratio));
     this.markers = this.markers.map((m) =>
       m.id !== this._overlayResize!.id ? m : { ...m, size: newSize },
     );
