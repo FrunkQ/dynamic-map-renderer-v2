@@ -55,10 +55,16 @@ export class Renderer {
   private mapTexture:   THREE.Texture | null = null;
   private fogCompositor: FogCompositor;
 
-  // Marker layer (Plane 2) — CanvasTexture from an OffscreenCanvas
+  // Marker layer split as of v2.10.29:
+  //   - Motion overlay (return blobs, scan rings) → single shared OffscreenCanvas
+  //     fed by MarkerTexture, attached as `markerMesh` at z=0.015.
+  //   - Marker icons themselves → per-marker THREE.Mesh group, attached via
+  //     setMarkerSpriteGroup() at z=0.02 (above motion blobs, so a marker
+  //     token sits on top of its own return blob).
   private markerCanvas: OffscreenCanvas | null = null;
   private markerTex:    THREE.CanvasTexture | null = null;
   private markerMesh:   THREE.Mesh | null = null;
+  private markerSpriteGroup: THREE.Object3D | null = null;
 
   // GM overlay — map border line (inverted background colour)
   private mapBorderLine: THREE.Line | null = null;
@@ -446,7 +452,8 @@ export class Renderer {
 
   /**
    * Give the renderer an OffscreenCanvas whose contents should be composited
-   * as the marker layer (Plane 2), subject to filters. Pass null to remove.
+   * as the motion-overlay layer (return blobs, scan rings), subject to
+   * filters. Pass null to remove.
    */
   setMarkerCanvas(canvas: OffscreenCanvas | null): void {
     this.markerCanvas = canvas;
@@ -454,7 +461,22 @@ export class Renderer {
     else this.needsRender = true;
   }
 
-  /** Call after re-rendering the marker canvas to upload new content to GPU. */
+  /**
+   * Attach (or remove) the marker-sprite group built by MarkerSprites.
+   * Each child is its own THREE.Mesh + CanvasTexture sized to the marker's
+   * pixel needs, so quality scales with marker size and DPR independent
+   * of the motion-overlay canvas.
+   */
+  setMarkerSpriteGroup(group: THREE.Object3D | null): void {
+    if (this.markerSpriteGroup && this.markerSpriteGroup !== group) {
+      this.scene.remove(this.markerSpriteGroup);
+    }
+    this.markerSpriteGroup = group;
+    if (group && !group.parent) this.scene.add(group);
+    this.needsRender = true;
+  }
+
+  /** Call after re-rendering the motion-overlay canvas to upload to GPU. */
   markMarkersDirty(): void {
     if (this.markerTex) this.markerTex.needsUpdate = true;
     this.needsRender = true;
@@ -662,7 +684,10 @@ export class Renderer {
       depthWrite: false,
     });
     this.markerMesh = new THREE.Mesh(geo, mat);
-    this.markerMesh.position.z = 0.02;
+    // Motion overlay sits BELOW marker sprites so a marker token visually
+    // lands on top of its own return blob (matches the GM canvas ordering
+    // where blobs are drawn before icons).
+    this.markerMesh.position.z = 0.015;
     this.scene.add(this.markerMesh);
   }
 

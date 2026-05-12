@@ -10,11 +10,11 @@
  * universally reliable across formats.
  *
  * The output preserves the source aspect ratio with the longer side capped
- * at 256 px (vector sources always render at the cap; rasters respect their
+ * at 512 px (vector sources always render at the cap; rasters respect their
  * natural dimensions so we don't waste memory upscaling a 64-px PNG). The
- * cap was raised from 64 in v2.10.28 because the v2.10.27 sizing change
- * lets markers grow to 8× — at the old cap the bitmap was upscaled 6× on
- * the projector and looked heavily pixelated.
+ * cap was raised from 256 to 512 in v2.10.29 to keep up with the new
+ * per-marker sprite layer (MarkerSprites) — large markers now render into
+ * their own 1024-px canvases and benefit from a higher-resolution source.
  *
  * For SVGs we read viewBox / width-height attributes directly because
  * `img.naturalWidth/Height` falls back to the W3C 300×150 default for
@@ -26,7 +26,7 @@ export async function decodeImageBitmap(dataUrl: string): Promise<ImageBitmap> {
   img.src = dataUrl;
   await img.decode();
 
-  const HARD_CAP = 256;
+  const HARD_CAP = 512;
   const isSvg    = dataUrl.startsWith('data:image/svg');
   const aspect   = isSvg
     ? (getSvgAspect(dataUrl) ?? 1)

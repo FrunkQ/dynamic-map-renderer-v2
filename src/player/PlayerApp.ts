@@ -3,6 +3,7 @@ import { bindFullscreenButton } from '../utils/fullscreen.ts';
 import { decodeImageBitmap } from '../utils/decodeImageBitmap.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { MarkerTexture } from '../rendering/MarkerTexture.ts';
+import { MarkerSprites } from '../rendering/MarkerSprites.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
 import { TransitionEngine } from '../transitions/TransitionEngine.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
@@ -23,6 +24,7 @@ import type { MotionOverlay, MotionOverlayScan, MotionOverlayBlob } from '../ren
 export class PlayerApp {
   private renderer!: Renderer;
   private markerTexture!: MarkerTexture;
+  private markerSprites!: MarkerSprites;
   private transitionEngine!: TransitionEngine;
   private guest!: Guest;
   private statusEl!: HTMLElement;
@@ -90,14 +92,18 @@ export class PlayerApp {
       { preserveDrawingBuffer: true },
     );
     this.markerTexture = new MarkerTexture();
+    this.markerSprites = new MarkerSprites();
     this.renderer.setMarkerCanvas(this.markerTexture.canvas);
+    this.renderer.setMarkerSpriteGroup(this.markerSprites.group);
 
     this.transitionEngine = new TransitionEngine(
       document.querySelector<HTMLCanvasElement>('#transition-canvas')!,
     );
     this.renderer.onMapLoaded = (aspect) => {
       this.markerTexture.setAspectRatio(aspect);
+      this.markerSprites.setAspectRatio(aspect);
       this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+      this.markerSprites.render(this.currentMarkers, this.playerIconCache);
       this.renderer.markMarkersDirty();
     };
     this.renderer.start();
@@ -162,7 +168,7 @@ export class PlayerApp {
         if (this.lastView) {
           this.renderer.setView(this.lastView);
         }
-        this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+        this.markerSprites.render(this.currentMarkers, this.playerIconCache);
         this.renderer.markMarkersDirty();
         this.setStatus('');
       });
@@ -236,7 +242,7 @@ export class PlayerApp {
           if (msg.iconData?.length)         await this._decodeIconData(msg.iconData);
           if (msg.soundboardAssets?.length) this._cacheSoundboardAssets(msg.soundboardAssets);
           if (msg.soundboardActive?.length) this._applySoundboardActive(msg.soundboardActive);
-          this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+          this.markerSprites.render(this.currentMarkers, this.playerIconCache);
           this.renderer.markMarkersDirty();
         })();
         this.setStatus('');
@@ -344,8 +350,9 @@ export class PlayerApp {
       case 'view_update': {
         this.lastView = msg.payload;
         this.renderer.setView(msg.payload);
-        // Re-render markers so any size-relevant state stays in sync.
-        this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+        // Re-render markers in case the view change should also retrigger
+        // sprite resizing decisions (e.g. DPR change after window move).
+        this.markerSprites.render(this.currentMarkers, this.playerIconCache);
         this.renderer.markMarkersDirty();
         break;
       }
@@ -354,7 +361,7 @@ export class PlayerApp {
         this.currentMarkers = msg.payload;
         void (async () => {
           if (msg.iconData?.length) await this._decodeIconData(msg.iconData);
-          this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+          this.markerSprites.render(this.currentMarkers, this.playerIconCache);
           this.renderer.markMarkersDirty();
         })();
         break;
@@ -532,13 +539,14 @@ export class PlayerApp {
         blobs: this._trackerBlobs,
       };
       this.markerTexture.render(this.currentMarkers, this.playerIconCache, overlay);
+      this.markerSprites.render(this.currentMarkers, this.playerIconCache);
       this.renderer.markMarkersDirty();
 
       if (this._trackerScans.length > 0 || this._trackerBlobs.length > 0) {
         this._trackerRafId = requestAnimationFrame(tick);
       } else {
         this._trackerRafId = null;
-        // Final draw with no overlay so the texture is clean
+        // Final draw with no overlay so the motion texture is clean.
         this.markerTexture.render(this.currentMarkers, this.playerIconCache);
         this.renderer.markMarkersDirty();
       }

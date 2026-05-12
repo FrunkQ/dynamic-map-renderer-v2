@@ -1,6 +1,7 @@
 import { Guest } from '../p2p/Guest.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { MarkerTexture } from '../rendering/MarkerTexture.ts';
+import { MarkerSprites } from '../rendering/MarkerSprites.ts';
 import {
   type ProjectorSetup,
   getActiveSetup,
@@ -48,6 +49,7 @@ export class ProjectorApp {
   private setup: ProjectorSetup | null = null;
   private renderer!: Renderer;
   private markerTexture!: MarkerTexture;
+  private markerSprites!: MarkerSprites;
 
   private statusEl!:        HTMLElement;
   private connectPanel!:    HTMLElement;
@@ -153,9 +155,12 @@ export class ProjectorApp {
     this.renderer = new Renderer(this.rendererCanvas);
     this.renderer.setFilterEnabled(false);
     this.markerTexture = new MarkerTexture();
+    this.markerSprites = new MarkerSprites();
     this.renderer.setMarkerCanvas(this.markerTexture.canvas);
+    this.renderer.setMarkerSpriteGroup(this.markerSprites.group);
     this.renderer.onMapLoaded = (aspect) => {
       this.markerTexture.setAspectRatio(aspect);
+      this.markerSprites.setAspectRatio(aspect);
       this._renderMarkers();
     };
     this.renderer.start();
@@ -501,7 +506,7 @@ export class ProjectorApp {
 
   private _renderMarkers(): void {
     if (!this.currentMarkers) return;
-    this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+    this.markerSprites.render(this.currentMarkers, this.playerIconCache);
     this.renderer.markMarkersDirty();
   }
 
@@ -581,7 +586,7 @@ export class ProjectorApp {
     if (mode === 'black') return;
     const view = this._computeViewState();
     this.renderer.setView(view);
-    this.markerTexture.render(this.currentMarkers, this.playerIconCache);
+    this.markerSprites.render(this.currentMarkers, this.playerIconCache);
     this.renderer.markMarkersDirty();
   }
 

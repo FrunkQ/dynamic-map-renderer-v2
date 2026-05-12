@@ -1,31 +1,31 @@
 import type { Marker } from '../types.ts';
-import { drawMarkerShape, type MotionOverlay } from './MarkerLayer.ts';
+import type { MotionOverlay } from './MarkerLayer.ts';
 
 /**
- * MarkerTexture — manages an OffscreenCanvas used as Plane 2 in the Three.js
- * scene so player markers (and the motion-tracker overlay) pass through the
- * active GLSL filter.
+ * MarkerTexture — motion overlay layer for the player + projector.
  *
- * The canvas is passed to Renderer.setMarkerCanvas() which creates its own
- * THREE.CanvasTexture from it. After each render() call the caller should
- * invoke renderer.markMarkersDirty() to upload the new pixels to the GPU.
+ * Historical note: prior to v2.10.29 this class also rendered the markers
+ * themselves into a shared 2048² OffscreenCanvas. Per-marker sprites
+ * (`MarkerSprites`) replaced that for the marker icons because the shared
+ * texture starved each marker of pixel budget at moderate zooms. This
+ * class now only draws the motion-tracker overlay (return blobs + scan
+ * rings) — those are coloured blobs and transparent strokes that don't
+ * benefit from per-marker resolution and fit comfortably in a single
+ * shared canvas. Reduced to 1024² accordingly.
  *
- * The texture is square (2048×2048) but the plane it's mapped onto is
- * `aspect × 1` world units. To keep circles looking like circles after that
- * stretch, the overlay drawing uses an X-radius scaled by 1/aspect.
+ * The canvas is wired to the renderer via `setMarkerCanvas()` and the
+ * caller must invoke `renderer.markMarkersDirty()` after each `render()`
+ * so the new pixels are uploaded to the GPU.
  *
- * Size was bumped from 1024 in v2.10.28 — at the previous resolution a
- * default-sized marker only got ~26 texture px of real estate and the GPU
- * stretch onto a calibrated projector turned that into visible chunkiness.
- * 2048 gives ~51 px per default marker (~205 at size=8), which the source
- * bitmaps (256 px longest side from decodeImageBitmap) can fill cleanly.
+ * The 1/aspect horizontal pre-squash compensates for the texture being
+ * stretched onto the aspect:1 plane — rings stay circular on screen.
  */
 export class MarkerTexture {
   readonly canvas: OffscreenCanvas;
   private aspect = 1;
 
   constructor() {
-    this.canvas = new OffscreenCanvas(2048, 2048);
+    this.canvas = new OffscreenCanvas(1024, 1024);
   }
 
   setAspectRatio(ar: number): void {
@@ -34,29 +34,15 @@ export class MarkerTexture {
 
   render(
     markers: Marker[],
-    iconCache?: Map<string, ImageBitmap>,
+    _iconCache?: Map<string, ImageBitmap>,
     motion?: MotionOverlay | null,
   ): void {
     const { width: W, height: H } = this.canvas;
-    const aspect = this.aspect;
     const ctx = this.canvas.getContext('2d')! as unknown as CanvasRenderingContext2D;
     ctx.clearRect(0, 0, W, H);
-    for (const m of markers) {
-      if (m.hidden) continue; // players never see hidden markers
-      const cx = m.position.x * W;
-      const cy = m.position.y * H;
-      // Map-fixed sizing: marker stays at 2.5% of map height regardless of
-      // how zoomed the viewport is. This matches the projector (always
-      // calibrated) and the GM canvas — a marker is a token on the map.
-      const r  = H * 0.025 * m.size;
-      // Pre-squash horizontally so the marker comes out as a true visual circle
-      // after the texture is stretched onto the aspect:1 plane.
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(1 / aspect, 1);
-      drawMarkerShape(ctx, m, 0, 0, r, false, false, iconCache);
-      ctx.restore();
-    }
+    // Markers themselves are rendered by MarkerSprites as individual meshes.
+    // The marker list is still needed here to colour return blobs from the
+    // tracker — each blob carries a sourceId we look up in the list.
     if (motion) this._drawMotionOverlay(ctx, motion, W, H, markers);
   }
 
