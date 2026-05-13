@@ -3536,41 +3536,6 @@ option.select-option--add {
 }
 .player-fullscreen-btn:hover { opacity: 1; }
 
-/* In fullscreen, blow the exit button up to ~half the map area + force
-   it always-visible. A small corner button is fiddly to find and tap,
-   especially on a tablet — making the exit affordance unmissable means
-   the GM (or anyone borrowing the tablet) can dismount fullscreen
-   intuitively from anywhere on the screen. */
-:fullscreen .player-fullscreen-btn {
-  width:  50vmin;
-  height: 50vmin;
-  font-size: 2rem;
-  opacity: 0.35;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  line-height: 1.2;
-  padding: 0;
-}
-:fullscreen .player-fullscreen-btn:hover { opacity: 0.85; }
-
-/* Same idea for the projector controls panel. The whole panel grows and
-   the idle-fade is overridden so the GM can always find the exit. */
-:fullscreen .projector-controls {
-  font-size: 1.5rem;
-  padding: var(--space-md) var(--space-lg);
-  gap: var(--space-md);
-  opacity: 0.6;
-}
-:fullscreen .projector-controls.idle { opacity: 0.4; }
-:fullscreen .projector-controls:hover { opacity: 1; }
-:fullscreen #fullscreen-btn,
-:fullscreen #recalibrate-btn {
-  font-size: 1.25rem;
-  padding: var(--space-sm) var(--space-md);
-}
-
 /* Projector view standalone styles */
 .projector-view { background: #000; color: var(--text); margin: 0; overflow: hidden; }
 .projector-view #renderer-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
