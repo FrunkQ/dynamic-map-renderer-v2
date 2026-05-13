@@ -13,10 +13,11 @@ varying vec2      vUv;
 void main() {
   vec4 color = texture2D(tDiffuse, vUv);
 
-  // Two anchor tints — cool dawn (slight cyan + magenta toe) and warm dusk
-  // (orange highlight, dim shadow). The slider walks between them.
-  vec3 cool = vec3(0.86, 0.97, 1.12);
-  vec3 warm = vec3(1.22, 1.02, 0.78);
+  // Two anchor tints — deeper now after first-pass feedback that the look
+  // was too subtle. Cool dawn pushes magenta-blue; warm dusk drops red-
+  // saturated and crushes blue for a richer orange.
+  vec3 cool = vec3(0.65, 0.88, 1.35);
+  vec3 warm = vec3(1.55, 0.95, 0.50);
   vec3 grade = mix(cool, warm, uWarmth);
   color.rgb = mix(color.rgb, color.rgb * grade, uIntensity);
 
@@ -25,9 +26,11 @@ void main() {
   color.rgb = mix(vec3(grey), color.rgb, uSaturation);
 
   // Aspect-correct radial vignette darkens edges so the sun-lit centre pops.
+  // Multiplier bumped from 0.35 to 0.75 so the vignette at max is genuinely
+  // dark, not a polite hint.
   vec2 d = (vUv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
-  float vAmt = smoothstep(0.30, 0.80, length(d)) * uVignette;
-  color.rgb *= 1.0 - vAmt * 0.35;
+  float vAmt = smoothstep(0.25, 0.85, length(d)) * uVignette;
+  color.rgb *= 1.0 - vAmt * 0.75;
 
   gl_FragColor = color;
 }

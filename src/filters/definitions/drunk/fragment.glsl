@@ -16,15 +16,18 @@ varying vec2      vUv;
 void main() {
   // Pendulum sway — slow, broad, on two axes at different rates so the
   // motion never lines up into a circle or back-and-forth band.
+  // Amplitudes doubled vs the first pass — the wobble was too polite to
+  // sell disorientation at max slider.
   vec2 sway = vec2(
-    sin(time * 0.55 + 0.7) * 0.020,
-    cos(time * 0.38)       * 0.013
+    sin(time * 0.55 + 0.7) * 0.040,
+    cos(time * 0.38)       * 0.027
   ) * uWobble;
 
   vec2 sUv = vUv + sway;
 
-  // Breathing chromatic aberration — slow envelope, smaller amplitude than
-  // Horror so it reads as queasy rather than shocking.
+  // Breathing chromatic aberration — slow envelope. Magnitude is driven
+  // entirely by the slider now (no implicit clamp) so cranking it really
+  // smears the channels apart.
   vec2 d = vUv - 0.5;
   float caEnv = 0.6 + sin(time * 0.7) * 0.4;
   float caAmt = uAberration * caEnv;

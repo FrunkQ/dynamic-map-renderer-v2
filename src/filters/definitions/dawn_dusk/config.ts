@@ -10,10 +10,10 @@ const definition: FilterDefinition = {
   vertexShader,
   fragmentShader,
   params: [
-    { type: 'slider', id: 'intensity',  label: 'Intensity',  min: 0, max: 1,   step: 0.01, default: 0.7  },
-    { type: 'slider', id: 'warmth',     label: 'Warmth',     min: 0, max: 1,   step: 0.01, default: 0.8  },
+    { type: 'slider', id: 'intensity',  label: 'Intensity',  min: 0, max: 1,   step: 0.01, default: 0.9  },
+    { type: 'slider', id: 'warmth',     label: 'Warmth',     min: 0, max: 1,   step: 0.01, default: 0.85 },
     { type: 'slider', id: 'saturation', label: 'Saturation', min: 0, max: 1.5, step: 0.01, default: 1.1  },
-    { type: 'slider', id: 'vignette',   label: 'Vignette',   min: 0, max: 1,   step: 0.01, default: 0.55 },
+    { type: 'slider', id: 'vignette',   label: 'Vignette',   min: 0, max: 1,   step: 0.01, default: 0.75 },
   ],
 };
 

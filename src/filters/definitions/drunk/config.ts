@@ -11,7 +11,7 @@ const definition: FilterDefinition = {
   fragmentShader,
   params: [
     { type: 'slider', id: 'wobble',     label: 'Wobble',              min: 0, max: 2,    step: 0.05,  default: 1.0  },
-    { type: 'slider', id: 'aberration', label: 'Chromatic Split',     min: 0, max: 0.02, step: 0.0005, default: 0.004 },
+    { type: 'slider', id: 'aberration', label: 'Chromatic Split',     min: 0, max: 0.04, step: 0.0005, default: 0.006 },
     { type: 'slider', id: 'tint',       label: 'Sickly Tint Amount',  min: 0, max: 1,    step: 0.01,  default: 0.6  },
     { type: 'color',  id: 'tintColor',  label: 'Tint Colour',                                          default: '#a8d68a' },
   ],
