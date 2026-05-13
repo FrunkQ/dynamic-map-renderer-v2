@@ -1,9 +1,10 @@
 // Rain — top-down view. The frame is the ground seen from above, so rain
 // reads as expanding ring-ripples where individual drops strike, not
 // falling streaks. A hash-cell grid picks splash locations; each cell
-// runs its own offset loop so the splashes don't pulse in sync. Two
-// layered grids (broad + dense) give visual variety. Slight darken +
-// saturation lift sells the "wet surface" look.
+// uses an INDEPENDENT hash seed for its time phase so active cells don't
+// march in lockstep (they did in the first cut, producing a uniform
+// pulse). Two layered grids with their own seeds give size + timing
+// variety. Slight darken + saturation lift sells the "wet surface" look.
 
 uniform sampler2D tDiffuse;
 uniform vec2      resolution;
@@ -20,63 +21,69 @@ float hash21(vec2 p) {
   return fract(p.x * p.y);
 }
 
-// One ripple layer. Each cell in the grid runs an independent ripple cycle:
-//   • picks a phase from its hash so cells don't all splash in lockstep
-//   • ring expands from 0 → 0.5 over the cycle
-//   • brightness fades quadratically so the splash starts bright and dies
-float ripple(vec2 uv, float cellScale) {
+// One ripple layer.
+//   • hGate decides if/how-much this cell splashes (density gate)
+//   • hPhase (different seed) is the time offset so active cells scatter
+//     through the splash cycle rather than firing in sync
+//   • hPos jitters the splash position inside the cell so they don't grid-align
+//   • hSize varies the splash radius cell-to-cell
+float ripple(vec2 uv, float cellScale, float seedSalt) {
   vec2 cell = floor(uv * cellScale);
   vec2 f    = fract(uv * cellScale) - 0.5;
-  float h   = hash21(cell);
 
-  // Density gate — most cells never splash.
-  if (h < 1.0 - uDensity) return 0.0;
+  float hGate  = hash21(cell + vec2(seedSalt, 0.0));
+  if (hGate < 1.0 - uDensity) return 0.0;
 
-  // Cycle length ~1.4s, per-cell phase from the hash so splashes scatter
-  // through time. Speed slider scales the cycle.
+  float hPhase = hash21(cell + vec2(seedSalt + 31.7, 17.3));
+  float hPos1  = hash21(cell + vec2(seedSalt + 7.1,  41.9));
+  float hPos2  = hash21(cell + vec2(seedSalt + 13.6, 5.2));
+  float hSize  = hash21(cell + vec2(seedSalt + 51.4, 23.8));
+
+  // Jitter splash position within the cell so splashes don't grid-align.
+  vec2 jitter = (vec2(hPos1, hPos2) - 0.5) * 0.6;
+  vec2 fc = f - jitter;
+
   float period = 1.4;
-  float lifeT = fract(time * uSpeed / period + h);
+  float lifeT = fract(time * uSpeed / period + hPhase);
 
-  // Distance from cell centre (already centred on 0 by the -0.5).
-  float r = length(f);
+  float r = length(fc);
 
-  // Ring expands; smoothstep gives the bright leading edge fading inward.
-  float ringR = lifeT * 0.45;
-  float ringW = mix(0.04, 0.10, lifeT); // ring softens as it expands
+  // Ring shape: thin band at lifeT * 0.5, softening as it expands.
+  float maxR  = mix(0.35, 0.55, hSize);
+  float ringR = lifeT * maxR;
+  float ringW = mix(0.03, 0.09, lifeT);
   float ring  = exp(-pow((r - ringR) / ringW, 2.0));
 
-  // Tiny central impact dot for the first frames of the splash.
-  float impact = smoothstep(0.06, 0.0, r) * smoothstep(0.10, 0.0, lifeT);
+  // Bright impact dot in the first ~10% of the cycle.
+  float impact = smoothstep(0.05, 0.0, r) * smoothstep(0.10, 0.0, lifeT);
 
-  // Quadratic fade-out over the cycle.
+  // Quadratic fade-out so the ring is brightest at birth and dies by life=1.
   float life = (1.0 - lifeT) * (1.0 - lifeT);
 
-  return (ring * life + impact) * 1.2;
+  return ring * life + impact;
 }
 
 void main() {
   vec4 color = texture2D(tDiffuse, vUv);
 
-  // Wet-surface tint: slight darken + saturation lift. Same slider as the
-  // side-view's overcast control so the GM has consistent semantics.
+  // Wet-surface tint: slight darken + saturation lift.
   if (uDarken > 0.001) {
     float grey = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-    // Saturation boost (wet things look more saturated), then a darken.
     color.rgb = mix(vec3(grey), color.rgb, 1.0 + 0.20 * uDarken);
     color.rgb *= (1.0 - 0.25 * uDarken);
   }
 
   vec2 aUv = vUv * vec2(resolution.x / resolution.y, 1.0);
 
-  // Two grids — broad + dense — for splash size variety.
+  // Two grids — broad + dense, with DIFFERENT seed salts so the two layers
+  // don't share a splash schedule either.
   float ripples = 0.0;
-  ripples += ripple(aUv, 40.0)  * 0.85;
-  ripples += ripple(aUv, 75.0)  * 0.50;
+  ripples += ripple(aUv, 35.0, 0.0)   * 0.95;
+  ripples += ripple(aUv, 70.0, 19.4)  * 0.55;
   ripples = clamp(ripples * uIntensity, 0.0, 1.0);
 
-  // Splash colour — pale wet highlight, blended additively so the underlying
-  // map texture still shows through the bright leading ring.
-  vec3 wetCol = vec3(0.80, 0.90, 1.05);
+  // Splash colour — pale wet highlight.
+  vec3 wetCol = vec3(0.80, 0.92, 1.08);
   color.rgb = mix(color.rgb, wetCol, ripples * 0.85);
 
   gl_FragColor = color;

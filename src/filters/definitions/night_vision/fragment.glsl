@@ -1,6 +1,9 @@
 // Night Vision — image-intensifier scope look. Luminance is mapped to
 // monochrome green, then layered with horizontal scanlines, animated grain,
-// and a heavy edge vignette to sell the "through a scope" feel.
+// and a heavy edge vignette to sell the "through a scope" feel. Optional
+// scope-overlay toggle adds the hard circular cutout + crosshair reticle
+// for the full FPS-scope vibe (vignette alone reads as "I'm wearing NV
+// goggles"; scope on top reads as "I'm looking through a sniper scope").
 
 uniform sampler2D tDiffuse;
 uniform vec2      resolution;
@@ -9,6 +12,7 @@ uniform float     uGreenStrength;
 uniform float     uScanlines;
 uniform float     uGrain;
 uniform float     uVignetteAmt;
+uniform float     uScopeOverlay;
 varying vec2      vUv;
 
 float hash21(vec2 p) {
@@ -27,7 +31,7 @@ void main() {
   vec3 nv = vec3(0.08, luma * 1.15 + 0.10, 0.05);
   color.rgb = mix(color.rgb, nv, uGreenStrength);
 
-  // Horizontal scanlines — devicePixelRatio-aware so they read crisp.
+  // Horizontal scanlines.
   if (uScanlines > 0.001) {
     float lineY = vUv.y * resolution.y;
     float band  = sin(lineY * 3.14159) * 0.5 + 0.5;
@@ -40,11 +44,48 @@ void main() {
     color.rgb += vec3(g * 0.18 * uGrain);
   }
 
-  // Aspect-correct vignette — a tighter circle than Dawn/Dusk's, since the
-  // scope-tube feel wants near-black edges.
-  vec2 d = (vUv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
-  float vig = smoothstep(0.30, 0.65, length(d));
-  color.rgb *= 1.0 - vig * 0.90 * uVignetteAmt;
+  // Aspect-corrected coords used by both the soft vignette and the optional
+  // hard scope overlay below.
+  vec2 sd = (vUv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
+  float dist = length(sd);
+
+  // Soft vignette — pulled in tighter than the first pass (smoothstep start
+  // 0.30 → 0.20, multiplier 0.90 → 0.98) so the frame really closes down.
+  float vig = smoothstep(0.20, 0.65, dist);
+  color.rgb *= 1.0 - vig * 0.98 * uVignetteAmt;
+
+  // Scope overlay — hard circular cutout + crosshair reticle. Toggled
+  // separately from the soft vignette so the GM can have one, the other,
+  // or both.
+  if (uScopeOverlay > 0.5) {
+    // Hard scope cutout: very dark outside the viewable circle.
+    float r = 0.42;
+    float ringW = 0.022;
+    float outside = smoothstep(r - ringW * 0.5, r, dist);
+    color.rgb *= 1.0 - outside * 0.97;
+
+    // Sharp dark ring at the scope rim.
+    float rim = smoothstep(r + 0.004, r, dist) * smoothstep(r - ringW * 1.6, r - ringW, dist);
+    color.rgb = mix(color.rgb, vec3(0.02, 0.06, 0.02), rim);
+
+    // Crosshair reticle inside the scope — thin lines that don't run all the
+    // way to the rim so they read like a proper reticle, not a cross-cut.
+    float reticleR = r * 0.85;
+    float lineWidth = 0.0015;
+    float gap = 0.020; // small inner gap around the centre
+    float hLine = smoothstep(lineWidth, 0.0, abs(sd.y))
+                * smoothstep(reticleR, reticleR - 0.04, abs(sd.x))
+                * smoothstep(gap - 0.004, gap, abs(sd.x));
+    float vLine = smoothstep(lineWidth, 0.0, abs(sd.x))
+                * smoothstep(reticleR, reticleR - 0.04, abs(sd.y))
+                * smoothstep(gap - 0.004, gap, abs(sd.y));
+    vec3 reticleCol = vec3(0.10, 0.55, 0.10);
+    color.rgb = mix(color.rgb, reticleCol, clamp(hLine + vLine, 0.0, 1.0));
+
+    // Small centre dot.
+    float centreDot = smoothstep(0.005, 0.001, dist);
+    color.rgb = mix(color.rgb, reticleCol, centreDot * 0.9);
+  }
 
   gl_FragColor = color;
 }

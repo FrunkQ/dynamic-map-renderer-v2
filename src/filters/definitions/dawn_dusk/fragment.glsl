@@ -26,11 +26,11 @@ void main() {
   color.rgb = mix(vec3(grey), color.rgb, uSaturation);
 
   // Aspect-correct radial vignette darkens edges so the sun-lit centre pops.
-  // Multiplier bumped from 0.35 to 0.75 so the vignette at max is genuinely
-  // dark, not a polite hint.
+  // Range pulled in (start at 0.15 instead of 0.25) and multiplier pushed to
+  // 0.95 so vignette = 1 genuinely tunnels the frame.
   vec2 d = (vUv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
-  float vAmt = smoothstep(0.25, 0.85, length(d)) * uVignette;
-  color.rgb *= 1.0 - vAmt * 0.75;
+  float vAmt = smoothstep(0.15, 0.75, length(d)) * uVignette;
+  color.rgb *= 1.0 - vAmt * 0.95;
 
   gl_FragColor = color;
 }
