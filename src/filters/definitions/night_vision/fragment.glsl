@@ -49,10 +49,10 @@ void main() {
   vec2 sd = (vUv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
   float dist = length(sd);
 
-  // Soft vignette — pulled in tighter than the first pass (smoothstep start
-  // 0.30 → 0.20, multiplier 0.90 → 0.98) so the frame really closes down.
-  float vig = smoothstep(0.20, 0.65, dist);
-  color.rgb *= 1.0 - vig * 0.98 * uVignetteAmt;
+  // Soft vignette — pushed harder again. Start 0.12 (very near centre), fade
+  // complete by 0.55, multiplier 1.0 — true-black corners at vignette = 1.
+  float vig = smoothstep(0.12, 0.55, dist);
+  color.rgb *= 1.0 - vig * uVignetteAmt;
 
   // Scope overlay — hard circular cutout + crosshair reticle. Toggled
   // separately from the soft vignette so the GM can have one, the other,
