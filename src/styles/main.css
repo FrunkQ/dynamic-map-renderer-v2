@@ -446,6 +446,22 @@ body.projector-view .marker-overlay {
   cursor: grab;
 }
 .marker-handle--rotate:active { cursor: grabbing; }
+
+/* Delete handle — red trashcan at the icon's bottom-left, mirroring the
+   text-map editor's per-element delete affordance for a consistent
+   "selection chrome" language across both. */
+.marker-handle--delete {
+  top:  calc(var(--icon-half-h, 0px) + 4px);
+  left: calc(-1 * var(--icon-half-w, 0px) - 4px);
+  border-color: rgba(220, 80, 80, 0.85);
+  color: #ffc4c4;
+  cursor: pointer;
+}
+.marker-handle--delete:hover {
+  background: rgba(180, 40, 40, 0.95);
+  color: #fff;
+  border-color: #ff8080;
+}
 #projector-viewport-canvas {
   position: absolute;
   inset: 0;
@@ -2450,9 +2466,11 @@ option.select-option--add {
 /* Text Map element chrome — unified with the marker / viewport rect design
    language (v2.11/A11). Selection shows a dashed outline + a soft veil;
    the move handle sits at the top-left corner, the resize handle at the
-   bottom-right, and the delete badge at the top-right. All three live as
-   ~22px monochrome stroked SVG icon buttons on the same dark surface as
-   the rest of the chrome family. Only visible when selected. */
+   bottom-right, and the red trashcan delete button at the bottom-left
+   (mirrors the marker overlay so the selection language matches across
+   text boxes and markers). All three live as ~22px monochrome stroked SVG
+   icon buttons on the same dark surface as the rest of the chrome family.
+   Only visible when selected. */
 .txt-map-el--selected {
   outline: 1px dashed var(--accent, #6aa3ff);
   outline-offset: 1px;
@@ -2504,7 +2522,7 @@ option.select-option--add {
   cursor: nwse-resize;
 }
 .txt-map-el-delete {
-  top: -11px; right: -11px;
+  bottom: -11px; left: -11px;
   border-color: rgba(220, 80, 80, 0.85);
   color: #ffc4c4;
 }

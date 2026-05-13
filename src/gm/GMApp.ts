@@ -720,6 +720,18 @@ export class GMApp {
    * revert to the recorded state. Any move/resize between clicks clears
    * the undo so the button starts fresh.
    */
+  /** Delete a marker by id and clear selection if it was the active one.
+   *  Shared between the side-panel Delete button and the overlay's trashcan
+   *  handle so both code paths stay in lock-step. */
+  private _deleteMarker(id: string): void {
+    const markers = this.state.getState().markers.filter((m) => m.id !== id);
+    if (this.selectedMarkerId === id) {
+      this.selectedMarkerId = null;
+      this.markerEditor.selectById(null);
+    }
+    this.state.setMarkers(markers);
+  }
+
   private _handleRectAspect(kind: 'player' | 'projector'): void {
     if (kind !== 'player') return;
     const current = this.viewportEditor.getView();
@@ -3005,6 +3017,7 @@ export class GMApp {
           else if (phase === 'move') this.markerEditor.updateOverlayRotate(clientX, clientY);
           else                       this.markerEditor.endOverlayRotate();
         },
+        onDeleteClick:    (id) => this._deleteMarker(id),
         onRectMoveDrag:   (kind, clientX, clientY, phase) => this._handleRectMoveDrag(kind, clientX, clientY, phase),
         onRectResizeDrag: (kind, clientX, clientY, phase) => this._handleRectResizeDrag(kind, clientX, clientY, phase),
         onRectAspectLock: (kind) => this._handleRectAspect(kind),
@@ -3048,10 +3061,7 @@ export class GMApp {
 
     document.querySelector('#delete-marker-btn')?.addEventListener('click', () => {
       if (!this.selectedMarkerId) return;
-      const markers = this.state.getState().markers.filter((m) => m.id !== this.selectedMarkerId);
-      this.selectedMarkerId = null;
-      this.markerEditor.selectById(null);
-      this.state.setMarkers(markers);
+      this._deleteMarker(this.selectedMarkerId);
     });
 
 

@@ -142,6 +142,8 @@ export interface OverlayHandlers {
   onResizeDrag?: ResizeDragHandler;
   /** Rotate handle drag — angle-based rotation of the selected marker. */
   onRotateDrag?: RotateDragHandler;
+  /** Delete handle click — remove the selected marker. */
+  onDeleteClick?: (markerId: string) => void;
 
   /** Viewport rectangle move-handle drag. */
   onRectMoveDrag?:    RectMoveHandler;
@@ -198,6 +200,7 @@ interface MarkerElements {
   selectionRing: HTMLDivElement | null;
   resizeHandle:  HTMLDivElement | null;
   rotateHandle:  HTMLDivElement | null;
+  deleteHandle:  HTMLDivElement | null;
   lockGlyph:     HTMLDivElement | null;
 }
 
@@ -434,7 +437,7 @@ export class MarkerOverlay {
     return {
       root, label: null, moveHandle: null, badgesRow: null,
       badges: new Map(), selectionRing: null, resizeHandle: null, rotateHandle: null,
-      lockGlyph: null,
+      deleteHandle: null, lockGlyph: null,
     };
   }
 
@@ -534,6 +537,40 @@ export class MarkerOverlay {
       el.rotateHandle.remove();
       el.rotateHandle = null;
     }
+
+    // Delete handle — red trashcan at the icon's bottom-left, mirroring the
+    // text-map editor's per-element delete affordance so markers and text
+    // boxes share the same selection chrome.
+    if (want && !el.deleteHandle) {
+      el.deleteHandle = document.createElement('div');
+      el.deleteHandle.className = 'marker-handle marker-handle--delete';
+      el.deleteHandle.title = 'Delete this marker';
+      el.deleteHandle.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          <line x1="10" y1="11" x2="10" y2="17"/>
+          <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+      `;
+      this._bindDeleteHandle(el.deleteHandle, item.id);
+      el.root.appendChild(el.deleteHandle);
+    } else if (!want && el.deleteHandle) {
+      el.deleteHandle.remove();
+      el.deleteHandle = null;
+    }
+  }
+
+  private _bindDeleteHandle(handle: HTMLDivElement, markerId: string): void {
+    // pointerdown swallows the event so a press on the trashcan doesn't
+    // also start a marker drag or deselect; the click handler does the work.
+    handle.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+    handle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handlers.onDeleteClick?.(markerId);
+    });
   }
 
   private _bindResizeHandle(handle: HTMLDivElement, markerId: string): void {
