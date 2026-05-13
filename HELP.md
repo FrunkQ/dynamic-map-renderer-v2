@@ -31,15 +31,17 @@ Pack-level actions live behind the hamburger.
 
 ---
 
-## Session
+## Player Connection *(renamed from Session in v2.11)*
 
-**QR Code** — Scan to open the player view on a phone or tablet at the table. **Hover** the QR for a tooltip showing the three-word room code; **click** the QR (or the small light bar to its left) to copy the player URL to your clipboard.
+**QR Code** — Scan to open the player view on a phone or tablet at the table. **Hover** the QR for a tooltip showing the three-word room code; **click** the QR (or the small light bar to its left) to copy the player URL to your clipboard. Any device on the same network with a browser is a fully functional second screen — no app install, no cable.
 
-**Players connected** — Live count below the QR. Updates as players join or drop.
+**Players connected** — Live count below the QR. Counts both same-machine browser windows AND remote LAN devices, plus any connected projectors. Hover for a per-peer breakdown.
 
-**Open Player Window** — Opens a local player window on this machine — handy for a second screen or projector.
+**Open Player Window** — Opens a local player window on this machine — handy for a second screen, projector, or quick preview.
 
-Room codes stay the same across page reloads. If a player's connection drops, their window will automatically try to reconnect.
+**Broadcast toggle** *(panel header)* — visual bypass switch. Off swaps the player view for a friendly "the GM is faffing" placeholder while keeping the underlying state streaming so flipping back is instant.
+
+Room codes stay the same across page reloads. If a player's connection drops, their window will automatically try to reconnect. If the public PeerJS broker is unreachable, same-machine browser windows still work via BroadcastChannel; the QR fades and a notice explains why remote devices can't join until the broker recovers (auto-retried every minute).
 
 ---
 
@@ -47,9 +49,7 @@ Room codes stay the same across page reloads. If a player's connection drops, th
 
 **Map Pack** — A name for your whole collection of maps. Travels with bundle exports and is used as the default filename when you **Save Map Pack…** from the menu. The default starter pack lands with the name "Getting Started" — edit it here once you start customising. You can also edit it inside the Save dialog.
 
-**Map selector** — Switch between your maps. Switching instantly updates all connected players. The dropdown has a bold-green **+ Add New Map…** option at the bottom — picking it opens the Add Map dialog (see below).
-
-**Name** — Live-rename the selected map; the dropdown label updates as you type. The underlying image keeps its own filename — this is just the display name in your pack.
+**Map selector** — Switch between your maps. Switching instantly updates all connected players. The dropdown's selected label is **editable in place** *(v2.11)* — click it to rename the current map, Enter to commit, Esc to revert. Use the chevron to pick a different map. The bold-green **+ Add New Map…** entry at the bottom opens the Add Map dialog.
 
 **+ Add New Map…** *(dropdown sentinel)* — Opens the Add Map dialog with three tabs:
 - **My Library** — every map image already in your pack. Hover for a thumbnail preview. Click **Use** to spin up a new map instance pointing at it (one image can back many maps with their own fog / markers / tracker config). Per-row **Store** / pen-edit / **⬇ download** / delete + footer bulk buttons (Store All Used / Store All / Delete All Unused), plus **ℹ Attributions & Licences**.
@@ -64,7 +64,25 @@ Room codes stay the same across page reloads. If a player's connection drops, th
 
 **Transition** — Choose an animated effect to play on the player screen when you switch maps (Fade, CRT Collapse, Wipe, etc.). Parameters for the selected transition appear below the dropdown.
 
-> Saving the whole pack — including all map / audio assets, fog, markers, splash, and theme — is now in the **☰ menu** (Save Map Pack… / Save Encrypted Pack…). See **App Menu** above.
+**Background Colour** *(v2.11 — moved here from its own panel)* — The fill colour shown around the map when the player's screen has a different aspect ratio. Auto-sampled from the map's top-left corner on first load.
+
+**Edit this Handout (Text Map)** — visible only when the current map is a text-map / handout. Opens the rich Text Map editor in a dialog. See **Text Maps** below.
+
+**Start Animation** — visible only when the current handout has an animated reveal configured. Triggers the reveal on every connected player + projector.
+
+> Saving the whole pack — including all map / audio / image assets, fog, markers, splash, and theme — is in the **☰ menu** (Save Map Pack… / Save Encrypted Pack…). See **App Menu** above.
+
+---
+
+## Text Maps (Handouts) *(new in v2.11)*
+
+A second map type for letters, posters, journal pages, stat blocks, and in-fiction documents. Text maps are first-class — they live alongside image maps in your library, ship in bundles, and broadcast to players exactly like image maps.
+
+**Create** — from **+ Add New Map…** → the **Text Map** option, or from the asset library.
+
+**Edit** — click **Edit this Handout (Text Map)** in Map Selection to open the editor in a full-screen dialog. Each handout is a page sized to your chosen aspect (16:9 / A4 / 4:3 / Square / 2:3 / custom), filled with absolutely-positioned **elements**: text blocks, images, or icons. Elements can be moved (top-left handle), resized (bottom-right handle), and deleted (top-right badge). Type into a selected text element to edit its content; the per-element toolbar adjusts font, size, colour, and alignment.
+
+**Animated reveal** — text maps support an optional animation that "types" each character of every text element onto the page when triggered. Configure in the editor; trigger from Map Selection with the **▶ Start Animation** button while the handout is broadcast to players / projectors.
 
 ---
 
@@ -94,11 +112,33 @@ Choose from None, Parchment Fantasy, Retro Sci-Fi Green/Amber, Ballpoint Pen, Ha
 
 **Orange rectangle** — Always visible on the GM's map; shows exactly what players can see right now.
 
-**Edit Player View** — Drag inside the rectangle to move it; drag any corner to resize it freely. Click **OK** to confirm or **Cancel** to revert. Touching any other sidebar control while editing implicitly commits the move.
+**Direct manipulation** *(v2.11)* — Click the move handle (top-left corner of the rect) to select it. Selected rect gains:
 
-**Reset to Full Map** — Snaps the view back to the full map instantly.
+- **Move handle** (top-left) — drag to reposition.
+- **Resize handle** (bottom-right) — drag to resize freely.
+- **Aspect-lock 16:9** (right edge) — snaps the rect to 16:9 physical proportions keeping the short edge fixed. Click again to undo.
+- **Maximise / Restore** (right edge) — first click expands to full map; second click restores the pre-max view.
 
-**Background Colour** — The fill colour shown around the map if the player's screen has a different shape. Auto-sampled from the map's top-left corner on first load.
+**Pop shortcut** — grabbing the move handle on a rect that already fills the entire map shrinks it to 50% map-dimensions centred. Gives you a sensibly-sized rect to drag/resize on the next gesture without having to fight a maximised view first.
+
+**Broadcast toggle** — the visual-bypass switch in the **Player Connection** panel header. Off swaps the player screen for a friendly "the GM is faffing" placeholder while keeping the underlying state streaming, so flipping back is instant.
+
+**Background Colour** — set in **Map Selection**. The fill colour shown around the map when the player's screen has a different shape. Auto-sampled from the map's top-left corner on first load.
+
+---
+
+## GM Workspace pan / zoom *(v2.11)*
+
+The GM canvas itself is now a workspace you can pan and zoom through:
+
+- **Wheel** — zoom around the cursor.
+- **Mouse drag** — click + drag any empty space (away from handles / markers) to pan. Cursor flips to a grabbing hand.
+- **Arrow keys** — pan; **R** — reset to centred fit.
+- **Touch** — two-finger pinch to zoom + pan; single-touch is reserved for the editors (fog draw, marker handles).
+- **Reset view** pill at the bottom-right appears whenever the camera is off identity. Click to snap back.
+- **Off-screen indicators** — if you pan a viewport rectangle out of sight, a small pill appears at the edge of the canvas pointing toward it. Click to recentre the camera on that rect.
+
+The workspace is **GM-only** — players and projectors always render at the rectangle the GM has chosen, not the GM's current zoom level. Zoom in on the GM canvas to place markers precisely, then frame whatever you want players to see with the player viewport rect.
 
 ---
 
@@ -114,11 +154,11 @@ A second on-table mode that renders the active map at **true table scale** — f
 
 When no projector is active, the panel shows just the dropdown and a brief intro paragraph. Once a primary connects, the full controls appear:
 
-**Move Projection View** — Drag the **orange + green** marching-ants rectangle on the GM's map to pan the projection. Size is locked to your projector calibration so you can't accidentally rescale at the table. Touching any other control implicitly commits the move (matching Player View).
+**Direct manipulation** *(v2.11)* — Same chrome as the Player View rect: click the **move handle** at the top-left of the green rect to select + drag the projection. Selection adds a **maximise / restore** button on the right edge that toggles between calibrated `scaled` mode and `full` map mode. Resize / aspect-lock aren't shown — projector size is locked to your calibration so you can't accidentally rescale at the table.
 
-**Black Out** — Mute the projector to solid black without closing it. Useful for transitions, breaks, or "the lights go out" moments.
+**Broadcast toggle** — the visual-bypass switch in the **Projection View** panel header swaps the projector to a "GM is faffing" placeholder while keeping the underlying state streaming. Replaces the older dedicated Blackout button.
 
-**Full Map** — Show the entire map fit-to-window on the projector, ignoring calibration. Handy for showing scope before zooming into a calibrated battlemap.
+**Full Map** — Show the entire map fit-to-window on the projector, ignoring calibration. Handy for showing scope before zooming into a calibrated battlemap. When the active map isn't calibrated, this is the only available projection mode — Scaled View greys out with a "Scaled View (Unavailable)" label and a warning explaining that calibration unlocks it.
 
 **Disable Filters** — When ticked, the GM's active visual filter does **not** apply to the projector — useful for projecting a clean battlemap while players still get a Parchment / Sci-Fi Green / etc. filter on their own screens. Off by default.
 
@@ -142,11 +182,17 @@ Place icons on the map to represent characters, objects, or points of interest.
 
 **Add Marker** — Pick **+ Add Marker** (the bold-green option at the bottom of the marker dropdown) to drop one at map centre, or right-click anywhere on the map to place one at that point.
 
-**Drag** — Click and drag any marker to reposition it. Moves are broadcast to players immediately on release.
+**Direct manipulation** *(v2.11)* — every marker carries on-canvas chrome when selected:
 
-**Select** — Click a marker on the map or choose it from the dropdown. Its properties appear in the panel.
+- **Move handle** at the top-left — drag to reposition. Position broadcasts to players immediately on release.
+- **Badge row** along the top edge — clickable mini-indicators for visibility, audio role, and motion role. Click any badge to toggle its state without going through the panel.
+- **Resize + rotate** handles at the bottom-right and top edges.
 
-**Properties** — Edit the label, icon, colour, and size. Toggle **Hide from players** to make a marker invisible to players while it remains visible (ghosted) to you.
+**Select** — Click the marker's move handle, or pick it from the dropdown. Its properties appear in the panel.
+
+**Rename in place** — the marker dropdown's selected label is editable directly. Click it to edit, Enter to commit, Esc to revert.
+
+**Properties** — Edit the icon, colour, and size. Toggle **Hide from players** to make a marker invisible to players while it remains visible (ghosted) to you. Toggle **Locked** to make a marker panel-access-only — the on-canvas handles ignore clicks on locked markers.
 
 **Show Name** — When on, the marker's label is visible on the player screen. Off by default.
 
@@ -154,7 +200,7 @@ Place icons on the map to represent characters, objects, or points of interest.
 
 **Delete Marker** — Removes the selected marker.
 
-**Icon picker** — Click the icon button to choose from preset symbols or upload your own image. To remove a custom uploaded icon, click **✕ Delete custom icon** inside the picker, then click the icon you want to remove.
+**Icon picker** — Click the icon button to open the **Small Asset Library** modal. Browse your saved icons, paste a Web Link, upload a file, or pull from the built-in connectors: **Lucide** (MIT) and **game-icons.net** (CC-BY 3.0). Tintable icons follow your chosen marker colour.
 
 ---
 
