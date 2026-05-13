@@ -1596,11 +1596,11 @@ export class ImageAssetModal {
     const toRender = capped ? filtered.slice(0, limit) : filtered;
 
     // Defer fetching preview SVGs until the user has narrowed the result
-    // set to roughly a screenful (12). At 2-char search depth a result
+    // set to roughly two screenfuls (30). At 2-char search depth a result
     // can hit several hundred entries — pulling every preview off
     // jsdelivr is wasteful (bandwidth + rate-limit penalty) and the user
     // hasn't picked yet anyway. Names alone are enough until they refine.
-    const PREVIEW_FETCH_THRESHOLD = 12;
+    const PREVIEW_FETCH_THRESHOLD = 30;
     const fetchPreviews = filtered.length <= PREVIEW_FETCH_THRESHOLD;
 
     for (const entry of toRender) {
