@@ -4,10 +4,11 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FogCompositor } from './FogCompositor.ts';
+import { MapFXCompositor } from './MapFXCompositor.ts';
 import { buildShaderObject, updateUniforms } from './ShaderMaterial.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
 import type { FilterDefinition } from '../filters/schema.ts';
-import type { FilterParamValues, FilterState, FogState, ViewState } from '../types.ts';
+import type { FilterParamValues, FilterState, FogState, ViewState, MapFXEntity } from '../types.ts';
 
 /**
  * Renderer
@@ -51,9 +52,11 @@ export class Renderer {
 
   // Layer meshes
   private mapMesh:      THREE.Mesh | null = null;
+  private mapFXMesh:    THREE.Mesh | null = null; // v2.12/M4
   private fogMesh:      THREE.Mesh | null = null;
   private mapTexture:   THREE.Texture | null = null;
   private fogCompositor: FogCompositor;
+  private mapFXCompositor: MapFXCompositor;  // v2.12/M4
 
   // Marker layer split as of v2.10.29:
   //   - Motion overlay (return blobs, scan rings) → single shared OffscreenCanvas
@@ -138,6 +141,7 @@ export class Renderer {
     this.camera.position.set(0, 0, 10);
 
     this.fogCompositor = new FogCompositor(1024, 1024);
+    this.mapFXCompositor = new MapFXCompositor(1024, 1024);
 
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
@@ -254,6 +258,8 @@ export class Renderer {
         this.fogCompositor.dispose();
         this.fogCompositor = new FogCompositor(1024, 1024);
         this.fogCompositor.redraw(this.lastFogState);
+        this.mapFXCompositor.dispose();
+        this.mapFXCompositor = new MapFXCompositor(1024, 1024);
 
         this.rebuildLayerMeshes();
         this.refreshCamera();
@@ -315,6 +321,22 @@ export class Renderer {
    *  persisting state / broadcasting a full snapshot. */
   exportFogBrush(): Promise<string | null> {
     return this.fogCompositor.exportBrushPng();
+  }
+
+  // ─── v2.12/M4 — MapFX entities ───────────────────────────────────────────
+
+  /** Push the latest MapFX state into the compositor and trigger a redraw.
+   *  Patch decode is async (PNGs) — texture refresh runs after it. */
+  async updateMapFX(entities: MapFXEntity[], selectedId: string | null): Promise<void> {
+    await this.mapFXCompositor.syncPatches(entities);
+    this.mapFXCompositor.redraw(entities, selectedId);
+    this.needsRender = true;
+  }
+
+  /** Clear the MapFX layer entirely. */
+  clearMapFX(): void {
+    this.mapFXCompositor.clear();
+    this.needsRender = true;
   }
 
   private _decodePng(base64Png: string): Promise<ImageBitmap | HTMLImageElement> {
@@ -717,6 +739,7 @@ export class Renderer {
   dispose(): void {
     this.stop();
     this.fogCompositor.dispose();
+    this.mapFXCompositor.dispose();
     this.mapTexture?.dispose();
     this.markerTex?.dispose();
     this.mapBorderLine?.geometry.dispose();
@@ -762,8 +785,9 @@ export class Renderer {
 
   private rebuildLayerMeshes(): void {
     // Remove existing layers
-    if (this.mapMesh)  { this.scene.remove(this.mapMesh);  this.mapMesh = null; }
-    if (this.fogMesh)  { this.scene.remove(this.fogMesh);  this.fogMesh = null; }
+    if (this.mapMesh)    { this.scene.remove(this.mapMesh);    this.mapMesh = null; }
+    if (this.mapFXMesh)  { this.scene.remove(this.mapFXMesh);  this.mapFXMesh = null; }
+    if (this.fogMesh)    { this.scene.remove(this.fogMesh);    this.fogMesh = null; }
 
     // Remove previous border from gmScene
     if (this.mapBorderLine) {
@@ -786,6 +810,17 @@ export class Renderer {
     this.mapMesh = new THREE.Mesh(geo, mapMat);
     this.mapMesh.position.z = 0;
     this.scene.add(this.mapMesh);
+
+    // v2.12/M4 — MapFX layer. Sits between map and fog so painted effects
+    // tint the map but fog can still hide them.
+    const mapFXMat = new THREE.MeshBasicMaterial({
+      map: this.mapFXCompositor.texture,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.mapFXMesh = new THREE.Mesh(geo, mapFXMat);
+    this.mapFXMesh.position.z = 0.005;
+    this.scene.add(this.mapFXMesh);
 
     // Fog layer — transparent, composited on top
     const fogMat = new THREE.MeshBasicMaterial({
