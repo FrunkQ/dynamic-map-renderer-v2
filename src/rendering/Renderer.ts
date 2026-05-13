@@ -270,7 +270,64 @@ export class Renderer {
   updateFog(fog: FogState): void {
     this.lastFogState = fog;
     this.fogCompositor.redraw(fog);
+    // The brush snapshot (alpha PNG) only arrives via this path on map_change /
+    // full_state; live strokes call applyFogBrushStroke instead. Decode async
+    // so the polygon redraw doesn't block on PNG decode — the brush layer
+    // re-composites itself once setBrushSnapshot lands.
+    void this._applyBrushSnapshot(fog.brush);
     this.needsRender = true;
+  }
+
+  /** Replace the in-memory FoW brush bitmap from a base64 PNG. Pass an empty
+   *  string / undefined to clear. Fire-and-forget — caller doesn't await. */
+  private async _applyBrushSnapshot(base64Png: string | undefined): Promise<void> {
+    if (!base64Png) {
+      this.fogCompositor.clearBrush();
+      this.fogCompositor.redraw(this.lastFogState);
+      this.needsRender = true;
+      return;
+    }
+    try {
+      const img = await this._decodePng(base64Png);
+      this.fogCompositor.setBrushSnapshot(img);
+      this.fogCompositor.redraw(this.lastFogState);
+      this.needsRender = true;
+    } catch { /* malformed snapshot — leave brush layer untouched */ }
+  }
+
+  /** Live FoW brush stroke — paints directly into the brush canvas and
+   *  re-composites without touching the polygons. Caller is responsible
+   *  for broadcasting the stroke to players. */
+  applyFogBrushStroke(stroke: { points: { x: number; y: number }[]; radius: number; mode: 'paint' | 'erase'; color: string }): void {
+    this.fogCompositor.applyBrushStroke(stroke);
+    this.fogCompositor.redraw(this.lastFogState);
+    this.needsRender = true;
+  }
+
+  /** Wipe the FoW brush canvas. */
+  clearFogBrush(): void {
+    this.fogCompositor.clearBrush();
+    this.fogCompositor.redraw(this.lastFogState);
+    this.needsRender = true;
+  }
+
+  /** Export the current FoW brush layer as base64 PNG. Used by the GM when
+   *  persisting state / broadcasting a full snapshot. */
+  exportFogBrush(): Promise<string | null> {
+    return this.fogCompositor.exportBrushPng();
+  }
+
+  private _decodePng(base64Png: string): Promise<ImageBitmap | HTMLImageElement> {
+    const url = base64Png.startsWith('data:') ? base64Png : `data:image/png;base64,${base64Png}`;
+    if (typeof Image !== 'undefined') {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+    return fetch(url).then((r) => r.blob()).then(createImageBitmap);
   }
 
   /**
@@ -281,6 +338,7 @@ export class Renderer {
   clearFog(): void {
     this.lastFogState = { polygons: [] };
     this.fogCompositor.redraw({ polygons: [] });
+    this.fogCompositor.clearBrush();
     this.needsRender = true;
   }
 
