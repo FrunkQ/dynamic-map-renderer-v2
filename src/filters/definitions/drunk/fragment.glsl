@@ -7,10 +7,10 @@
 uniform sampler2D tDiffuse;
 uniform vec2      resolution;
 uniform float     time;
-uniform float     wobble;
-uniform float     aberration;
-uniform float     tint;
-uniform vec3      tintColor;
+uniform float     uWobble;
+uniform float     uAberration;
+uniform float     uTint;
+uniform vec3      uTintColor;
 varying vec2      vUv;
 
 void main() {
@@ -19,7 +19,7 @@ void main() {
   vec2 sway = vec2(
     sin(time * 0.55 + 0.7) * 0.020,
     cos(time * 0.38)       * 0.013
-  ) * wobble;
+  ) * uWobble;
 
   vec2 sUv = vUv + sway;
 
@@ -27,7 +27,7 @@ void main() {
   // Horror so it reads as queasy rather than shocking.
   vec2 d = vUv - 0.5;
   float caEnv = 0.6 + sin(time * 0.7) * 0.4;
-  float caAmt = aberration * caEnv;
+  float caAmt = uAberration * caEnv;
 
   float r = texture2D(tDiffuse, sUv - d * caAmt).r;
   float g = texture2D(tDiffuse, sUv).g;
@@ -36,7 +36,7 @@ void main() {
 
   // Sickly tint — apply as a multiplicative wash so the underlying map
   // still bleeds through. Default colour is poison green; user can pick.
-  color = mix(color, color * tintColor, tint);
+  color = mix(color, color * uTintColor, uTint);
 
   gl_FragColor = vec4(color, 1.0);
 }

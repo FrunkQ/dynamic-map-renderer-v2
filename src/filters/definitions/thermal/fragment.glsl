@@ -6,10 +6,10 @@
 uniform sampler2D tDiffuse;
 uniform vec2      resolution;
 uniform float     time;
-uniform float     palette;
-uniform float     contrast;
-uniform float     scanlines;
-uniform float     pulse;
+uniform float     uPalette;
+uniform float     uContrast;
+uniform float     uScanlines;
+uniform float     uPulse;
 varying vec2      vUv;
 
 // Five-stop heat palette. t in 0..1 → vec3.
@@ -35,21 +35,21 @@ void main() {
   // Luma drives the palette index. Contrast slider stretches around the
   // midpoint so the GM can crush the response for a sharper hot/cold split.
   float luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-  float t = (luma - 0.5) * contrast + 0.5;
+  float t = (luma - 0.5) * uContrast + 0.5;
   vec3 thermal = heatColor(t);
-  color.rgb = mix(color.rgb, thermal, palette);
+  color.rgb = mix(color.rgb, thermal, uPalette);
 
   // Slow brightness pulse — sells the "live feed" feel.
-  if (pulse > 0.001) {
+  if (uPulse > 0.001) {
     float p = sin(time * 1.7) * 0.5 + 0.5;
-    color.rgb *= 1.0 + (p - 0.5) * 0.10 * pulse;
+    color.rgb *= 1.0 + (p - 0.5) * 0.10 * uPulse;
   }
 
   // Scanlines — same band trick as Night Vision but lighter.
-  if (scanlines > 0.001) {
+  if (uScanlines > 0.001) {
     float lineY = vUv.y * resolution.y;
     float band  = sin(lineY * 3.14159) * 0.5 + 0.5;
-    color.rgb *= 1.0 - (1.0 - band) * 0.25 * scanlines;
+    color.rgb *= 1.0 - (1.0 - band) * 0.25 * uScanlines;
   }
 
   gl_FragColor = color;

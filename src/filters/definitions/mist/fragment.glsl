@@ -6,11 +6,11 @@
 uniform sampler2D tDiffuse;
 uniform vec2      resolution;
 uniform float     time;
-uniform float     intensity;
-uniform float     scale;
-uniform float     speed;
-uniform float     groundPool;
-uniform vec3      mistColor;
+uniform float     uIntensity;
+uniform float     uScale;
+uniform float     uSpeed;
+uniform float     uGroundPool;
+uniform vec3      uMistColor;
 varying vec2      vUv;
 
 float hash21(vec2 p) {
@@ -48,7 +48,7 @@ void main() {
   vec2 aUv = vUv * vec2(resolution.x / resolution.y, 1.0);
   // Drift: horizontal scroll + slow vertical wobble so the field doesn't look
   // like a side-scrolling band.
-  vec2 p = aUv * scale + vec2(time * speed * 0.10, sin(time * speed * 0.07) * 0.4);
+  vec2 p = aUv * uScale + vec2(time * uSpeed * 0.10, sin(time * uSpeed * 0.07) * 0.4);
 
   float n = fbm(p);
   // Stretch contrast so flat-grey mid-tones become genuinely murky vs. clear.
@@ -56,10 +56,10 @@ void main() {
 
   // Vertical gradient — when groundPool > 0 the mist concentrates near the
   // bottom of the frame. groundPool = 0 means uniform.
-  float vGrad = mix(1.0, smoothstep(-0.1, 0.9, vUv.y), clamp(groundPool, 0.0, 1.0));
+  float vGrad = mix(1.0, smoothstep(-0.1, 0.9, vUv.y), clamp(uGroundPool, 0.0, 1.0));
 
-  float mistAmount = clamp(n * vGrad * intensity, 0.0, 1.0);
-  color.rgb = mix(color.rgb, mistColor, mistAmount);
+  float mistAmount = clamp(n * vGrad * uIntensity, 0.0, 1.0);
+  color.rgb = mix(color.rgb, uMistColor, mistAmount);
 
   gl_FragColor = color;
 }

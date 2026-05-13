@@ -92,12 +92,18 @@ void main() {
 
 ## Param uniforms
 
-Every param declared in `config.ts` is automatically injected as a GLSL uniform with the same name as its `id`. Declare it in your shader with the matching type:
+Every param declared in `config.ts` is automatically injected as a GLSL uniform with a **`u`-prefixed PascalCase** name derived from its `id`. The runtime applies this transform — your shader must declare the uniform under the prefixed name or the value won't flow through.
+
+| Param `id` (in config.ts) | GLSL uniform (in shader) |
+|---|---|
+| `intensity` | `uIntensity` |
+| `scanlineThickness` | `uScanlineThickness` |
+| `chromaticAberration` | `uChromaticAberration` |
 
 | Param type | GLSL type |
 |---|---|
 | `slider` | `float` |
-| `toggle` | `bool` |
+| `toggle` | `float` (0.0 / 1.0 — declare as `float`, not `bool`) |
 | `color` | `vec3` (linear sRGB, 0–1) |
 | `select` (numeric value) | `float` |
 | `select` (string value) | not injectable — handle via multiple shader variants or map to int |

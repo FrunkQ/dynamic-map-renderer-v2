@@ -5,11 +5,11 @@
 uniform sampler2D tDiffuse;
 uniform vec2      resolution;
 uniform float     time;
-uniform float     intensity;
-uniform float     density;
-uniform float     speed;
-uniform float     wind;
-uniform float     darken;
+uniform float     uIntensity;
+uniform float     uDensity;
+uniform float     uSpeed;
+uniform float     uWind;
+uniform float     uDarken;
 varying vec2      vUv;
 
 float hash21(vec2 p) {
@@ -23,15 +23,15 @@ float hash21(vec2 p) {
 float rainLayer(vec2 uv, float cellScale, float cellAspect, float speedMul) {
   // Wind shears streaks diagonally — multiplier kept gentle so wind=1 looks
   // like a moderate slant, not horizontal.
-  uv.x += uv.y * wind * 0.6;
-  uv.y -= time * speed * speedMul;
+  uv.x += uv.y * uWind * 0.6;
+  uv.y -= time * uSpeed * speedMul;
 
   vec2 cell = vec2(floor(uv.x * cellScale), floor(uv.y * cellScale / cellAspect));
   vec2 f    = vec2(fract(uv.x * cellScale), fract(uv.y * cellScale / cellAspect));
   float h = hash21(cell);
 
   // Density gate — most cells are empty; only the brightest hashes emit.
-  float gate = step(1.0 - density, h);
+  float gate = step(1.0 - uDensity, h);
   if (gate < 0.5) return 0.0;
 
   // Streak shape:
@@ -49,10 +49,10 @@ void main() {
 
   // Overcast tint: slight desaturation + darken, both scaled by darken slider
   // so the GM can keep streaks without dimming the map.
-  if (darken > 0.001) {
+  if (uDarken > 0.001) {
     float grey = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-    color.rgb = mix(color.rgb, vec3(grey), 0.25 * darken);
-    color.rgb *= (1.0 - 0.30 * darken);
+    color.rgb = mix(color.rgb, vec3(grey), 0.25 * uDarken);
+    color.rgb *= (1.0 - 0.30 * uDarken);
   }
 
   // Aspect-corrected UVs so streaks look the same width / spacing regardless
@@ -64,7 +64,7 @@ void main() {
   streaks += rainLayer(aUv, 60.0,  3.5, 1.0) * 0.55;
   streaks += rainLayer(aUv, 95.0,  4.0, 1.7) * 0.30;
   streaks += rainLayer(aUv, 40.0,  3.0, 0.7) * 0.25;
-  streaks = clamp(streaks * intensity, 0.0, 1.0);
+  streaks = clamp(streaks * uIntensity, 0.0, 1.0);
 
   // Streak colour — cool pale blue, blended additively for a wet sheen.
   vec3 streakCol = vec3(0.75, 0.85, 1.0);
