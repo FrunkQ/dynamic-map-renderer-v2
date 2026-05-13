@@ -1,4 +1,4 @@
-import type { SessionState, MapState, FilterState, FogState, ViewState, Marker, AudioState, TransitionConfig, MotionTrackerConfig, ProjectorViewport } from '../types.ts';
+import type { SessionState, MapState, FilterState, FogState, ViewState, Marker, AudioState, TransitionConfig, MotionTrackerConfig, ProjectorViewport, MapFXState, MapFXEntity } from '../types.ts';
 import { defaultSessionState } from '../types.ts';
 import { saveConfig, loadConfig } from '../storage/db.ts';
 import { migrateSessionState } from '../storage/migrations.ts';
@@ -134,6 +134,31 @@ export class StateManager {
   setMotionTracker(config: MotionTrackerConfig): void {
     this.state = { ...this.state, motionTracker: config };
     this._notify(['motionTracker'], undefined, true);
+  }
+
+  // ─── v2.12/M4 — MapFX entities ────────────────────────────────────────────
+
+  setMapFX(mapfx: MapFXState): void {
+    this.state = { ...this.state, mapfx };
+    this._notify(['mapfx'], undefined, true);
+  }
+
+  /** Append a new MapFX entity. */
+  addMapFXEntity(entity: MapFXEntity): void {
+    const next: MapFXEntity[] = [...this.state.mapfx.entities, entity];
+    this.setMapFX({ entities: next });
+  }
+
+  /** Patch an existing MapFX entity (mainly for label / selected flag /
+   *  paint patch updates). No-op if no entity matches the id. */
+  updateMapFXEntity(id: string, patch: Partial<MapFXEntity>): void {
+    const next = this.state.mapfx.entities.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    this.setMapFX({ entities: next });
+  }
+
+  removeMapFXEntity(id: string): void {
+    const next = this.state.mapfx.entities.filter((e) => e.id !== id);
+    this.setMapFX({ entities: next });
   }
 
   // ─── Listeners ────────────────────────────────────────────────────────────
