@@ -646,6 +646,26 @@ export class GMApp {
       // Dragging the move handle is also a selection gesture — matches
       // the marker move-handle pattern (drag = move + select).
       this._selectViewport(kind);
+      // Pop shortcut (player only): if the rect currently fills the
+      // whole map there's nothing to "move", so a grab of the move
+      // handle instead snaps it down to a 50% map-dimension rect
+      // centred on the map. The user then has a sensibly-sized rect
+      // they can drag / resize on their next gesture. We abort the
+      // drag init for this gesture so the cursor doesn't drag a rect
+      // whose move handle just teleported elsewhere on screen.
+      if (kind === 'player') {
+        const v = this.viewportEditor.getView();
+        if (v.viewNW >= 0.99 && v.viewNH >= 0.99) {
+          const popped: ViewState = { ...v, centerX: 0.5, centerY: 0.5, viewNW: 0.5, viewNH: 0.5 };
+          this.viewportEditor.setView(popped);
+          this.state.setView(popped);
+          // Clear any pending snap-undo state — the pop is a deliberate
+          // non-undo action and the prior baselines are stale.
+          this._clearSnapUndo('player');
+          this._refreshRectOverlays();
+          return;
+        }
+      }
       const startCenter = kind === 'player'
         ? { x: this.viewportEditor.getView().centerX,    y: this.viewportEditor.getView().centerY    }
         : { x: this.projectorEditor.getViewport().centerX, y: this.projectorEditor.getViewport().centerY };
