@@ -868,25 +868,47 @@ export class TextMapEditor {
     }
     host.appendChild(body);
 
-    // Chrome: drag bar + resize handle (only visible when selected, via CSS)
+    // Chrome — matches the marker / viewport rect design language from
+    // A8: move handle at top-left, resize at bottom-right, delete badge
+    // at top-right. All three are visible only when this element is
+    // selected (gated via .txt-map-el--selected in CSS).
     const dragBar = document.createElement('div');
     dragBar.className = 'txt-map-el-drag';
     dragBar.title = 'Drag to move';
+    dragBar.innerHTML =
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="5 9 2 12 5 15"/>' +
+        '<polyline points="9 5 12 2 15 5"/>' +
+        '<polyline points="15 19 12 22 9 19"/>' +
+        '<polyline points="19 9 22 12 19 15"/>' +
+        '<line x1="2" y1="12" x2="22" y2="12"/>' +
+        '<line x1="12" y1="2" x2="12" y2="22"/>' +
+      '</svg>';
     dragBar.addEventListener('pointerdown', (e) => this._startDrag(e, el.id, 'move'));
     host.appendChild(dragBar);
 
     const resize = document.createElement('div');
     resize.className = 'txt-map-el-resize';
     resize.title = 'Drag to resize';
+    resize.innerHTML =
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="15 3 21 3 21 9"/>' +
+        '<polyline points="9 21 3 21 3 15"/>' +
+        '<line x1="21" y1="3" x2="14" y2="10"/>' +
+        '<line x1="3"  y1="21" x2="10" y2="14"/>' +
+      '</svg>';
     resize.addEventListener('pointerdown', (e) => this._startDrag(e, el.id, 'resize'));
     host.appendChild(resize);
 
-    // Delete button — only visible when selected.
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'txt-map-el-delete';
     del.title = 'Delete element';
-    del.textContent = '×';
+    del.innerHTML =
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<line x1="6" y1="6" x2="18" y2="18"/>' +
+        '<line x1="6" y1="18" x2="18" y2="6"/>' +
+      '</svg>';
     del.addEventListener('pointerdown', (e) => e.stopPropagation());
     del.addEventListener('click', (e) => {
       e.stopPropagation();

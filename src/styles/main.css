@@ -2418,50 +2418,72 @@ option.select-option--add {
 /* Selected element: dashed accent border + visible drag bar + resize +
    delete button. Border stays inside the element bounds so geometry
    matches what the rasteriser will produce. */
+/* Text Map element chrome — unified with the marker / viewport rect design
+   language (v2.11/A11). Selection shows a dashed outline + a soft veil;
+   the move handle sits at the top-left corner, the resize handle at the
+   bottom-right, and the delete badge at the top-right. All three live as
+   ~22px monochrome stroked SVG icon buttons on the same dark surface as
+   the rest of the chrome family. Only visible when selected. */
 .txt-map-el--selected {
-  border: 1px dashed var(--accent, #6aa3ff);
-  box-shadow: 0 0 0 1px rgba(106,163,255,0.25);
+  outline: 1px dashed var(--accent, #6aa3ff);
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.04);
 }
 .txt-map-el-drag,
 .txt-map-el-resize,
 .txt-map-el-delete {
   position: absolute;
   display: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(20, 24, 36, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   z-index: 2;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+  touch-action: none;
+  transition: background 120ms ease, color 120ms ease, transform 80ms ease;
 }
+.txt-map-el-drag svg,
+.txt-map-el-resize svg,
+.txt-map-el-delete svg { display: block; }
 .txt-map-el--selected .txt-map-el-drag,
 .txt-map-el--selected .txt-map-el-resize,
-.txt-map-el--selected .txt-map-el-delete { display: block; }
-.txt-map-el-drag {
-  top: -12px; left: 0; right: 0;
-  height: 10px;
-  background: var(--accent, #6aa3ff);
-  border-radius: 2px;
-  cursor: move;
-  opacity: 0.8;
+.txt-map-el--selected .txt-map-el-delete { display: flex; }
+.txt-map-el-drag:hover,
+.txt-map-el-resize:hover {
+  background: rgba(40, 50, 70, 0.95);
+  color: var(--accent, #fff);
+  border-color: rgba(255, 255, 255, 0.85);
 }
-.txt-map-el-drag:hover { opacity: 1; }
+.txt-map-el-drag:active,
+.txt-map-el-resize:active,
+.txt-map-el-delete:active { transform: scale(0.94); }
+.txt-map-el-drag {
+  top: -11px; left: -11px;
+  cursor: move;
+}
 .txt-map-el-resize {
-  right: -6px; bottom: -6px;
-  width: 14px; height: 14px;
-  background: var(--accent, #6aa3ff);
-  border: 1px solid var(--bg-panel);
-  border-radius: 50%;
+  bottom: -11px; right: -11px;
   cursor: nwse-resize;
 }
 .txt-map-el-delete {
-  top: -12px; right: -12px;
-  width: 22px; height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: var(--danger, #c0392b);
-  color: #fff;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
+  top: -11px; right: -11px;
+  border-color: rgba(220, 80, 80, 0.85);
+  color: #ffc4c4;
 }
-.txt-map-el-delete:hover { background: #d44e3f; }
+.txt-map-el-delete:hover {
+  background: rgba(180, 40, 40, 0.95);
+  color: #fff;
+  border-color: #ff8080;
+}
 /* Per-element controls — live inside the top toolbar so every editing
    knob is in one place. Visible only when an element is selected;
    appended after the page-level controls in the same flex row. */
