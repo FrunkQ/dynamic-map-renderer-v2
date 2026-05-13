@@ -2508,6 +2508,31 @@ export class GMApp {
       });
     });
 
+    // v2.12/M3 — Spotlight is a brush-mode preset: enable brush + flip mode
+    // to 'erase' + bump the radius. A single click then reveals a circle.
+    // Re-clicking the button toggles back to whatever brush settings were
+    // active before so it acts as a one-shot quick-tool.
+    const spotBtn = document.querySelector<HTMLButtonElement>('#fog-spotlight-btn');
+    spotBtn?.addEventListener('click', () => {
+      const on = !spotBtn.classList.contains('btn--active');
+      if (on) {
+        this.fogEditor.disable();
+        this.fogEditor.setBrushActive(true);
+        this.fogEditor.setBrushSettings({ mode: 'erase', radius: 0.10, color: '#000000' });
+        // Reflect in the panel controls + flag the button.
+        if (brushBtn) brushBtn.classList.remove('btn--active');
+        if (brushControls) brushControls.hidden = false;
+        if (brushModeSel)  brushModeSel.value = 'erase';
+        if (brushRadiusInput) brushRadiusInput.value = '0.1';
+        this.markerEditor?.setPointerCapture(false);
+      } else {
+        this.fogEditor.setBrushActive(false);
+        if (brushControls) brushControls.hidden = true;
+        this.markerEditor?.setPointerCapture(true);
+      }
+      spotBtn.classList.toggle('btn--active', on);
+    });
+
     document.querySelector('#fog-delete-btn')?.addEventListener('click', () => {
       this.fogEditor.deleteSelected();
     });
