@@ -1,6 +1,9 @@
-// Rain — animated diagonal streaks with optional darken + desaturate.
-// Three overlaid streak layers at different scales / speeds give parallax.
-// Each layer hashes a 2D cell grid; cells above (1 - density) emit a streak.
+// Rain — top-down view. The frame is the ground seen from above, so rain
+// reads as expanding ring-ripples where individual drops strike, not
+// falling streaks. A hash-cell grid picks splash locations; each cell
+// runs its own offset loop so the splashes don't pulse in sync. Two
+// layered grids (broad + dense) give visual variety. Slight darken +
+// saturation lift sells the "wet surface" look.
 
 uniform sampler2D tDiffuse;
 uniform vec2      resolution;
@@ -8,7 +11,6 @@ uniform float     time;
 uniform float     uIntensity;
 uniform float     uDensity;
 uniform float     uSpeed;
-uniform float     uWind;
 uniform float     uDarken;
 varying vec2      vUv;
 
@@ -18,57 +20,64 @@ float hash21(vec2 p) {
   return fract(p.x * p.y);
 }
 
-// One streak layer. cellScale = how many cells across one screen width.
-// cellAspect = vertical stretch (>1 makes cells taller — longer streaks).
-float rainLayer(vec2 uv, float cellScale, float cellAspect, float speedMul) {
-  // Wind shears streaks diagonally — multiplier kept gentle so wind=1 looks
-  // like a moderate slant, not horizontal.
-  uv.x += uv.y * uWind * 0.6;
-  uv.y -= time * uSpeed * speedMul;
+// One ripple layer. Each cell in the grid runs an independent ripple cycle:
+//   • picks a phase from its hash so cells don't all splash in lockstep
+//   • ring expands from 0 → 0.5 over the cycle
+//   • brightness fades quadratically so the splash starts bright and dies
+float ripple(vec2 uv, float cellScale) {
+  vec2 cell = floor(uv * cellScale);
+  vec2 f    = fract(uv * cellScale) - 0.5;
+  float h   = hash21(cell);
 
-  vec2 cell = vec2(floor(uv.x * cellScale), floor(uv.y * cellScale / cellAspect));
-  vec2 f    = vec2(fract(uv.x * cellScale), fract(uv.y * cellScale / cellAspect));
-  float h = hash21(cell);
+  // Density gate — most cells never splash.
+  if (h < 1.0 - uDensity) return 0.0;
 
-  // Density gate — most cells are empty; only the brightest hashes emit.
-  float gate = step(1.0 - uDensity, h);
-  if (gate < 0.5) return 0.0;
+  // Cycle length ~1.4s, per-cell phase from the hash so splashes scatter
+  // through time. Speed slider scales the cycle.
+  float period = 1.4;
+  float lifeT = fract(time * uSpeed / period + h);
 
-  // Streak shape:
-  //   • narrow vertical band on x (peaks at fract.x = h to avoid all streaks
-  //     hugging the same side of the cell)
-  //   • fades from top of cell (bright leading edge) downward
-  float xCentre = mix(0.15, 0.85, h);
-  float xWidth  = 1.0 - smoothstep(0.0, 0.04, abs(f.x - xCentre));
-  float yShape  = pow(1.0 - f.y, 3.0); // sharp leading edge, soft tail
-  return xWidth * yShape * h;
+  // Distance from cell centre (already centred on 0 by the -0.5).
+  float r = length(f);
+
+  // Ring expands; smoothstep gives the bright leading edge fading inward.
+  float ringR = lifeT * 0.45;
+  float ringW = mix(0.04, 0.10, lifeT); // ring softens as it expands
+  float ring  = exp(-pow((r - ringR) / ringW, 2.0));
+
+  // Tiny central impact dot for the first frames of the splash.
+  float impact = smoothstep(0.06, 0.0, r) * smoothstep(0.10, 0.0, lifeT);
+
+  // Quadratic fade-out over the cycle.
+  float life = (1.0 - lifeT) * (1.0 - lifeT);
+
+  return (ring * life + impact) * 1.2;
 }
 
 void main() {
   vec4 color = texture2D(tDiffuse, vUv);
 
-  // Overcast tint: slight desaturation + darken, both scaled by darken slider
-  // so the GM can keep streaks without dimming the map.
+  // Wet-surface tint: slight darken + saturation lift. Same slider as the
+  // side-view's overcast control so the GM has consistent semantics.
   if (uDarken > 0.001) {
     float grey = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-    color.rgb = mix(color.rgb, vec3(grey), 0.25 * uDarken);
-    color.rgb *= (1.0 - 0.30 * uDarken);
+    // Saturation boost (wet things look more saturated), then a darken.
+    color.rgb = mix(vec3(grey), color.rgb, 1.0 + 0.20 * uDarken);
+    color.rgb *= (1.0 - 0.25 * uDarken);
   }
 
-  // Aspect-corrected UVs so streaks look the same width / spacing regardless
-  // of screen shape. Multiplying x by resolution.x/resolution.y means our
-  // cell grid is square in physical pixels.
   vec2 aUv = vUv * vec2(resolution.x / resolution.y, 1.0);
 
-  float streaks = 0.0;
-  streaks += rainLayer(aUv, 60.0,  3.5, 1.0) * 0.55;
-  streaks += rainLayer(aUv, 95.0,  4.0, 1.7) * 0.30;
-  streaks += rainLayer(aUv, 40.0,  3.0, 0.7) * 0.25;
-  streaks = clamp(streaks * uIntensity, 0.0, 1.0);
+  // Two grids — broad + dense — for splash size variety.
+  float ripples = 0.0;
+  ripples += ripple(aUv, 40.0)  * 0.85;
+  ripples += ripple(aUv, 75.0)  * 0.50;
+  ripples = clamp(ripples * uIntensity, 0.0, 1.0);
 
-  // Streak colour — cool pale blue, blended additively for a wet sheen.
-  vec3 streakCol = vec3(0.75, 0.85, 1.0);
-  color.rgb = mix(color.rgb, streakCol, streaks * 0.85);
+  // Splash colour — pale wet highlight, blended additively so the underlying
+  // map texture still shows through the bright leading ring.
+  vec3 wetCol = vec3(0.80, 0.90, 1.05);
+  color.rgb = mix(color.rgb, wetCol, ripples * 0.85);
 
   gl_FragColor = color;
 }
