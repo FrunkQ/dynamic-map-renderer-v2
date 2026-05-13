@@ -297,6 +297,7 @@ export class PlayerApp {
           this.lastFog     = fog;
           if (filter) this.lastFilter = filter;
           if (view)   this.lastView   = view;
+          const mapfx = msg.mapfx;
           void (async () => {
             if (msg.iconData?.length)       await this._decodeIconData(msg.iconData);
             if (msg.soundboardActive?.length) this._applySoundboardActive(msg.soundboardActive);
@@ -306,9 +307,22 @@ export class PlayerApp {
               if (view) {
                 this.renderer.setView(view);
               }
+              if (mapfx) {
+                this.renderer.clearMapFX();
+                await this.renderer.updateMapFX(mapfx.entities, null);
+              } else {
+                this.renderer.clearMapFX();
+              }
             });
           })();
         }
+        break;
+      }
+
+      case 'mapfx_update': {
+        // v2.12/M4 — full MapFX state push.
+        if (msg.mapId && msg.mapId !== this.currentMapId) break;
+        void this.renderer.updateMapFX(msg.payload.entities, null);
         break;
       }
 

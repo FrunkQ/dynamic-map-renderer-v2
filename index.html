@@ -142,6 +142,16 @@
           </label>
           <button id="fog-brush-clear" class="btn btn--sm btn--ghost">Clear brush</button>
         </div>
+        <hr class="fog-divider" />
+        <div class="mapfx-toolbar">
+          <span class="mapfx-label">MapFX</span>
+          <select id="mapfx-kind-select" title="Effect type">
+            <!-- Filled from MAPFX_REGISTRY in JS. -->
+          </select>
+          <button id="mapfx-paint-btn"  class="btn btn--sm btn--ghost" title="Paint mode — drag to lay down an effect">Paint</button>
+          <button id="mapfx-poly-btn"   class="btn btn--sm btn--ghost" title="Polygon mode — click vertices to define an area">Polygon</button>
+          <button id="mapfx-finish-btn" class="btn btn--sm btn--ghost" hidden title="Finish the in-progress polygon">Done</button>
+        </div>
         <p class="fog-hint">Polygon: click vertices, close to commit. Brush: drag to paint. Esc cancels in-progress drawing.</p>
       </div>
     </section>

@@ -1,6 +1,9 @@
 import { StateManager } from './StateManager.ts';
 import { MapManager } from './MapManager.ts';
 import { FogEditor } from './FogEditor.ts';
+import { MapFXEditor } from './MapFXEditor.ts';
+import { MAPFX_REGISTRY, MAPFX_KIND_ORDER } from '../mapfx/mapfxKindRegistry.ts';
+import type { MapFXEntity, MapFXKind } from '../types.ts';
 import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
@@ -84,6 +87,11 @@ export class GMApp {
   private host:   Host;
   private renderer!:       Renderer;
   private fogEditor!:      FogEditor;
+  private mapFXEditor!:    MapFXEditor;
+  /** v2.12/M4 — currently selected MapFX entity id (or null). Used by the
+   *  renderer composite to dim unselected entities; click-to-select via the
+   *  selector-icon overlay updates this. */
+  private selectedMapFXEntityId: string | null = null;
   private viewportEditor!: ViewportEditor;
   private projectorEditor!: ProjectorViewportEditor;
 
@@ -1441,6 +1449,18 @@ export class GMApp {
       });
     }
 
+    // v2.12/M4 — MapFX entities. Re-composite the GM renderer; broadcast a
+    // full state push (cheap relative to map_change since the entity list
+    // is small + paint patches travel as base64 inside each entity).
+    if (changed.includes('mapfx') && !changed.includes('map')) {
+      void this.renderer.updateMapFX(state.mapfx.entities, this.selectedMapFXEntityId);
+      this.host.broadcast({
+        type: 'mapfx_update',
+        payload: state.mapfx,
+        ...(state.map ? { mapId: state.map.id } : {}),
+      });
+    }
+
     if (changed.includes('filter')) {
       // Honour the panel-header bypass switch — when off, the renderer
       // gets 'none' regardless of what's in state.filter.
@@ -1499,6 +1519,11 @@ export class GMApp {
       void this._ensureLibIcons(broadcastMarkers).then((added) => {
         if (added) this._rebroadcastMarkersWithFreshIconData();
       });
+      // v2.12/M4 — push the new map's MapFX entities into the renderer.
+      // No broadcast here; the next map_change broadcast (in loadMap) carries
+      // mapfx alongside fog.
+      this.renderer.clearMapFX();
+      void this.renderer.updateMapFX(state.mapfx.entities, null);
     }
 
     if (changed.includes('markers')) {
@@ -1927,6 +1952,7 @@ export class GMApp {
       ...(asset?.imageWidth            ? { mapImageWidth:      asset.imageWidth     } : {}),
       ...(asset?.imageHeight           ? { mapImageHeight:     asset.imageHeight    } : {}),
       projectorViewport: nextProjVp,
+      mapfx:      this.state.getState().mapfx,
       // For animated handouts, the broadcast carries the STARTING frame
       // (background + noAnimate elements) so the player + projector
       // display the pre-reveal state. The handout_reveal message
@@ -2531,6 +2557,91 @@ export class GMApp {
         this.markerEditor?.setPointerCapture(true);
       }
       spotBtn.classList.toggle('btn--active', on);
+    });
+
+    // ─── v2.12/M4 — MapFX editor wiring ──────────────────────────────────
+    this.mapFXEditor = new MapFXEditor(
+      canvas,
+      (cx, cy) => {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return null;
+        // Identity map-norm — markers / fog use the same canvasPxToMapNorm
+        // path; for MapFX we just need the basic px→norm with the renderer
+        // hook so pan/zoom is honoured.
+        const m = this.renderer.canvasCssToMapNorm(cx - rect.left, cy - rect.top);
+        return m ?? null;
+      },
+    );
+
+    // Populate the kind dropdown.
+    const kindSelect = document.querySelector<HTMLSelectElement>('#mapfx-kind-select');
+    if (kindSelect) {
+      kindSelect.innerHTML = '';
+      for (const id of MAPFX_KIND_ORDER) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = MAPFX_REGISTRY[id].label;
+        kindSelect.appendChild(opt);
+      }
+      kindSelect.value = 'fire';
+      this.mapFXEditor.setActiveKind('fire');
+      kindSelect.addEventListener('change', () => {
+        this.mapFXEditor.setActiveKind(kindSelect.value as MapFXKind);
+      });
+    }
+
+    const mapfxPaintBtn  = document.querySelector<HTMLButtonElement>('#mapfx-paint-btn');
+    const mapfxPolyBtn   = document.querySelector<HTMLButtonElement>('#mapfx-poly-btn');
+    const mapfxFinishBtn = document.querySelector<HTMLButtonElement>('#mapfx-finish-btn');
+
+    const setMapFXMode = (mode: 'off' | 'paint' | 'poly') => {
+      // Turn off competing modes so the canvas has a single owner.
+      if (mode !== 'off') {
+        this.fogEditor.disable();
+        this.fogEditor.setBrushActive(false);
+        if (brushBtn) brushBtn.classList.remove('btn--active');
+        if (brushControls) brushControls.hidden = true;
+        spotBtn?.classList.remove('btn--active');
+      }
+      this.mapFXEditor.setMode(mode);
+      mapfxPaintBtn?.classList.toggle('btn--active', mode === 'paint');
+      mapfxPolyBtn?.classList.toggle('btn--active',  mode === 'poly');
+      if (mapfxFinishBtn) mapfxFinishBtn.hidden = mode !== 'poly';
+      this.markerEditor?.setPointerCapture(mode === 'off');
+    };
+    mapfxPaintBtn?.addEventListener('click', () => {
+      setMapFXMode(this.mapFXEditor.getMode() === 'paint' ? 'off' : 'paint');
+    });
+    mapfxPolyBtn?.addEventListener('click', () => {
+      setMapFXMode(this.mapFXEditor.getMode() === 'poly' ? 'off' : 'poly');
+    });
+    mapfxFinishBtn?.addEventListener('click', () => {
+      this.mapFXEditor.finishPolygon();
+    });
+
+    // Polygon mode adds vertices via clicks. Wire the canvas click so it
+    // goes to MapFXEditor when MapFX-poly is the active mode.
+    canvas.addEventListener('click', (e) => {
+      if (this.mapFXEditor.getMode() !== 'poly') return;
+      const rect = canvas.getBoundingClientRect();
+      const m = this.renderer.canvasCssToMapNorm(e.clientX - rect.left, e.clientY - rect.top);
+      if (m) this.mapFXEditor.polyClick({ x: m.x, y: m.y });
+    });
+
+    // Commit → state + broadcast.
+    this.mapFXEditor.setHandlers({
+      onCommit: (entity: MapFXEntity) => {
+        this.state.addMapFXEntity(entity);
+        const mapId = this.state.getState().map?.id;
+        this.host.broadcast({
+          type: 'mapfx_update',
+          payload: this.state.getState().mapfx,
+          ...(mapId ? { mapId } : {}),
+        });
+        // After committing, hop out of paint/poly so the user picks up a
+        // fresh action rather than accidentally double-creating.
+        setMapFXMode('off');
+      },
     });
 
     document.querySelector('#fog-delete-btn')?.addEventListener('click', () => {

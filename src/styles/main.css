@@ -1484,6 +1484,36 @@ option.select-option--add {
 /* Crosshair cursor while brush mode is active. */
 #fog-canvas.fog-brush { pointer-events: auto; cursor: crosshair; }
 
+/* v2.12/M4 — MapFX toolbar row, sits below the fog brush controls. */
+.fog-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 8px 0;
+}
+.mapfx-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  align-items: center;
+}
+.mapfx-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  padding-right: 4px;
+}
+#mapfx-kind-select {
+  flex: 1 1 90px;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+#fog-canvas.mapfx-paint,
+#fog-canvas.mapfx-poly { pointer-events: auto; cursor: crosshair; }
+
 /* ── View panel ─────────────────────────────────────────────────────────── */
 .view-hint {
   font-size: 0.7rem;
