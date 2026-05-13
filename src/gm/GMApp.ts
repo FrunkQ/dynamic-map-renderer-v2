@@ -415,6 +415,39 @@ export class GMApp {
     this.viewportEditor?.redrawExternal();
     this.projectorEditor?.redrawExternal();
     this._refreshRectOverlays();
+    this._updateResetViewBtn();
+  }
+
+  /** Lazily-built "reset view" button — appears at the bottom-right of
+   *  the canvas wrapper whenever the GM workspace transform isn't at
+   *  identity (scale=1, offset=0/0). Click resets the camera. Same
+   *  visual idiom as the off-screen indicators: small dark pill that
+   *  doesn't compete with the map. */
+  private _resetViewBtn: HTMLButtonElement | null = null;
+
+  private _updateResetViewBtn(): void {
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (!wrapper) return;
+    if (!this._resetViewBtn) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'reset-view-btn';
+      btn.title = 'Reset workspace view (centred, 100%)';
+      btn.innerHTML =
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<polyline points="1 4 1 10 7 10"/>' +
+          '<path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>' +
+        '</svg>' +
+        '<span class="reset-view-btn__label">Reset view</span>';
+      btn.addEventListener('click', () => {
+        this.gmTransform.reset();
+        this._applyWorkspaceTransform();
+      });
+      btn.hidden = true;
+      wrapper.appendChild(btn);
+      this._resetViewBtn = btn;
+    }
+    this._resetViewBtn.hidden = this.gmTransform.isIdentity;
   }
 
   /**

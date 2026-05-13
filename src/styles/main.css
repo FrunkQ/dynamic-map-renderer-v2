@@ -154,6 +154,35 @@ body.gm-view {
 .offscreen-indicator--player    { color: #ff8c00; }
 .offscreen-indicator--projector { color: #22c55e; }
 
+/* Reset view pill — bottom-right of the GM canvas-wrapper, only visible
+   when the workspace camera has been panned / zoomed off identity. */
+.reset-view-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--text, #fff);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-md);
+  padding: 5px 9px;
+  font-size: 0.7rem;
+  z-index: 50;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  opacity: 0.55;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.reset-view-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.85);
+}
+.reset-view-btn__label { white-space: nowrap; }
+
 #canvas-wrapper canvas {
   position: absolute;
   inset: 0;
