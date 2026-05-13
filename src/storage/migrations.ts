@@ -93,5 +93,7 @@ export function migrateSessionState(saved: any): SessionState | null {
     markers: Array.isArray(cur.markers) ? cur.markers : base.markers,
     audio,
     motionTracker,
+    // v2.12/M4 — MapFX entities. Pre-v2.12 saves don't have this field; seed empty.
+    mapfx:   (cur.mapfx && Array.isArray(cur.mapfx.entities)) ? cur.mapfx : base.mapfx,
   } as SessionState;
 }

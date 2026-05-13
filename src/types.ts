@@ -42,6 +42,80 @@ export interface FogPolygon {
 
 export interface FogState {
   polygons: FogPolygon[];
+  /**
+   * Optional alpha-only brush layer (v2.12/M2). Stored as a base64 PNG of the
+   * map's intrinsic dimensions where opaque pixels = "this is fogged" and
+   * transparent pixels = "no fog from the brush" (polygons compose on top
+   * during render). Absent on a fresh map / packs that predate brush mode.
+   */
+  brush?: string;
+  /**
+   * Fog brush colour for new strokes — same semantics as FogPolygon.color
+   * (uniform across the brush layer; the alpha channel is what carries the
+   * stroke shape). Defaults to '#000000' if absent.
+   */
+  brushColor?: string;
+}
+
+// ─── MapFX (v2.12/M4) ────────────────────────────────────────────────────────
+
+/**
+ * All MapFX effect kinds. Drives both the rendering tint pipeline and the
+ * selector-icon glyph in the overlay. Adding a new kind is a one-line append
+ * here plus an entry in src/mapfx/mapfxKindRegistry.ts.
+ */
+export type MapFXKind =
+  | 'fire'
+  | 'cold'
+  | 'smoke'
+  | 'light'
+  | 'blood'
+  | 'water'
+  | 'shadow'
+  | 'electric'
+  | 'poison'
+  | 'holy'
+  | 'healing'
+  | 'fear';
+
+/**
+ * One MapFX entity. Two backing shapes are supported (polygon and painted-
+ * area), recorded the same way as fog: vertices for polys, a base64 PNG patch
+ * for paint. An entity always has exactly one of `vertices` or `paint`.
+ *
+ * Anchor point (centroid by default; refined in M4) drives where the selector
+ * icon renders on the GM canvas.
+ */
+export interface MapFXEntity {
+  id:         string;
+  kind:       MapFXKind;
+  /** Optional GM label — shown beside the selector icon on hover. */
+  label?:     string;
+  /** Polygon mode — flat list of normalised 0..1 map-space vertices. */
+  vertices?:  FogVertex[];
+  /**
+   * Painted-area mode — base64 PNG patch covering the painted region. Stored
+   * at map-pixel scale matching the map's intrinsic dimensions. The bounding
+   * box (in normalised coords) is recorded separately so the renderer can
+   * composite the patch at the right place without loading the PNG to read
+   * dimensions.
+   */
+  paint?:     {
+    /** base64 PNG bytes (no data: prefix) */
+    png:    string;
+    /** Bounding box in normalised 0..1 map coords. */
+    bounds: { x: number; y: number; w: number; h: number };
+  };
+  /** Centroid for the selector icon, normalised 0..1 map coords. */
+  anchor:     { x: number; y: number };
+  /** When true the GM has selected this entity — full opacity on the map. */
+  selected?:  boolean;
+  /** Creation timestamp (ms epoch) — used as a stable sort key. */
+  createdAt:  number;
+}
+
+export interface MapFXState {
+  entities: MapFXEntity[];
 }
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
@@ -336,6 +410,8 @@ export interface SessionState {
   /** Projector viewport position + rotation (per-map). Optional — only set
    *  once a projector has connected at least once. */
   projectorViewport?: ProjectorViewport;
+  /** v2.12/M4 — painted + polygon MapFX entities (fire, blood, light pools…). */
+  mapfx: MapFXState;
 }
 
 export function defaultSessionState(): SessionState {
@@ -350,6 +426,7 @@ export function defaultSessionState(): SessionState {
       slots: [],
     },
     motionTracker: defaultMotionTrackerConfig(),
+    mapfx: { entities: [] },
   };
 }
 
@@ -390,6 +467,45 @@ export interface MsgFogUpdate {
   mapId?: string;
 }
 
+/**
+ * v2.12/M2 — single brush stroke delta. Sent live as the GM paints so players
+ * reproduce the stroke locally without a full bitmap resync. The full fog
+ * brush state is also sent inside `MsgFogUpdate` / `MsgMapChange.fog` on map
+ * switch / new-joiner sync.
+ */
+export interface MsgBrushStroke {
+  type: 'brush_stroke';
+  /** Which layer this stroke modifies. */
+  layer: 'fog' | 'mapfx';
+  /** For MapFX, the entity id this stroke belongs to. Omitted for fog. */
+  entityId?: string;
+  /** Map-norm 0..1 points along the smoothed stroke path. */
+  points: FogVertex[];
+  /** Brush radius in normalised map units (0..1; 1 = map width). */
+  radius: number;
+  /** Brush mode: paint adds opacity, erase subtracts. */
+  mode: 'paint' | 'erase';
+  /** Stroke colour — '#rrggbb'. For fog this overrides the layer colour. */
+  color: string;
+  /** MapFX kind tag — drives the type-tinted render. Omitted for fog. */
+  kind?: MapFXKind;
+  /** Stable id for the stroke so dedup is possible across BC + PeerJS paths. */
+  strokeId: string;
+  /** ID of the map this stroke belongs to — players filter stale strokes. */
+  mapId?: string;
+}
+
+/**
+ * v2.12/M4 — full MapFX state push. Used on map_change resync and whenever
+ * the entity list changes outside live painting (selection, delete, label
+ * edit). Live paint goes through MsgBrushStroke instead.
+ */
+export interface MsgMapFXUpdate {
+  type: 'mapfx_update';
+  payload: MapFXState;
+  mapId?: string;
+}
+
 export interface MsgFilterUpdate {
   type: 'filter_update';
   payload: FilterState;
@@ -423,6 +539,8 @@ export interface MsgMapChange {
    *  toggle, etc.). Carried in map_change so the projector window applies
    *  the new map's saved viewport instead of holding over the prior map's. */
   projectorViewport?: ProjectorViewport;
+  /** MapFX state for the incoming map — applied atomically with the map. */
+  mapfx?: MapFXState;
   mapBlob: ArrayBuffer;
   transition?: TransitionConfig;
 }
@@ -711,7 +829,9 @@ export type GMMessage =
   | MsgProjectorRole
   | MsgProjectorShutdown
   | MsgProjectorViewportUpdate
-  | MsgMapMetaUpdate;
+  | MsgMapMetaUpdate
+  | MsgBrushStroke
+  | MsgMapFXUpdate;
 
 // ─── Storage types ───────────────────────────────────────────────────────────
 
