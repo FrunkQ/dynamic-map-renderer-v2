@@ -73,11 +73,6 @@ function rangeToSlider(r: number): number {
 }
 
 
-/** Inside-rect hit-test for CSS-pixel bounding boxes. */
-function inRect(r: { x: number; y: number; w: number; h: number }, x: number, y: number): boolean {
-  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-}
-
 /**
  * GMApp — top-level orchestrator for the GM interface.
  *
@@ -439,35 +434,24 @@ export class GMApp {
   }
 
   /**
-   * Wrapper-level pointerdown hit-test against viewport rects — clicking
-   * inside a rect selects it; clicking outside both deselects. Overlay
-   * handles (move / resize / badges) stopPropagation upstream so this
-   * never fires when the user grabbed a handle. Marker selection isn't
-   * affected here — that flow stays in MarkerEditor; mutual exclusion
-   * happens via _selectViewport / markerEditor.selectById.
+   * Wrapper-level pointerdown — soft deselect for viewport rects. Selection
+   * itself is deliberate (handle-driven only) per the design philosophy
+   * established in A8: clicking the move / resize / aspect / maximise
+   * handle is the ONLY way to select a rect. Casual clicks inside the
+   * rect bounds no longer select — they fall through to whatever's
+   * underneath (markers, canvas, future mouse-pan).
+   *
+   * This listener still fires on bubble; handle clicks stopPropagation
+   * upstream so a handle-click never reaches here. Anything that DOES
+   * reach here is by definition "not a handle" — so if a rect is
+   * currently selected, dismiss the chrome.
    */
   private _bindRectSelection(): void {
     const wrapper = document.getElementById('canvas-wrapper');
     if (!wrapper) return;
     wrapper.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 && e.pointerType === 'mouse') return;
-      // Already-consumed by a handle (stopPropagation) won't reach here.
-      const r = wrapper.getBoundingClientRect();
-      const cssX = e.clientX - r.left;
-      const cssY = e.clientY - r.top;
-      const playerBounds = this.viewportEditor?.getRectBounds() ?? null;
-      const projBounds   = this.projectorEditor?.getRectBounds() ?? null;
-      // Projector first so it wins on overlap (it's typically smaller +
-      // sits on top of the player rect visually).
-      if (projBounds && inRect(projBounds, cssX, cssY)) {
-        this._selectViewport('projector');
-        return;
-      }
-      if (playerBounds && inRect(playerBounds, cssX, cssY)) {
-        this._selectViewport('player');
-        return;
-      }
-      this._selectViewport(null);
+      if (this._selectedViewport !== null) this._selectViewport(null);
     });
   }
 
