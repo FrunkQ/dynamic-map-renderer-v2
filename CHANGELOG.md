@@ -8,10 +8,11 @@ v2.11 turns the GM canvas into a real workspace and rebuilds every
 selection / handle interaction around one consistent design language.
 The biggest practical win is **tablet-as-screen**: any device on the
 LAN — a phone, a spare tablet, a laptop — opens the player view in a
-browser and becomes a fully functional second screen. Throw a tablet
-in your bag with the gaming laptop and you have a portable VTT
-setup; a second tablet flat on the table is a third screen for
-floorplans.
+browser and becomes a fully functional second screen. Pack your
+gaming laptop and two tablets and you have a complete three-screen
+in-person VTT setup in a bag: laptop as the GM screen, one tablet
+flat on the table as the calibrated 1″-scale projector / floorplan,
+and the other facing the players for handouts and reveals.
 
 #### GM canvas workspace
 

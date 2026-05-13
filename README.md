@@ -19,7 +19,7 @@ No account needed. No server. Everything stays on your device — maps you uploa
 
 This is the headline difference for in-person play. Mappadux connects the GM and players over peer-to-peer, so **any phone, tablet, or laptop on the same network is a fully functional second screen** — no HDMI cable, no DisplayLink dongle, no installed app. Open the QR code on the device, done.
 
-> Throw a tablet in your bag with the gaming laptop and you have a full setup. A second tablet flat on the table at true 1″ scale is your floorplan. A third becomes a dedicated handouts screen.
+> Pack your gaming laptop and two tablets. The laptop is your GM screen. One tablet sits flat on the table at true 1″ scale as the projector view — your battlemap / floorplan. The other tablet faces the players for handouts, room descriptions, and reveals. That's a full three-screen VTT setup in a bag.
 
 ### What it does
 
