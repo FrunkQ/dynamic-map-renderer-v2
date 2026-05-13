@@ -41,6 +41,13 @@ export class FogEditor {
   private marchAnimId: number | null = null;
   private cursorPos: FogVertex | null = null;
 
+  /** Screen-space delete handle — red trashcan that pops up at the bottom-
+   *  left-most vertex of the selected polygon. Lives in the marker-overlay
+   *  layer so it stacks above the fog canvas; managed entirely from here
+   *  so position tracks selection + camera (FogEditor.redraw is called on
+   *  every camera change via GMApp). Null until setOverlayHost wires a host. */
+  private deleteHandleEl: HTMLButtonElement | null = null;
+
   constructor(canvas: HTMLCanvasElement, onChange: FogChangeCallback) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -92,6 +99,41 @@ export class FogEditor {
   /** Wire a Renderer so coord conversions ride the live camera transform. */
   setRenderer(renderer: Renderer): void {
     this.renderer = renderer;
+  }
+
+  /**
+   * Mount a per-selection delete handle inside the given screen-space host
+   * (typically the marker-overlay element). The handle pops up at the
+   * polygon's lowest-leftest vertex while selected, mirroring the marker /
+   * text-map editor delete affordance so the selection chrome stays
+   * consistent across all three editors. Idempotent — calling again with
+   * a different host moves the element.
+   */
+  setOverlayHost(host: HTMLElement): void {
+    if (!this.deleteHandleEl) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fog-delete-handle';
+      btn.title = 'Delete this fog area';
+      btn.hidden = true;
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          <line x1="10" y1="11" x2="10" y2="17"/>
+          <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+      `;
+      btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.deleteSelected();
+      });
+      this.deleteHandleEl = btn;
+    }
+    host.appendChild(this.deleteHandleEl);
   }
 
   loadState(fog: FogState): void {
@@ -315,6 +357,47 @@ export class FogEditor {
     if (this.currentVertices.length > 0) {
       this.drawInProgress(this.currentVertices);
     }
+
+    this._updateDeleteHandle();
+  }
+
+  /** Position the delete-handle screen-space button at the selected
+   *  polygon's lowest-leftest vertex (or hide it if no selection / draw
+   *  mode / no host). "Lowest-leftest" maximises `(y - x)` in normalised
+   *  coords — y grows downward and x rightward, so a high (y - x) is
+   *  bottom-left. */
+  private _updateDeleteHandle(): void {
+    const btn = this.deleteHandleEl;
+    if (!btn) return;
+    if (!this.selectedId || this.enabled) { btn.hidden = true; return; }
+
+    const poly = this.polygons.find((p) => p.id === this.selectedId);
+    if (!poly || poly.vertices.length === 0) { btn.hidden = true; return; }
+
+    let bestIdx = 0;
+    let bestScore = -Infinity;
+    for (let i = 0; i < poly.vertices.length; i++) {
+      const v = poly.vertices[i]!;
+      const score = v.y - v.x;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    const apex = poly.vertices[bestIdx]!;
+
+    let screenX: number;
+    let screenY: number;
+    if (this.renderer) {
+      const p = this.renderer.mapNormToCanvasCss(apex.x, apex.y);
+      if (!p) { btn.hidden = true; return; }
+      screenX = p.x;
+      screenY = p.y;
+    } else {
+      const b = this.getMapBounds(this.drawW, this.drawH);
+      screenX = b.x + apex.x * b.w;
+      screenY = b.y + apex.y * b.h;
+    }
+    btn.style.left = `${screenX}px`;
+    btn.style.top  = `${screenY}px`;
+    btn.hidden = false;
   }
 
   private drawPolygon(vertices: FogVertex[], color: string, selected: boolean): void {

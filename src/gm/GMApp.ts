@@ -2429,6 +2429,11 @@ export class GMApp {
     const canvas = document.querySelector<HTMLCanvasElement>('#fog-canvas')!;
     this.fogEditor = new FogEditor(canvas, (fog) => this.state.setFog(fog));
     this.fogEditor.setRenderer(this.renderer);
+    // Mount the per-selection delete handle in the shared screen-space layer.
+    // marker-overlay sits above the fog canvas at the same inset:0 footprint,
+    // so a single px coordinate works for both.
+    const overlayHost = document.getElementById('marker-overlay');
+    if (overlayHost) this.fogEditor.setOverlayHost(overlayHost);
 
     // Start in select mode so the canvas is interactive immediately
     this.fogEditor.disable();
