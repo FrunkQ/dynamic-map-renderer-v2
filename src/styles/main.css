@@ -852,19 +852,33 @@ body.player-view #renderer-canvas {
 }
 
 /* ── Form controls ──────────────────────────────────────────────────────── */
-.select-full {
-  width: 100%;
-  background: var(--bg-input);
+/* Native <select> baseline — matches the EditableSelect surface so modal
+   dropdowns (licence pickers, calibration LFD selects, asset editor
+   dropdowns, font / aspect selects in the Text Map editor, etc.) feel
+   like the same family as the sidebar dropdowns. EditableSelect-wrapped
+   selects hide their native element via .editable-select__native, so
+   this rule only paints the unwrapped ones. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-input);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23999' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='3,5 6,8 9,5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  padding: var(--space-sm);
+  padding: var(--space-sm) 28px var(--space-sm) var(--space-sm);
   font-size: var(--font-size-base);
   outline: none;
   cursor: pointer;
 }
+select:focus { border-color: var(--border-focus); }
 
-.select-full:focus { border-color: var(--border-focus); }
+.select-full {
+  width: 100%;
+}
 
 /* Action option inside a <select> dropdown — e.g. "+ Add New Map".
    Native <option> styling support is patchy across browsers, but modern
