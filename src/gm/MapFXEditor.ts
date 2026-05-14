@@ -44,6 +44,9 @@ export class MapFXEditor {
 
   // Polygon-mode state
   private polyVertices: FogVertex[] = [];
+  /** Cached last point of the in-progress paint stroke — used so each
+   *  onContinue can emit a (prev, current) segment for the renderer. */
+  private lastLivePoint: FogVertex | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -52,19 +55,21 @@ export class MapFXEditor {
     this.canvas = canvas;
     this.brushController = new BrushController(clientToMapNorm);
     this.brushController.setHandlers({
-      onContinue: (_p, _s) => {
-        // Live preview is read by the caller from the controller; we just
-        // forward the current settings + points to the GM via onLivePaint.
-        const pts = this._brushPointsSoFar();
-        const s   = this.brushController.getSettings();
-        this.handlers.onLivePaint?.(this.activeKind, pts, s.radius);
+      onStart: (p, s) => {
+        // Live preview — single point disc.
+        this.handlers.onLivePaint?.(this.activeKind, [p], s.radius);
       },
-      onStart: (_p, _s) => {
-        const pts = this._brushPointsSoFar();
-        const s   = this.brushController.getSettings();
-        this.handlers.onLivePaint?.(this.activeKind, pts, s.radius);
+      onContinue: (p, s) => {
+        // Append a fresh segment so the renderer can extend the live stroke
+        // without re-painting prior points. Passing two points (prev, current)
+        // makes the rasteriser stroke a line between them with a rounded cap
+        // at each end — bridges any inter-frame gaps cleanly.
+        const prev = this.lastLivePoint ?? p;
+        this.lastLivePoint = p;
+        this.handlers.onLivePaint?.(this.activeKind, [prev, p], s.radius);
       },
       onEnd: (points, settings) => {
+        this.lastLivePoint = null;
         void this._commitPaintStroke(points, settings);
         this.handlers.onLivePaintEnd?.();
       },
@@ -125,14 +130,6 @@ export class MapFXEditor {
   getPolyPreview(): FogVertex[] { return this.polyVertices.slice(); }
 
   // ─── Private ──────────────────────────────────────────────────────────────
-
-  private _brushPointsSoFar(): FogVertex[] {
-    // BrushController doesn't expose its points; expose via a getter on
-    // a future iteration if the GM ends up needing it. For now the live
-    // preview only gets the latest point so we return an empty array as
-    // a placeholder — the GM renderer paints into the live patch directly.
-    return [];
-  }
 
   private _bindEvents(): void {
     this.canvas.addEventListener('pointerdown', (e) => {

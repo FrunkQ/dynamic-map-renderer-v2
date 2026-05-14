@@ -2663,28 +2663,59 @@ export class GMApp {
       this.mapFXEditor.finishPolygon();
     });
 
-    // Polygon mode adds vertices via clicks. Wire the canvas click so it
-    // goes to MapFXEditor when MapFX-poly is the active mode.
+    // Polygon mode adds vertices via clicks. When NOT in a MapFX mode,
+    // clicks on the canvas also serve as a "deselect MapFX entity" gesture
+    // — selector icons stopPropagation, so anything that bubbles here
+    // missed every icon.
     canvas.addEventListener('click', (e) => {
-      if (this.mapFXEditor.getMode() !== 'poly') return;
-      const rect = canvas.getBoundingClientRect();
-      const m = this.renderer.canvasCssToMapNorm(e.clientX - rect.left, e.clientY - rect.top);
-      if (m) this.mapFXEditor.polyClick({ x: m.x, y: m.y });
+      if (this.mapFXEditor.getMode() === 'poly') {
+        const rect = canvas.getBoundingClientRect();
+        const m = this.renderer.canvasCssToMapNorm(e.clientX - rect.left, e.clientY - rect.top);
+        if (m) this.mapFXEditor.polyClick({ x: m.x, y: m.y });
+        return;
+      }
+      if (this.mapFXEditor.getMode() === 'off' && this.selectedMapFXEntityId) {
+        this._selectMapFXEntity(null);
+      }
     });
 
-    // Commit → state + broadcast.
+    // Delete key on a selected MapFX entity → remove it. Matches the marker
+    // / FoW polygon shortcut so keyboard flow is consistent.
+    window.addEventListener('keydown', (e) => {
+      if (!this.selectedMapFXEntityId) return;
+      const t = document.activeElement;
+      if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement
+          || t instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        this._deleteMapFXEntity(this.selectedMapFXEntityId);
+      } else if (e.key === 'Escape') {
+        this._selectMapFXEntity(null);
+      }
+    });
+
+    // Commit → state + broadcast. Live painting → renderer for instant
+    // feedback (replaced by the entity recomposite on commit).
     this.mapFXEditor.setHandlers({
       onCommit: (entity: MapFXEntity) => {
         this.state.addMapFXEntity(entity);
-        const mapId = this.state.getState().map?.id;
-        this.host.broadcast({
-          type: 'mapfx_update',
-          payload: this.state.getState().mapfx,
-          ...(mapId ? { mapId } : {}),
-        });
         // After committing, hop out of paint/poly so the user picks up a
         // fresh action rather than accidentally double-creating.
+        // (Broadcast + renderer composite happen via the 'mapfx' state branch.)
         setMapFXMode('off');
+      },
+      onLivePaint: (kind, points, radius) => {
+        const k = MAPFX_REGISTRY[kind] ?? MAPFX_REGISTRY.fire;
+        this.renderer.applyMapFXLiveStroke({
+          points,
+          radius,
+          mode:  'paint',
+          color: k.defaultColor,
+        });
+      },
+      onLivePaintEnd: () => {
+        // No-op — the entity commit triggers a clean recomposite that
+        // replaces the live preview pixels.
       },
     });
 

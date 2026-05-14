@@ -339,6 +339,14 @@ export class Renderer {
     this.needsRender = true;
   }
 
+  /** Paint a live in-progress MapFX stroke for instant feedback while the
+   *  GM is dragging. Overwritten by the next updateMapFX call once the
+   *  stroke is committed as an entity. */
+  applyMapFXLiveStroke(stroke: { points: { x: number; y: number }[]; radius: number; mode: 'paint' | 'erase'; color: string }): void {
+    this.mapFXCompositor.applyLiveStroke(stroke);
+    this.needsRender = true;
+  }
+
   private _decodePng(base64Png: string): Promise<ImageBitmap | HTMLImageElement> {
     const url = base64Png.startsWith('data:') ? base64Png : `data:image/png;base64,${base64Png}`;
     if (typeof Image !== 'undefined') {

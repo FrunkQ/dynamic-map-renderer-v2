@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import type { MapFXEntity } from '../types.ts';
+import type { MapFXEntity, FogVertex } from '../types.ts';
 import { mapfxKind } from '../mapfx/mapfxKindRegistry.ts';
+import { applyStroke } from '../mapfx/strokeEngine.ts';
 
 /**
  * MapFXCompositor (v2.12/M4) — sibling to FogCompositor. Maintains an
@@ -110,6 +111,15 @@ export class MapFXCompositor {
   clear(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.patchCache.clear();
+    this.texture.needsUpdate = true;
+  }
+
+  /** Paint a live in-progress stroke directly onto the compositor canvas
+   *  for instant feedback while the GM is dragging. The next `redraw` call
+   *  will replace this with the committed entity's cached patch — strokes
+   *  are short enough that the swap is invisible. */
+  applyLiveStroke(stroke: { points: FogVertex[]; radius: number; mode: 'paint' | 'erase'; color: string }): void {
+    applyStroke({ canvas: this.canvas, ctx: this.ctx }, stroke);
     this.texture.needsUpdate = true;
   }
 
