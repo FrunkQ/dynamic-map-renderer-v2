@@ -378,6 +378,21 @@ export class Renderer {
       const mapUvH = maskEntry.bbox.h;
 
       let entry = this.shaderPlanes.get(poly.id);
+      if (entry && entry.kind !== poly.kind) {
+        // The polygon's kind morphed (e.g. via the dropdown change
+        // while a polygon is selected). The existing plane's material
+        // was compiled for the OLD kind's shader — uniforms and the
+        // fragment program don't match the new kind. Dispose and let
+        // the create branch below build a fresh plane for the new
+        // kind. Without this the polygon kept rendering with the old
+        // shader after a morph; only the GM-side flat-fill colour
+        // looked changed.
+        this.scene.remove(entry.mesh);
+        entry.mesh.geometry.dispose();
+        entry.material.dispose();
+        this.shaderPlanes.delete(poly.id);
+        entry = undefined;
+      }
       if (!entry) {
         // First sighting of this polygon — build material + mesh.
         const paramUniforms: Record<string, { value: number }> = {};
