@@ -92,6 +92,16 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 |--------|------|--------|
 | Fire | Promethean (4tB3zV) | https://www.shadertoy.com/view/4tB3zV |
 
+### Under evaluation *(may be removed before v2.12 ships)*
+
+The following shader is saved in the source tree for evaluation only and is
+not currently wired into the renderer. If it is dropped before release, the
+files in `src/mapfx/shaders/fire-fluid/` and this entry will be removed.
+
+| Effect | Name | Author | Licence | Source |
+|--------|------|--------|---------|--------|
+| Fire (fluid sim, multi-pass) | Volumetric fluid fire (dsKfWR) | al-ro | MIT | https://www.shadertoy.com/view/dsKfWR |
+
 Modifications made:
 - Translated from ShaderToy GLSL to Three.js EffectComposer / GLSL ES 1.00
 - Replaced `iChannel0` (video/image input) with `tDiffuse` (rendered scene texture)
