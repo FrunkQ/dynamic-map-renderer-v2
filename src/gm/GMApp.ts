@@ -2586,9 +2586,21 @@ export class GMApp {
       this.fogEditor.setBrushSettings({ radius: parseFloat(brushRadiusInput.value) });
     });
     document.querySelector('#fog-brush-clear')?.addEventListener('click', () => {
-      // Clear all polygons of the active kind only. Lets the GM wipe their
-      // current fire / fog / smoke layer without nuking the others.
+      // Clear all polygons of the active kind only. Lets the GM wipe
+      // their current fire / fog / smoke layer without nuking the
+      // others. Destructive — confirm first, and name the kind +
+      // count so the GM knows exactly what they're about to delete
+      // (it's easy to leave the panel on a different kind than the
+      // one you think you're clearing).
       const fog = this.state.getState().fog;
+      const k = overlayKind(this.activeOverlayKind);
+      const targets = fog.polygons.filter((p) => p.kind === this.activeOverlayKind);
+      if (targets.length === 0) return;
+      const noun = targets.length === 1 ? 'polygon' : 'polygons';
+      const ok = window.confirm(
+        `Delete all ${targets.length} ${k.label} ${noun} on this map? This can't be undone.`
+      );
+      if (!ok) return;
       const kept = fog.polygons.filter((p) => p.kind !== this.activeOverlayKind);
       this.state.setFog({ polygons: kept });
     });
