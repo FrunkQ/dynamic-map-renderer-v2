@@ -7,7 +7,7 @@ import type { OverlayKind, FogPolygon } from '../types.ts';
 import { offsetPolyline } from '../mapfx/polylineOffset.ts';
 import { subtractFromAll, cleanRibbonToBlobs } from '../mapfx/polygonOps.ts';
 import { floodFillToPolygon } from '../mapfx/floodFill.ts';
-import { attachSliderReadout } from '../utils/sliderReadout.ts';
+import { wireSliderTooltip } from '../utils/sliderReadout.ts';
 import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
@@ -2623,17 +2623,17 @@ export class GMApp {
     brushRadiusInput?.addEventListener('input', () => {
       this.fogEditor.setBrushSettings({ radius: parseFloat(brushRadiusInput.value) });
     });
-    // Live numeric readouts for the three HTML-defined sliders. Each
-    // gets a tabular-numeric span to its right via the shared helper.
-    const _attach = (id: string) => {
+    // Sliders show their value via a hover tooltip (title attribute)
+    // rather than a permanent readout — sliders are "feel" controls
+    // and a visible number tempts users to think the exact value
+    // matters. Hover still surfaces it for screenshotting / sharing.
+    const _tip = (id: string, label: string) => {
       const slider = document.getElementById(id) as HTMLInputElement | null;
-      if (!slider) return;
-      const readout = attachSliderReadout(slider);
-      if (readout) slider.parentElement?.appendChild(readout);
+      if (slider) wireSliderTooltip(slider, label);
     };
-    _attach('fog-brush-radius');
-    _attach('fog-edge-fade');
-    _attach('fog-fill-tolerance');
+    _tip('fog-brush-radius',   'Brush size');
+    _tip('fog-edge-fade',      'Edge Fade');
+    _tip('fog-fill-tolerance', 'Tolerance');
     document.querySelector('#fog-brush-clear')?.addEventListener('click', async () => {
       // Clear all polygons of the active kind only. Lets the GM wipe
       // their current fire / fog / smoke layer without nuking the
@@ -2958,16 +2958,16 @@ export class GMApp {
     slider.max = String(p.max);
     slider.step = String(p.step);
     slider.value = String(initial);
-    slider.title = `${p.label} — ${kindLabel}`;
     slider.addEventListener('input', () => {
       const v = parseFloat(slider.value);
       if (!Number.isFinite(v)) return;
       onChange(v);
     });
+    // Live tooltip (title) so the current value is hover-revealable
+    // for shareable setups; no permanent UI footprint for it.
+    wireSliderTooltip(slider, `${p.label} — ${kindLabel}`);
     row.appendChild(labelEl);
     row.appendChild(slider);
-    const readout = attachSliderReadout(slider);
-    if (readout) row.appendChild(readout);
     return row;
   }
 

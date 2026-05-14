@@ -1557,16 +1557,6 @@ option.select-option--add {
 .fog-brush-row > span { flex: 0 0 5.5em; color: var(--text-dim); }
 .fog-brush-row > select,
 .fog-brush-row > input { flex: 1 1 auto; min-width: 0; }
-/* Live slider readout — shows the current value to the right of a
-   range input. Reserved width keeps the slider's right edge from
-   jumping as the value gains / loses digits. */
-.slider-value {
-  flex: 0 0 3em;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-}
 /* Toggle variant — same label column, but the right side is a
    .toggle-switch rather than a stretching input. Push it left so
    the switch lines up with where the sliders end visually. */

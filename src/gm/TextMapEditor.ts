@@ -15,6 +15,7 @@ import { ensureFontsLoaded, registerLocalFontsFromAssets } from '../images/fontC
 import { generateId } from '../utils/id.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
 import { pickTextboxEmptyHint } from '../utils/emptyHints.ts';
+import { wireSliderTooltip } from '../utils/sliderReadout.ts';
 import { renderAssetToInlineHtml } from '../utils/resolveAssetImages.ts';
 
 /**
@@ -1080,25 +1081,23 @@ export class TextMapEditor {
     tb.appendChild(colour);
 
     // Font size — slider 0.5..4 multiplier on the page-level basePx.
+    // No visible numeric readout (v2.12 sliders-are-feel rule); the
+    // value rides in the tooltip for hover / screenshot use.
     tb.appendChild(this._toolbarLabel('Size'));
     const size = document.createElement('input');
     size.type = 'range';
     size.min = '0.5'; size.max = '4'; size.step = '0.1';
     size.value = String(el.fontScale ?? 1);
     size.className = 'txt-map-element-slider';
-    size.title = 'Font size multiplier for this element';
-    const sizeVal = document.createElement('span');
-    sizeVal.className = 'txt-map-element-slider-val';
-    sizeVal.textContent = `${(el.fontScale ?? 1).toFixed(1)}×`;
     size.addEventListener('input', () => {
       const v = parseFloat(size.value);
       el.fontScale = v;
-      sizeVal.textContent = `${v.toFixed(1)}×`;
       const node = this.elementNodes.get(el.id);
       const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
       if (body) this._applyTextStyle(body, el);
     });
-    tb.append(size, sizeVal);
+    wireSliderTooltip(size, 'Size');
+    tb.appendChild(size);
 
     // Font family — pulls from the Image Library's font registry.
     // Each option is rendered in its OWN font so the user previews the

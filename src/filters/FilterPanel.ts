@@ -1,5 +1,6 @@
 import type { FilterDefinition, FilterParam } from './schema.ts';
 import type { FilterParamValues } from '../types.ts';
+import { wireSliderTooltip } from '../utils/sliderReadout.ts';
 
 /**
  * FilterPanel
@@ -139,38 +140,20 @@ export class FilterPanel {
     input.value = String(value);
     input.dataset['paramId'] = param.id;
 
-    const numInput = document.createElement('input');
-    numInput.type = 'number';
-    numInput.className = 'param-number';
-    numInput.min = String(param.min);
-    numInput.max = String(param.max);
-    numInput.step = String(param.step);
-    numInput.value = String(value);
-
     input.addEventListener('input', () => {
       const v = parseFloat(input.value);
-      numInput.value = String(v);
       this.currentValues[param.id] = v;
       this.onChangeCallback({ ...this.currentValues });
     });
 
-    numInput.addEventListener('input', () => {
-      const min = parseFloat(input.min);
-      const max = parseFloat(input.max);
-      const v = Math.max(min, Math.min(max, parseFloat(numInput.value) || 0));
-      input.value = String(v);
-      this.currentValues[param.id] = v;
-      this.onChangeCallback({ ...this.currentValues });
-    });
-
-    numInput.addEventListener('blur', () => {
-      numInput.value = input.value;
-    });
+    // v2.12 design call: sliders are "feel" controls; visible numbers
+    // tempt users into precision-twiddling. Title attribute carries
+    // the value for hover / screenshot use.
+    wireSliderTooltip(input, param.label);
 
     const controls = document.createElement('div');
     controls.className = 'param-controls';
     controls.appendChild(input);
-    controls.appendChild(numInput);
     row.appendChild(controls);
     return row;
   }

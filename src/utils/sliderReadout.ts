@@ -1,14 +1,15 @@
 /**
- * Slider-readout utility — appends a live value display next to a
- * range input so the GM can see what they're dragging to. One shared
- * helper across MapFX, Filter, Transitions panels keeps formatting
- * consistent.
+ * Slider-tooltip utility — wire a range input so the slider's
+ * `title` attribute live-updates with its current value. The browser
+ * tooltip on hover gives GMs an exact value for screenshotting /
+ * sharing setups without burning permanent UI space on a number.
  *
- * Number of decimal places is derived from the slider's `step`
- * attribute: step 0.01 → 2 dp; step 0.1 → 1 dp; step 1 (or absent)
- * → integer. Toggle-style sliders (min=0, max=1, step=1) skip the
- * readout entirely since the on/off state is already visually
- * obvious from the slider position.
+ * v2.12 design call: sliders are "feel" controls (intensity, scale,
+ * opacity, duration, etc.). Visible numbers and editable number
+ * inputs add visual noise and tempt users to think the numeric
+ * value is meaningful when really only the resulting LOOK matters.
+ * Strip the numbers, keep the value reachable on hover for the rare
+ * "what value worked best?" question.
  */
 
 /** Format a numeric value for display using the step's precision. */
@@ -22,31 +23,19 @@ export function formatSliderValue(value: number, step: number | string): string 
 }
 
 /**
- * Wire a live-value readout to an existing range input. Returns the
- * created <span> so the caller can insert it wherever fits the row
- * layout (usually as the next sibling of the slider).
+ * Wire a range input so its tooltip (`title` attribute) updates live
+ * to show the current value. Pass an optional `baseTitle` to keep a
+ * human-readable label alongside the number — e.g. baseTitle =
+ * "Intensity" produces "Intensity — 0.85" on hover.
  *
- * Skip-toggle: integer 0..1 sliders aren't wired (they're true/false
- * pretending to be sliders, and a "0"/"1" readout reads as noise).
- * Callers that actually want a value on those should pass {force:
- * true}.
+ * Returns nothing — purely side-effecting wiring on the input.
  */
-export function attachSliderReadout(
-  slider: HTMLInputElement,
-  opts: { force?: boolean } = {},
-): HTMLSpanElement | null {
-  const min  = parseFloat(slider.min);
-  const max  = parseFloat(slider.max);
-  const step = parseFloat(slider.step);
-  if (!opts.force && min === 0 && max === 1 && step === 1) return null;
-
-  const span = document.createElement('span');
-  span.className = 'slider-value';
+export function wireSliderTooltip(slider: HTMLInputElement, baseTitle?: string): void {
   const update = () => {
     const v = parseFloat(slider.value);
-    span.textContent = formatSliderValue(v, slider.step);
+    const formatted = formatSliderValue(v, slider.step);
+    slider.title = baseTitle ? `${baseTitle} — ${formatted}` : formatted;
   };
   slider.addEventListener('input', update);
   update();
-  return span;
 }

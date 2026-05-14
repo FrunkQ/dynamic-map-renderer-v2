@@ -1,4 +1,5 @@
 import type { TransitionDefinition, TransitionParam } from './schema.ts';
+import { wireSliderTooltip } from '../utils/sliderReadout.ts';
 
 /**
  * TransitionPanel
@@ -60,34 +61,21 @@ export class TransitionPanel {
     input.value = String(value);
     input.className = 'transition-slider';
 
-    const numInput = document.createElement('input');
-    numInput.type  = 'number';
-    numInput.min   = String(param.min);
-    numInput.max   = String(param.max);
-    numInput.step  = String(param.step);
-    numInput.value = String(value);
-    numInput.className = 'param-number';
-
     input.addEventListener('input', () => {
       const v = parseFloat(input.value);
-      numInput.value = String(v);
       this.currentParams[param.id] = v;
       this.onChangeFn({ ...this.currentParams });
     });
 
-    numInput.addEventListener('input', () => {
-      const v = Math.max(param.min, Math.min(param.max, parseFloat(numInput.value) || 0));
-      input.value = String(v);
-      this.currentParams[param.id] = v;
-      this.onChangeFn({ ...this.currentParams });
-    });
-
-    numInput.addEventListener('blur', () => { numInput.value = input.value; });
+    // v2.12 design call: sliders are "feel" controls. Strip the
+    // paired number input; expose value on hover for screenshot /
+    // share use only.
+    const tipLabel = param.unit ? `${param.label} (${param.unit})` : param.label;
+    wireSliderTooltip(input, tipLabel);
 
     const controls = document.createElement('div');
     controls.className = 'param-controls';
     controls.appendChild(input);
-    controls.appendChild(numInput);
     row.appendChild(controls);
     return row;
   }
