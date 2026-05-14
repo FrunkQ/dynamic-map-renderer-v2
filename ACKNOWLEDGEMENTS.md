@@ -93,6 +93,25 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 | Coloured Flames | Promethean (4tB3zV) | https://www.shadertoy.com/view/4tB3zV |
 | River | A river (MsSGWK, Pierco fork) | https://www.shadertoy.com/view/MsSGWK |
 
+### MIT-licensed shaders
+
+The MapFX *Ocean* effect's shader is adapted from work by **afl_ext (2017-2024)**,
+distributed under the [MIT licence](https://opensource.org/licenses/MIT).
+
+| Effect | Name | Source |
+|--------|------|--------|
+| Ocean | Ocean / open-sea waves (afl_ext) | Shadertoy (see source comment) |
+
+Modifications made to afl_ext's ocean shader:
+- Replaced the mouse-rotated 3D camera + ray-march of two water planes with a fixed top-down view; each shader-plane pixel samples the surface directly via `vUv` mapped to wave-space.
+- Dropped the sky-only branch (top-down can't see horizon).
+- Reduced `ITERATIONS_NORMAL` from 36 to 16; at battlemap altitude the micro-detail isn't visible and 36-iteration normals scale poorly when a large ocean polygon covers most of the screen.
+- Kept the procedural atmosphere + sun + ACES tone-mapping intact — they're what give the original its plausible-daytime look.
+- Removed the trailing `pow(.., 1/2.2)` sRGB encoding inside ACES; the renderer's `OutputPass` does sRGB encoding for the whole scene and keeping it in the shader would double-encode.
+- Added per-poly uniforms: `uColor` (gentle 20% hue tint mixed in after tone-mapping), `uIntensity`, `uScale` (wave feature size, 0.25–4 — covers small bay through horizon-spanning ocean), `uSpeed` (0 = mirror-still through 4 = stormy). No direction slider — ocean swells are multi-directional in the wave-sum, not a single flow vector.
+
+
+
 Modifications made to "Promethean":
 - Translated from ShaderToy GLSL to Three.js ShaderMaterial / GLSL ES 1.00.
 - Replaced `iTime` with `time`; kept the `iChannel0` noise texture purpose as `uNoise`.

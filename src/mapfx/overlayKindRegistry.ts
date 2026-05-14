@@ -190,6 +190,18 @@ const FIRE_SHADER_PARAMS: ShaderParamDef[] = [
 //     (water flows toward the top of the map). Polygon-scoped naturally:
 //     every river bends differently and the inheritance pattern carries
 //     the last-tuned direction onto the next-painted polygon.
+// Ocean shader params (afl_ext / MIT). No direction — oceans have
+// multi-directional swells, not a single flow vector. Wave size +
+// speed + intensity is enough to cover "still mirror lake" through
+// "stormy open sea". uScale's wide range supports painting anything
+// from a small bay to a horizon-spanning ocean covering most of the
+// map.
+const OCEAN_SHADER_PARAMS: ShaderParamDef[] = [
+  { id: 'intensity', label: 'Intensity', min: 0.05, max: 1.5, step: 0.05, default: 1.0 },
+  { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0, step: 0.05, default: 1.0 },
+  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0, step: 0.05, default: 1.0 },
+];
+
 const RIVER_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'intensity', label: 'Intensity', min: 0.05, max: 1.5,            step: 0.05, default: 1.0 },
   { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0,            step: 0.05, default: 1.0 },
@@ -210,6 +222,7 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   blood:    { id: 'blood',    label: 'Blood',         iconSvg: SVG_BLOOD,     defaultColor: '#8a0d18', defaultRadius: 15, blend: 'multiply', animated: false, selectByInterior: false, allowColor: false, z: 5   },
   water:    { id: 'water',    label: 'Water',         iconSvg: SVG_WATER,     defaultColor: '#4aa3ff', defaultRadius: 35, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: true,  z: 5   },
   river:    { id: 'river',    label: 'River',         iconSvg: SVG_WATER,     defaultColor: '#5aa9d6', defaultRadius: 35, blend: 'normal',   animated: true,  selectByInterior: false, allowColor: true,  z: 5, shader: 'river', shaderParams: RIVER_SHADER_PARAMS },
+  ocean:    { id: 'ocean',    label: 'Ocean',         iconSvg: SVG_WATER,     defaultColor: '#5fa9d6', defaultRadius: 60, blend: 'normal',   animated: true,  selectByInterior: false, allowColor: true,  z: 5, shader: 'ocean', shaderParams: OCEAN_SHADER_PARAMS },
   shadow:   { id: 'shadow',   label: 'Shadow',        iconSvg: SVG_SHADOW,    defaultColor: '#10131c', defaultRadius: 35, blend: 'multiply', animated: false, selectByInterior: false, allowColor: false, z: 30  },
   electric: { id: 'electric', label: 'Lightning',     iconSvg: SVG_ELECTRIC,  defaultColor: '#a0c8ff', defaultRadius: 12, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: false, z: 15  },
   poison:   { id: 'poison',   label: 'Poison',        iconSvg: SVG_POISON,    defaultColor: '#7dd23a', defaultRadius: 20, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 10  },
@@ -221,7 +234,7 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
 /** Order for the kind dropdown — fog first (most-used), then groupings. */
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   'fog',
-  'fire', 'cold', 'river', 'water', 'smoke', 'electric',
+  'fire', 'cold', 'river', 'ocean', 'water', 'smoke', 'electric',
   'light', 'holy', 'healing',
   'blood', 'shadow', 'poison', 'fear',
 ];
