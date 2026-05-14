@@ -2707,12 +2707,12 @@ export class GMApp {
   private _commitOverlayBrushStroke(settings: import('../mapfx/BrushController.ts').BrushSettings, points: import('../types.ts').FogVertex[]): void {
     if (points.length === 0) return;
     const radMapNorm = this.fogEditor.radiusScreenPxToMapNorm(settings.radius);
-    const ribbon = offsetPolyline(points, radMapNorm);
-    if (ribbon.length < 3) return;
-    // Self-union the ribbon. Returns {outer, holes}[] — disconnected
-    // scribbles become separate polygons, and donut-shaped scribbles keep
-    // their hole (e.g. a "ring of fire" stroke).
-    const blobs = cleanRibbonToBlobs(ribbon);
+    // offsetPolyline returns the flat-ended ribbon + a disc at each endpoint;
+    // cleanRibbonToBlobs unions them so end-points round naturally and any
+    // self-overlap (loops) absorbs without leaving cap imprints.
+    const rings = offsetPolyline(points, radMapNorm);
+    if (rings.length === 0) return;
+    const blobs = cleanRibbonToBlobs(rings);
     if (blobs.length === 0) return;
     const fog = this.state.getState().fog;
     if (settings.mode === 'erase') {

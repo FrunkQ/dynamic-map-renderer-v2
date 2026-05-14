@@ -59,23 +59,34 @@ function outerAndHolesFromPC(p: pc.Polygon): { outer: FogVertex[]; holes: FogVer
 }
 
 /**
- * Clean a self-intersecting ribbon polygon (from offsetPolyline) into one or
- * more non-self-intersecting "blob" outlines.
+ * Union one or more rings into a clean set of "blob" outlines.
  *
- * Holes that the union produces are DROPPED — a brush stroke that loops
- * back over itself should leave a solid blob, not a polygon with a
- * semicircle window into the background. (Holes from explicit erase
- * carving — via `subtractFromAll` — ARE kept.)
+ * Called with the polygons emitted by `offsetPolyline` (the flat-ended
+ * ribbon plus a full disc at each endpoint). polygon-clipping.union
+ * absorbs the overlaps so the discs round the ribbon endpoints naturally,
+ * AND any self-overlap in the ribbon (e.g. a stroke that loops back on
+ * itself) collapses cleanly without leaving the semicircular end-cap
+ * imprints that an inline half-disc cap used to produce.
  *
- * Disconnected components become separate polygons (each its own blob).
+ * Holes from the union are DROPPED — a brush stroke should leave a solid
+ * blob, not a polygon with a hole. (Holes from explicit erase carving
+ * via `subtractFromAll` ARE kept; that's a separate semantic.)
  */
-export function cleanRibbonToBlobs(ring: FogVertex[]): FogVertex[][] {
-  if (ring.length < 3) return [];
+export function cleanRibbonToBlobs(rings: FogVertex[][]): FogVertex[][] {
+  const inputs: pc.Geom[] = [];
+  for (const r of rings) {
+    if (r.length >= 3) inputs.push(toPCPolygon(r) as pc.Geom);
+  }
+  if (inputs.length === 0) return [];
   let cleaned: pc.MultiPolygon;
   try {
-    cleaned = pc.union(toPCPolygon(ring) as pc.Geom);
+    cleaned = (inputs.length === 1)
+      ? pc.union(inputs[0]!)
+      : pc.union(inputs[0]!, ...inputs.slice(1));
   } catch {
-    return [ring];
+    // Library balked on a numerical edge case — fall back to the largest
+    // input ring so the stroke isn't lost entirely.
+    return rings.length > 0 ? [rings[0]!] : [];
   }
   const result: FogVertex[][] = [];
   for (const poly of cleaned) {

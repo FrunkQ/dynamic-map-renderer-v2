@@ -635,9 +635,9 @@ export class FogEditor {
   private _drawInProgressBrush(points: FogVertex[], settings: BrushSettings): void {
     const radMapNorm = this.radiusScreenPxToMapNorm(settings.radius);
     if (radMapNorm <= 0) return;
-    const ribbon = offsetPolyline(points, radMapNorm);
-    if (ribbon.length < 3) return;
-    const blobs = cleanRibbonToBlobs(ribbon);
+    const rings = offsetPolyline(points, radMapNorm);
+    if (rings.length === 0) return;
+    const blobs = cleanRibbonToBlobs(rings);
     if (blobs.length === 0) return;
     const ctx = this.ctx;
     const b = this.getMapBounds(this.drawW, this.drawH);
