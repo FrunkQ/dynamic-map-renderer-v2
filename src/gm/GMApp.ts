@@ -4,7 +4,7 @@ import { FogEditor } from './FogEditor.ts';
 import { OVERLAY_KIND_REGISTRY, OVERLAY_KIND_ORDER, overlayKind } from '../mapfx/overlayKindRegistry.ts';
 import type { OverlayKind, FogPolygon } from '../types.ts';
 import { offsetPolyline } from '../mapfx/polylineOffset.ts';
-import { subtractFromAll } from '../mapfx/polygonOps.ts';
+import { subtractFromAll, cleanRibbonToBlobs } from '../mapfx/polygonOps.ts';
 import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
@@ -1492,6 +1492,12 @@ export class GMApp {
     // player independently of map_change and can be applied to the wrong map.
     if (changed.includes('fog') && !changed.includes('map')) {
       this.renderer.updateFog(state.fog);
+      // v2.12 — sync FogEditor's local polygon list so brushed polygons
+      // get marching ants + interior-click selection without waiting for
+      // the next map switch. Selection survives if still valid.
+      this.fogEditor.syncPolygons(state.fog.polygons);
+      // Selector icons for non-fog kinds redraw from state.
+      this._refreshMapFXSelectors();
       this.host.broadcast({
         type: 'fog_update',
         payload: state.fog,
@@ -2628,29 +2634,44 @@ export class GMApp {
   }
 
   /** Brush stroke commit. Converts the polyline to a polygon (offset at
-   *  brush radius), then either pushes it as a new overlay polygon (paint)
-   *  or runs polygon-difference against every existing polygon (erase).
-   *  Each stroke = one polygon, no auto-merge with other strokes. */
+   *  brush radius, converted from CSS px to map-norm at commit time so the
+   *  GM gets fine-detail painting by zooming in), then either pushes it as
+   *  a new overlay polygon (paint) or runs polygon-difference against
+   *  every existing polygon (erase). Each stroke = one polygon, no
+   *  auto-merge with other strokes. */
   private _commitOverlayBrushStroke(settings: import('../mapfx/BrushController.ts').BrushSettings, points: import('../types.ts').FogVertex[]): void {
     if (points.length === 0) return;
-    const ring = offsetPolyline(points, settings.radius);
-    if (ring.length < 3) return;
+    const radMapNorm = this.fogEditor.radiusScreenPxToMapNorm(settings.radius);
+    const ribbon = offsetPolyline(points, radMapNorm);
+    if (ribbon.length < 3) return;
+    // Self-union the ribbon → cleans up self-intersections from a wiggly
+    // stroke and emits a single "blob" outline of the area swept. If the
+    // stroke disconnects into separate areas, each becomes its own polygon.
+    const blobs = cleanRibbonToBlobs(ribbon);
+    if (blobs.length === 0) return;
     const fog = this.state.getState().fog;
     if (settings.mode === 'erase') {
-      const result = subtractFromAll(fog.polygons, ring);
-      this.state.setFog({ polygons: result });
+      // For erase, treat the cleaned shape as a single union of all blobs
+      // and subtract from every overlapping target. Multi-blob strokes
+      // happen rarely (the brush ribbon is continuous so most strokes
+      // collapse to one blob); when they do, subtract each in sequence.
+      let polys = fog.polygons;
+      for (const blob of blobs) polys = subtractFromAll(polys, blob);
+      this.state.setFog({ polygons: polys });
       return;
     }
-    // Paint — new polygon of the active kind.
+    // Paint — one new polygon per blob (one stroke can produce multiple if
+    // the user drew disconnected scribbles in one drag).
     const k = overlayKind(this.activeOverlayKind);
-    const poly: FogPolygon = {
+    const now = Date.now();
+    const newPolys: FogPolygon[] = blobs.map((vertices) => ({
       id:        generateId(),
       kind:      this.activeOverlayKind,
-      vertices:  ring,
+      vertices,
       color:     settings.color || k.defaultColor,
-      createdAt: Date.now(),
-    };
-    this.state.setFog({ polygons: [...fog.polygons, poly] });
+      createdAt: now,
+    }));
+    this.state.setFog({ polygons: [...fog.polygons, ...newPolys] });
   }
 
   private bindFilterPanel(): void {

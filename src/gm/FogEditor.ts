@@ -2,6 +2,8 @@ import type { FogPolygon, FogState, FogVertex, OverlayKind } from '../types.ts';
 import { generateId } from '../utils/id.ts';
 import type { Renderer } from '../rendering/Renderer.ts';
 import { BrushController, type BrushSettings } from '../mapfx/BrushController.ts';
+import { offsetPolyline } from '../mapfx/polylineOffset.ts';
+import { cleanRibbonToBlobs } from '../mapfx/polygonOps.ts';
 
 export interface FogEditorMode {
   drawing: boolean;
@@ -73,6 +75,10 @@ export class FogEditor {
   private brushEnd:  FogBrushEndHandler  | null = null;
   /** Latest cursor position in map-norm coords for the brush-size outline. */
   private brushCursor: FogVertex | null = null;
+  /** Points being collected during an in-progress brush drag, in map-norm
+   *  coords. Empty between strokes. Rendered as a dashed offset-polygon
+   *  outline so the user sees the shape they're laying down. */
+  private brushDragPoints: FogVertex[] = [];
   /** External brush preview (e.g. MapFX). When set, the cursor outline
    *  renders with these settings instead of FogEditor's own brush. Allows
    *  the fog canvas to host the preview for ANY brush-using editor. */
@@ -87,9 +93,21 @@ export class FogEditor {
 
     this.brushController = new BrushController((cx, cy) => this._clientToMapNorm(cx, cy));
     this.brushController.setHandlers({
-      onStart:    (p, s) => this.brushLive?.(s, [p]),
-      onContinue: (p, s) => this.brushLive?.(s, [p]),
-      onEnd:      (pts, s) => this.brushEnd?.(s, pts),
+      onStart: (p, s) => {
+        this.brushDragPoints = [p];
+        this.brushLive?.(s, [p]);
+        this.redraw();
+      },
+      onContinue: (p, s) => {
+        this.brushDragPoints.push(p);
+        this.brushLive?.(s, [p]);
+        this.redraw();
+      },
+      onEnd: (pts, s) => {
+        this.brushDragPoints = [];
+        this.brushEnd?.(s, pts);
+        this.redraw();
+      },
     });
 
     this.syncSize();
@@ -225,6 +243,21 @@ export class FogEditor {
     this.polygons = fog.polygons.map((p) => ({ ...p, vertices: [...p.vertices] }));
     this.currentVertices = [];
     this.setSelection(null);
+    this.updateMarchState();
+    this.redraw();
+    this.emitMode();
+  }
+
+  /** Lighter alternative to loadState — refresh the polygon list without
+   *  wiping in-progress draw / selection state. Used when external code
+   *  (e.g. GMApp brush commit) mutates state.fog and FogEditor needs to
+   *  pick up the new polygons for marching ants + interior-click selection.
+   *  Selection survives if the selected id is still in the new list. */
+  syncPolygons(polygons: FogPolygon[]): void {
+    this.polygons = polygons.map((p) => ({ ...p, vertices: [...p.vertices] }));
+    if (this.selectedId && !this.polygons.some((p) => p.id === this.selectedId)) {
+      this.setSelection(null);
+    }
     this.updateMarchState();
     this.redraw();
     this.emitMode();
@@ -493,6 +526,11 @@ export class FogEditor {
       this.drawInProgress(this.currentVertices);
     }
 
+    if (this.brushActive && this.brushDragPoints.length > 0) {
+      const s = this.brushController.getSettings();
+      this._drawInProgressBrush(this.brushDragPoints, s);
+    }
+
     if (this.brushActive && this.brushCursor) {
       const s = this.brushController.getSettings();
       this._drawBrushCursor(this.brushCursor, s.radius, s.color, s.mode);
@@ -504,6 +542,53 @@ export class FogEditor {
     this._updateDeleteHandle();
   }
 
+  /** Convert a brush radius in CSS pixels into normalised map coords using
+   *  the current camera transform. Used by the live preview + by GMApp at
+   *  brush-commit time so the polygon offset matches what the GM sees. */
+  radiusScreenPxToMapNorm(radiusPx: number): number {
+    const b = this.getMapBounds(this.drawW, this.drawH);
+    if (b.w <= 0) return 0;
+    return radiusPx / b.w;
+  }
+
+  /** Draw the in-progress brush polygon outline as a dashed shape so the GM
+   *  sees the result of their drag before committing. The ribbon is run
+   *  through `cleanRibbonToBlobs` so self-crossings collapse to a single
+   *  "blob" outline live, matching what the commit will produce. */
+  private _drawInProgressBrush(points: FogVertex[], settings: BrushSettings): void {
+    const radMapNorm = this.radiusScreenPxToMapNorm(settings.radius);
+    if (radMapNorm <= 0) return;
+    const ribbon = offsetPolyline(points, radMapNorm);
+    if (ribbon.length < 3) return;
+    const blobs = cleanRibbonToBlobs(ribbon);
+    if (blobs.length === 0) return;
+    const ctx = this.ctx;
+    const b = this.getMapBounds(this.drawW, this.drawH);
+    const stroke = settings.mode === 'erase' ? '#ffffff' : (settings.color || '#000000');
+    ctx.save();
+    for (const blob of blobs) {
+      ctx.beginPath();
+      ctx.moveTo(b.x + blob[0]!.x * b.w, b.y + blob[0]!.y * b.h);
+      for (let i = 1; i < blob.length; i++) {
+        ctx.lineTo(b.x + blob[i]!.x * b.w, b.y + blob[i]!.y * b.h);
+      }
+      ctx.closePath();
+      // Semi-transparent fill so the shape reads as the about-to-commit area.
+      ctx.fillStyle = stroke + '40';
+      ctx.fill();
+      // Dashed outline — marches via the same dashOffset clock as the
+      // committed polygons' ants.
+      ctx.setLineDash([6, 6]);
+      ctx.lineDashOffset = -this.dashOffset;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+    }
+    ctx.restore();
+  }
+
   /** External callers can drive the brush-size preview
    *  outline through this method so the cursor renders on the same fog
    *  canvas — no new DOM layer needed. Pass null to clear. */
@@ -512,16 +597,16 @@ export class FogEditor {
     this.redraw();
   }
 
-  /** Draw the brush-size circle outline at the cursor. Two strokes — a
-   *  bright fill and a dark inner outline — so the ring reads against
-   *  any map background. The colour cue (paint vs erase) is the fill:
-   *  brush colour when painting, white when erasing (reveal). */
+  /** Draw the brush-size circle outline at the cursor. Radius is now in
+   *  CSS pixels directly (v2.12 unified system) — so the brush stays
+   *  visually constant as the GM zooms, giving fine-detail painting via
+   *  zoom-in. The actual map polygon shrinks at higher zoom. */
   private _drawBrushCursor(pos: FogVertex, radius: number, color: string, mode: 'paint' | 'erase'): void {
     const ctx = this.ctx;
     const b = this.getMapBounds(this.drawW, this.drawH);
     const cx = b.x + pos.x * b.w;
     const cy = b.y + pos.y * b.h;
-    const rad = Math.max(2, radius * b.w);
+    const rad = Math.max(2, radius);
     ctx.save();
     ctx.lineWidth = 2;
     ctx.strokeStyle = mode === 'erase' ? '#ffffff' : (color || '#000000');

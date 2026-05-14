@@ -45,6 +45,40 @@ function fromPCPolygon(p: pc.Polygon): FogVertex[] {
 }
 
 /**
+ * Clean a self-intersecting ribbon polygon (from offsetPolyline) into one or
+ * more non-self-intersecting "blob" outlines. A wiggly stroke that crosses
+ * itself collapses to the outline of the swept area, not the ribbon path —
+ * matching the GM's intuition that "scribbling in a circle should fill it
+ * in, not leave a wiggly line".
+ *
+ * Holes in the result are dropped (we render outer rings only — keeps the
+ * polygon mental model simple). Disconnected components become separate
+ * polygons (each is its own blob).
+ */
+export function cleanRibbonToBlobs(ring: FogVertex[]): FogVertex[][] {
+  if (ring.length < 3) return [];
+  let cleaned: pc.MultiPolygon;
+  try {
+    cleaned = pc.union(toPCPolygon(ring) as pc.Geom);
+  } catch {
+    // Library balks on certain self-intersection edge cases — fall back to
+    // the raw ribbon so the stroke isn't lost entirely.
+    return [ring];
+  }
+  const result: FogVertex[][] = [];
+  for (const poly of cleaned) {
+    const outer = poly[0];
+    if (!outer || outer.length < 3) continue;
+    const verts: FogVertex[] = [];
+    for (let i = 0; i < outer.length - 1; i++) {
+      verts.push({ x: outer[i]![0], y: outer[i]![1] });
+    }
+    if (verts.length >= 3) result.push(verts);
+  }
+  return result;
+}
+
+/**
  * Subtract the eraser polygon from every overlapping polygon in `polygons`.
  * Returns the new polygon list with any clipped polygon replaced by 0..N
  * fragments. Non-overlapping polygons pass through unchanged.
