@@ -2512,13 +2512,19 @@ export class GMApp {
       // When a polygon is selected, preselect its kind in the dropdown so
       // the GM sees the same panel state they'd get by picking that kind
       // manually (shader-params panel, colour swatch enable/disable, etc.).
+      // On deselection (selected → none, not mid-draw), revert the panel
+      // to fog — the default kind — so the GM isn't stuck on a previous
+      // pick after stepping away from the last polygon.
       if (selectedId && selectedId !== this._lastSelectedSyncedId) {
         const poly = this.state.getState().fog.polygons.find((p) => p.id === selectedId);
         if (poly && poly.kind !== this.activeOverlayKind) {
           this._syncPanelToKind(poly.kind);
         }
         this._lastSelectedSyncedId = selectedId;
-      } else if (!selectedId) {
+      } else if (!selectedId && this._lastSelectedSyncedId !== null) {
+        if (!drawing && this.activeOverlayKind !== 'fog') {
+          this._syncPanelToKind('fog');
+        }
         this._lastSelectedSyncedId = null;
       }
     });
