@@ -88,6 +88,9 @@ export class FogCompositor {
       this.ctx.strokeStyle = fill;
       this.ctx.lineWidth   = 1;
 
+      // Path = outer ring + every hole as its own subpath. fill('evenodd')
+      // punches the holes out of the fill; stroke draws every subpath so
+      // the holes outline too.
       this.ctx.beginPath();
       const v0 = poly.vertices[0]!;
       this.ctx.moveTo(v0.x * width, v0.y * height);
@@ -96,8 +99,19 @@ export class FogCompositor {
         this.ctx.lineTo(v.x * width, v.y * height);
       }
       this.ctx.closePath();
-      this.ctx.fill();
-      // Stroke the same colour to eat the sub-pixel AA fringe between fills.
+      if (poly.holes) {
+        for (const hole of poly.holes) {
+          if (hole.length < 3) continue;
+          const h0 = hole[0]!;
+          this.ctx.moveTo(h0.x * width, h0.y * height);
+          for (let i = 1; i < hole.length; i++) {
+            const h = hole[i]!;
+            this.ctx.lineTo(h.x * width, h.y * height);
+          }
+          this.ctx.closePath();
+        }
+      }
+      this.ctx.fill('evenodd');
       this.ctx.stroke();
       this.ctx.restore();
     }

@@ -66,7 +66,13 @@ export interface FogPolygon {
   id:        string;
   /** Drives fill / blend / animation in the renderer. */
   kind:      OverlayKind;
+  /** Outer ring of the polygon. */
   vertices:  FogVertex[];
+  /** Optional inner rings that punch holes in the fill. Renders with the
+   *  even-odd fill rule (canvas2D `fill('evenodd')`); each hole stroke
+   *  inherits the same marching-ants treatment as the outer ring so the
+   *  GM can see the boundary clearly. */
+  holes?:    FogVertex[][];
   /** Optional colour override — for fog the GM picks via the colour input,
    *  for other kinds the kind's default colour is used unless this is set. */
   color?:    string;

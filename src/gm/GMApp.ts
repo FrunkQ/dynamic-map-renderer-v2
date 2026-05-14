@@ -2644,30 +2644,29 @@ export class GMApp {
     const radMapNorm = this.fogEditor.radiusScreenPxToMapNorm(settings.radius);
     const ribbon = offsetPolyline(points, radMapNorm);
     if (ribbon.length < 3) return;
-    // Self-union the ribbon → cleans up self-intersections from a wiggly
-    // stroke and emits a single "blob" outline of the area swept. If the
-    // stroke disconnects into separate areas, each becomes its own polygon.
+    // Self-union the ribbon. Returns {outer, holes}[] — disconnected
+    // scribbles become separate polygons, and donut-shaped scribbles keep
+    // their hole (e.g. a "ring of fire" stroke).
     const blobs = cleanRibbonToBlobs(ribbon);
     if (blobs.length === 0) return;
     const fog = this.state.getState().fog;
     if (settings.mode === 'erase') {
-      // For erase, treat the cleaned shape as a single union of all blobs
-      // and subtract from every overlapping target. Multi-blob strokes
-      // happen rarely (the brush ribbon is continuous so most strokes
-      // collapse to one blob); when they do, subtract each in sequence.
+      // Erase: subtract each blob's outer (holes inside an erase stroke
+      // are unusual but harmless — they're carved-from-the-eraser regions
+      // that would put fog back; just drop them).
       let polys = fog.polygons;
-      for (const blob of blobs) polys = subtractFromAll(polys, blob);
+      for (const blob of blobs) polys = subtractFromAll(polys, blob.outer);
       this.state.setFog({ polygons: polys });
       return;
     }
-    // Paint — one new polygon per blob (one stroke can produce multiple if
-    // the user drew disconnected scribbles in one drag).
+    // Paint — one new polygon per blob, with the blob's holes preserved.
     const k = overlayKind(this.activeOverlayKind);
     const now = Date.now();
-    const newPolys: FogPolygon[] = blobs.map((vertices) => ({
+    const newPolys: FogPolygon[] = blobs.map((blob) => ({
       id:        generateId(),
       kind:      this.activeOverlayKind,
-      vertices,
+      vertices:  blob.outer,
+      ...(blob.holes.length > 0 ? { holes: blob.holes } : {}),
       color:     settings.color || k.defaultColor,
       createdAt: now,
     }));

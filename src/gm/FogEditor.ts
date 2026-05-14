@@ -444,15 +444,22 @@ export class FogEditor {
   }
 
   private trySelect(pos: FogVertex): void {
-    // Interior hit test
+    // Interior hit test — a point is "in" a polygon if it's inside the
+    // outer ring AND not inside any of its holes.
     for (let i = this.polygons.length - 1; i >= 0; i--) {
       const poly = this.polygons[i]!;
-      if (this.pointInPolygon(pos, poly.vertices)) {
-        this.setSelection(poly.id);
-        this.redraw();
-        this.emitMode();
-        return;
+      if (!this.pointInPolygon(pos, poly.vertices)) continue;
+      let inHole = false;
+      if (poly.holes) {
+        for (const h of poly.holes) {
+          if (this.pointInPolygon(pos, h)) { inHole = true; break; }
+        }
       }
+      if (inHole) continue;
+      this.setSelection(poly.id);
+      this.redraw();
+      this.emitMode();
+      return;
     }
 
     this.setSelection(null);
@@ -519,7 +526,7 @@ export class FogEditor {
       // colour override isn't set (keeps backward compat with pre-kind
       // saves migrated forward).
       const colour = poly.color ?? this.activeColor;
-      this.drawPolygon(poly.vertices, colour, poly.id === this.selectedId);
+      this.drawPolygon(poly.vertices, colour, poly.id === this.selectedId, poly.holes);
     }
 
     if (this.currentVertices.length > 0) {
@@ -568,16 +575,21 @@ export class FogEditor {
     ctx.save();
     for (const blob of blobs) {
       ctx.beginPath();
-      ctx.moveTo(b.x + blob[0]!.x * b.w, b.y + blob[0]!.y * b.h);
-      for (let i = 1; i < blob.length; i++) {
-        ctx.lineTo(b.x + blob[i]!.x * b.w, b.y + blob[i]!.y * b.h);
+      ctx.moveTo(b.x + blob.outer[0]!.x * b.w, b.y + blob.outer[0]!.y * b.h);
+      for (let i = 1; i < blob.outer.length; i++) {
+        ctx.lineTo(b.x + blob.outer[i]!.x * b.w, b.y + blob.outer[i]!.y * b.h);
       }
       ctx.closePath();
-      // Semi-transparent fill so the shape reads as the about-to-commit area.
+      for (const h of blob.holes) {
+        if (h.length < 3) continue;
+        ctx.moveTo(b.x + h[0]!.x * b.w, b.y + h[0]!.y * b.h);
+        for (let i = 1; i < h.length; i++) {
+          ctx.lineTo(b.x + h[i]!.x * b.w, b.y + h[i]!.y * b.h);
+        }
+        ctx.closePath();
+      }
       ctx.fillStyle = stroke + '40';
-      ctx.fill();
-      // Dashed outline — marches via the same dashOffset clock as the
-      // committed polygons' ants.
+      ctx.fill('evenodd');
       ctx.setLineDash([6, 6]);
       ctx.lineDashOffset = -this.dashOffset;
       ctx.lineWidth = 2;
@@ -663,23 +675,34 @@ export class FogEditor {
     btn.hidden = false;
   }
 
-  private drawPolygon(vertices: FogVertex[], color: string, selected: boolean): void {
+  private drawPolygon(vertices: FogVertex[], color: string, selected: boolean, holes?: FogVertex[][]): void {
     if (vertices.length < 2) return;
     const b = this.getMapBounds(this.drawW, this.drawH);
     const ctx = this.ctx;
     const vx = (v: FogVertex) => b.x + v.x * b.w;
     const vy = (v: FogVertex) => b.y + v.y * b.h;
 
+    // Outer ring path + each hole as its own subpath. fill('evenodd')
+    // punches the holes out; the subsequent stroke draws every subpath
+    // including the holes — so holes get marching ants too.
     ctx.beginPath();
     ctx.moveTo(vx(vertices[0]!), vy(vertices[0]!));
     for (let i = 1; i < vertices.length; i++) {
       ctx.lineTo(vx(vertices[i]!), vy(vertices[i]!));
     }
     ctx.closePath();
+    if (holes) {
+      for (const h of holes) {
+        if (h.length < 3) continue;
+        ctx.moveTo(vx(h[0]!), vy(h[0]!));
+        for (let i = 1; i < h.length; i++) ctx.lineTo(vx(h[i]!), vy(h[i]!));
+        ctx.closePath();
+      }
+    }
 
-    // Semi-transparent fill
+    // Semi-transparent fill with even-odd so holes punch through.
     ctx.fillStyle = color + '40';
-    ctx.fill();
+    ctx.fill('evenodd');
 
     // Always draw marching ants around every polygon.
     // Selected: bright white/black ants (high contrast).
