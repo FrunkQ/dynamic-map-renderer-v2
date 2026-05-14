@@ -14,6 +14,7 @@ import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { ensureFontsLoaded, registerLocalFontsFromAssets } from '../images/fontCatalog.ts';
 import { generateId } from '../utils/id.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
+import { pickTextboxEmptyHint } from '../utils/emptyHints.ts';
 import { renderAssetToInlineHtml } from '../utils/resolveAssetImages.ts';
 
 /**
@@ -835,6 +836,13 @@ export class TextMapEditor {
       body.spellcheck = true;
       this._applyTextStyle(body, el);
       body.innerHTML = sanitizeSplashHtml(el.html ?? '');
+      // Empty-state placeholder. The CSS rule
+      //   .txt-map-el-body--text:empty::before { content: attr(data-placeholder); ... }
+      // shows the joke while the element is empty and hides it as
+      // soon as the GM types. One pick per element so the same
+      // text box doesn't rotate the joke on every keystroke.
+      body.classList.add('txt-map-el-body--text');
+      body.dataset['placeholder'] = pickTextboxEmptyHint();
       body.addEventListener('input', () => this._onTextInput(el.id, body));
       body.addEventListener('paste', (e) => {
         e.preventDefault();

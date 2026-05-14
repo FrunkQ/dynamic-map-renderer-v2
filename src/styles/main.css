@@ -2721,6 +2721,16 @@ option.select-option--add {
 .txt-map-el-body p { margin: 0; }
 .txt-map-el-body ul, .txt-map-el-body ol { margin: 0 0 0.6em 0; padding-left: 1.6em; }
 .txt-map-el-body li { margin: 0; }
+/* v2.12 — empty-state placeholder for fresh text boxes. Pulls one
+   joke per element via TextMapEditor's pickTextboxEmptyHint(). The
+   :empty selector hides it as soon as the GM types. */
+.txt-map-el-body--text:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  font-style: italic;
+  opacity: 0.7;
+  pointer-events: none;
+}
 .txt-map-el--image .txt-map-el-body {
   display: block;
   padding: 0;
