@@ -25,6 +25,7 @@ uniform float uPaperContrast;
 uniform float uEdgeBurn;
 uniform float uInkSoftening;
 uniform float uFlicker;
+uniform float uRaggedBorder;
 uniform float time;
 
 varying vec2 vUv;
@@ -107,15 +108,33 @@ void main() {
     float paperOffset = (paperSample - 0.5) * uPaperContrast;
     sceneColor += vec3(paperOffset * uPaperGrain);
 
-    // 6. Age spots / foxing — low-frequency noise blotches
+    // 6. Age spots / foxing — multi-scale brown stains
+    //
+    // Rebuilt 2026-05-14 because the previous incarnation was too
+    // subtle even at uAgeSpots=1 (just a mild darkening). Real foxing
+    // shows distinct rust-brown blotches of varied sizes, so we
+    // sample three octaves of low-frequency noise (large patches,
+    // medium spots, small flecks), pick the high tail of each via
+    // smoothstep, and mix toward a warm rust-brown rather than
+    // simply subtracting RGB. The result reads as proper foxing at
+    // moderate values and heavy aged-paper at the top of the range.
     if (uAgeSpots > 0.0) {
-        float spotNoise = fbm(vUv * 4.0 + vec2(13.7, 5.3));
-        float spotNoise2 = fbm(vUv * 7.0 + vec2(2.1, 8.9));
-        float spots = pow(max(spotNoise * spotNoise2 - 0.18, 0.0), 2.0) * uAgeSpots * 3.0;
-        // Foxing stains are brownish — darken red/green, darken blue more
-        sceneColor.r -= spots * 0.4;
-        sceneColor.g -= spots * 0.45;
-        sceneColor.b -= spots * 0.55;
+        float spotA = fbm(vUv * 4.0  + vec2(13.7, 5.3));
+        float spotB = fbm(vUv * 10.0 + vec2( 2.1, 8.9));
+        float spotC = fbm(vUv * 22.0 + vec2( 7.8, 3.2));
+        // Large patches start at noise > 0.55, fade to fully visible
+        // at 0.70. Medium and small fade in at higher thresholds and
+        // contribute less so they read as accents on the patches.
+        float patchLarge  = smoothstep(0.55, 0.70, spotA);
+        float patchMedium = smoothstep(0.55, 0.72, spotB) * 0.70;
+        float patchSmall  = smoothstep(0.62, 0.78, spotC) * 0.45;
+        float spots = clamp((patchLarge + patchMedium + patchSmall) * uAgeSpots, 0.0, 1.0);
+        // Rust-brown stain colour. Multiply the existing scene by it
+        // (so light parchment areas pick up the warm brown, dark ink
+        // areas stay dark). The mix factor is capped below 1.0 so
+        // even heavy foxing doesn't completely overwrite the map.
+        vec3 foxingTint = vec3(0.42, 0.22, 0.10);
+        sceneColor = mix(sceneColor, sceneColor * foxingTint * 2.4, spots * 0.85);
     }
 
     // 7. Edge burn — vignetted darkening towards corners
@@ -126,7 +145,29 @@ void main() {
         sceneColor *= burnFactor;
     }
 
-    // 8. Candlelight flicker — low-frequency brightness variation
+    // 8. Ragged black border — torn / burned parchment edge.
+    //    Distance from the nearest edge is perturbed by noise so the
+    //    border eats into the image in irregular tatters rather than
+    //    a clean vignette. The border darkens to near-black at the
+    //    image edge and fades into the parchment over a soft band.
+    //    Independent of uEdgeBurn (which is a soft vignette);
+    //    uRaggedBorder is the harder, blacker, more "torn" look.
+    if (uRaggedBorder > 0.0) {
+        vec2 fromCentre = abs(vUv - 0.5) * 2.0; // 0 centre, 1 at edge
+        float edgeDist  = max(fromCentre.x, fromCentre.y);
+        // Two-octave noise gives the tatter shape: lower-freq for
+        // big bites, higher-freq for fine ragged detail.
+        float raggedA = fbm(vUv * 14.0 + vec2(3.7, 11.1));
+        float raggedB = fbm(vUv * 38.0 + vec2(9.2,  2.4));
+        float rag     = (raggedA - 0.5) * 0.18 + (raggedB - 0.5) * 0.06;
+        float raggedEdgeDist = edgeDist + rag;
+        // Border zone: 0.82..1.0 of the noise-perturbed distance.
+        // Start of band = faint; end = near-black, scaled by slider.
+        float borderAmount = smoothstep(0.82, 1.0, raggedEdgeDist) * uRaggedBorder;
+        sceneColor *= 1.0 - clamp(borderAmount, 0.0, 0.98);
+    }
+
+    // 9. Candlelight flicker — low-frequency brightness variation
     if (uFlicker > 0.0) {
         float f1 = random(vec2(floor(time * 7.0), 0.0));
         float f2 = random(vec2(floor(time * 13.0), 1.0));
