@@ -139,21 +139,20 @@
           </div>
         </div>
 
-        <!-- Single-shot Add — click, draw one polygon/stroke, auto-exit. -->
-        <div class="fog-row fog-row--add">
-          <button id="fog-add-btn" class="btn btn--primary btn--block">+ Add</button>
-        </div>
-
-        <!-- Brush sub-controls — only visible when Drawing Mode = Brush. -->
+        <!-- Brush size — only visible when Drawing Mode = Brush. -->
         <div class="fog-brush-controls" hidden>
-          <div class="fog-brush-modes">
-            <button id="fog-brush-paint-btn" class="btn btn--sm fog-brush-paint  is-active" title="Paint onto the map">Paint</button>
-            <button id="fog-brush-erase-btn" class="btn btn--sm fog-brush-erase"             title="Erase carves through everything beneath the brush">Erase</button>
-          </div>
           <label class="fog-brush-row">
             <span>Size</span>
             <input id="fog-brush-radius" type="range" min="2" max="80" step="1" value="20" title="Brush size in screen pixels — zoom in for finer detail" />
           </label>
+        </div>
+
+        <!-- Action buttons — Paint (green) + Erase (red). Each is a
+             single-shot: click → draw one polygon/stroke under the current
+             Drawing Mode → auto-exit. -->
+        <div class="fog-row fog-row--actions">
+          <button id="fog-paint-btn" class="btn btn--sm fog-action fog-action--paint" title="Add one shape">Paint</button>
+          <button id="fog-erase-btn" class="btn btn--sm fog-action fog-action--erase" title="Carve one shape out of everything beneath">Erase</button>
         </div>
 
         <!-- Clear-this-kind always available. Delete button gone — use the
@@ -162,8 +161,8 @@
         <button id="fog-delete-btn" class="btn btn--sm btn--danger" hidden>Delete</button>
 
         <p class="fog-hint">
-          Pick a Kind. Drawing Mode picks Polygon or Brush (sticky). Click + Add and lay down one shape — Add resets so the next click is a fresh deliberate action.<br/>
-          Click a polygon or icon to select; trashcan or Del to remove. Erase mode carves through anything beneath it — fog and effects alike.
+          Pick a Kind, then Drawing Mode (sticky). Click Paint to add one shape or Erase to carve one out. Polygon: click vertices, click near first to close. Brush: drag.<br/>
+          Click a polygon or icon to select; trashcan or Del to remove.
         </p>
       </div>
     </section>

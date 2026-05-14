@@ -1487,20 +1487,40 @@ option.select-option--add {
   font-weight: 600;
 }
 
-/* Add button — large + prominent so the action is unambiguous. Active
-   state (currently mid-add) gets a stronger fill. */
-.fog-row--add { margin-bottom: 8px; }
 .btn--block {
   display: block;
   width: 100%;
   text-align: center;
 }
-#fog-add-btn { font-weight: 600; }
-#fog-add-btn.is-active {
-  background: var(--ok);
-  border-color: var(--ok);
-  color: #fff;
+
+/* Paint / Erase action buttons — green + red. Each is a single-shot click:
+   it activates the current Drawing Mode (Polygon or Brush) with the
+   chosen action and auto-exits after one commit. `is-active` shows while
+   the action is currently mid-draw. */
+.fog-row--actions {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
 }
+.fog-action {
+  flex: 1 1 50%;
+  border-width: 1.5px;
+  font-weight: 600;
+}
+.fog-action--paint {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: transparent;
+}
+.fog-action--paint:hover     { background: rgba(34, 197, 94, 0.12); }
+.fog-action--paint.is-active { background: var(--ok);     color: #fff; }
+.fog-action--erase {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+.fog-action--erase:hover     { background: rgba(224, 62, 62, 0.12); }
+.fog-action--erase.is-active { background: var(--danger); color: #fff; }
 
 .fog-hint {
   font-size: 0.7rem;

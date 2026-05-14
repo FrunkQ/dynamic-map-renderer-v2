@@ -27,6 +27,16 @@ export interface FogBrushEndHandler {
   (settings: BrushSettings, points: FogVertex[]): void;
 }
 
+/** v2.12 — Polygon mode now supports a paint/erase action like brush.
+ *  The action is set by the GM via setPolygonAction() before vertex-click
+ *  begins; on close, FogEditor fires this handler (instead of mutating
+ *  its own polygons list + emitting). GMApp interprets the vertices
+ *  according to the action — paint adds a polygon, erase carves via
+ *  polygon-difference. */
+export interface FogPolygonCompleteHandler {
+  (action: 'paint' | 'erase', vertices: FogVertex[]): void;
+}
+
 export class FogEditor {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -39,6 +49,11 @@ export class FogEditor {
   private activeColor = '#000000';
   /** v2.12 — kind tagged on new polygon-mode polygons. */
   private activeKind: OverlayKind = 'fog';
+  /** v2.12 — action for the next polygon close: paint adds, erase carves. */
+  private polygonAction: 'paint' | 'erase' = 'paint';
+  /** v2.12 — caller (GMApp) handles the polygon close; FogEditor doesn't
+   *  mutate its own polygons list directly anymore. */
+  private polygonCompleteHandler: FogPolygonCompleteHandler | null = null;
   private enabled = false;
 
   private lastPointer: { x: number; y: number } | null = null;
@@ -58,6 +73,10 @@ export class FogEditor {
   private dashOffset = 0;
   private marchAnimId: number | null = null;
   private cursorPos: FogVertex | null = null;
+  /** GM-canvas-only crosshatch pattern. Lazy-built on first use; reused
+   *  across all polygon fills so the GM can see shapes regardless of
+   *  the fog colour (e.g. when fog colour matches map background). */
+  private hatchPattern: CanvasPattern | null = null;
 
   /** Screen-space delete handle — red trashcan that pops up at the bottom-
    *  left-most vertex of the selected polygon. Lives in the marker-overlay
@@ -192,6 +211,19 @@ export class FogEditor {
   /** v2.12 — what kind to tag on new polygon-mode polygons. */
   setActiveKind(kind: OverlayKind): void {
     this.activeKind = kind;
+  }
+
+  /** v2.12 — set the action a polygon close should produce. Paint adds a
+   *  new polygon; erase carves via polygon-difference. */
+  setPolygonAction(action: 'paint' | 'erase'): void {
+    this.polygonAction = action;
+  }
+
+  /** v2.12 — caller (GMApp) commits the polygon. If unset, FogEditor falls
+   *  back to its legacy "push to local polygons + emit" behaviour for
+   *  backward compat. */
+  setPolygonCompleteHandler(handler: FogPolygonCompleteHandler | null): void {
+    this.polygonCompleteHandler = handler;
   }
 
   setMapAspect(ratio: number): void {
@@ -426,20 +458,29 @@ export class FogEditor {
 
   private closePolygon(): void {
     if (this.currentVertices.length < 3) return;
-    const poly: FogPolygon = {
-      id:        generateId(),
-      kind:      this.activeKind,
-      vertices:  [...this.currentVertices],
-      color:     this.activeColor,
-      createdAt: Date.now(),
-    };
-    this.polygons.push(poly);
+    const vertices = [...this.currentVertices];
     this.currentVertices = [];
-    this.setSelection(poly.id);
-    this.updateMarchState();
-    this.emit();
+    if (this.polygonCompleteHandler) {
+      // GMApp interprets the vertices according to the current action —
+      // paint adds, erase carves. State sync brings the new polygons back
+      // into FogEditor.polygons via syncPolygons.
+      this.polygonCompleteHandler(this.polygonAction, vertices);
+    } else {
+      // Legacy fallback: push directly to local polygons + emit.
+      const poly: FogPolygon = {
+        id:        generateId(),
+        kind:      this.activeKind,
+        vertices,
+        color:     this.activeColor,
+        createdAt: Date.now(),
+      };
+      this.polygons.push(poly);
+      this.setSelection(poly.id);
+      this.updateMarchState();
+      this.emit();
+    }
     // Auto-exit draw mode — disable() redraws and emits the updated mode,
-    // so the Draw button deactivates and Delete appears for the new polygon.
+    // so the action button deactivates and selection is restored.
     this.disable();
   }
 
@@ -556,6 +597,35 @@ export class FogEditor {
     const b = this.getMapBounds(this.drawW, this.drawH);
     if (b.w <= 0) return 0;
     return radiusPx / b.w;
+  }
+
+  /** Lazy-builds an 8×8 black/white diagonal crosshatch pattern used as
+   *  the GM-canvas polygon fill. Visible regardless of fog colour so the
+   *  GM can always see shapes (helpful when fog colour matches the map
+   *  background). Translucent so the underlying map still shows through. */
+  private _getHatchPattern(): CanvasPattern | null {
+    if (this.hatchPattern) return this.hatchPattern;
+    const tile = document.createElement('canvas');
+    tile.width = 8;
+    tile.height = 8;
+    const tctx = tile.getContext('2d');
+    if (!tctx) return null;
+    tctx.clearRect(0, 0, 8, 8);
+    tctx.lineWidth = 1.2;
+    // Black diagonal one way
+    tctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+    tctx.beginPath();
+    tctx.moveTo(-1, 1); tctx.lineTo(9, 11);
+    tctx.moveTo(-1, -7); tctx.lineTo(9, 3);
+    tctx.stroke();
+    // White diagonal the other way
+    tctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    tctx.beginPath();
+    tctx.moveTo(-1, 7); tctx.lineTo(9, -3);
+    tctx.moveTo(-1, 15); tctx.lineTo(9, 5);
+    tctx.stroke();
+    this.hatchPattern = this.ctx.createPattern(tile, 'repeat');
+    return this.hatchPattern;
   }
 
   /** Draw the in-progress brush polygon outline as a dashed shape so the GM
@@ -700,9 +770,18 @@ export class FogEditor {
       }
     }
 
-    // Semi-transparent fill with even-odd so holes punch through.
+    // Two-pass fill on the GM canvas: the kind colour at low alpha (so the
+    // user can see what kind / colour it is) and a black/white crosshatch
+    // on top (so the shape is always visible regardless of how closely
+    // the fog colour matches the map background). Player view stays clean —
+    // crosshatch is GM-canvas-only; the compositor renders the solid fill.
     ctx.fillStyle = color + '40';
     ctx.fill('evenodd');
+    const hatch = this._getHatchPattern();
+    if (hatch) {
+      ctx.fillStyle = hatch;
+      ctx.fill('evenodd');
+    }
 
     // Always draw marching ants around every polygon.
     // Selected: bright white/black ants (high contrast).
