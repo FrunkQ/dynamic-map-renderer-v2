@@ -1,9 +1,9 @@
-// Magic Portal — adapted from a Shadertoy portal demo (author / source
-// URL not yet captured — ACKNOWLEDGEMENTS.md flags this for fill-in
-// when the GM provides it). The noise primitive credits a Shadertoy
-// snippet at https://www.shadertoy.com/view/4sc3z2 (hash33 + simplex
-// noise). Default Shadertoy licence assumed (CC-BY-NC-SA 3.0)
-// pending confirmation.
+// Magic Portal — adapted from "Magic Portal" by Delincoter (2021-08-10)
+//   https://www.shadertoy.com/view/NtBXWV
+//   Used under Shadertoy default licence (CC-BY-NC-SA 3.0) — see
+//   ACKNOWLEDGEMENTS.md.
+//   The noise primitive (hash33 + simplex noise) credits a snippet
+//   at https://www.shadertoy.com/view/4sc3z2, kept intact.
 //
 // Adaptation notes:
 //   • iTime → time; iResolution → uAspect; iMouse → not used.

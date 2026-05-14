@@ -1,7 +1,7 @@
-// Starfield — adapted from a Shadertoy starfield demo (author / source
-// URL not yet captured — ACKNOWLEDGEMENTS.md flags this for fill-in
-// when the GM provides it). Default Shadertoy licence assumed
-// (CC-BY-NC-SA 3.0) pending confirmation.
+// Starfield — adapted from "StarField practice" by Deadtotem (2020-08-13)
+//   https://www.shadertoy.com/view/tllfRX
+//   Used under Shadertoy default licence (CC-BY-NC-SA 3.0) — see
+//   ACKNOWLEDGEMENTS.md.
 //
 // Adaptation notes:
 //   • iTime → time; iResolution → uAspect; iMouse → not used.
