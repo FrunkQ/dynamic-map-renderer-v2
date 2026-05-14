@@ -103,6 +103,28 @@ export class FogCompositor {
       this.ctx.strokeStyle = fill;
       this.ctx.lineWidth   = 1;
 
+      // v2.12 edge fade — Gaussian-blur the polygon's fill so the
+      // alpha tapers near the boundary. Blur radius scales with the
+      // polygon's bbox in canvas coords so a small polygon and a
+      // large polygon get visually proportional fade at the same
+      // slider value. 0 = hard edge (existing behaviour).
+      const fade = Math.max(0, Math.min(1, poly.edgeFade ?? 0));
+      if (fade > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const v of poly.vertices) {
+          const x = v.x * width, y = v.y * height;
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        const blurPx = fade * Math.min(maxX - minX, maxY - minY) * 0.15;
+        this.ctx.filter = `blur(${blurPx}px)`;
+        // No stroke when fading -- the stroke line would draw a hard
+        // outline that defeats the soft edge.
+        this.ctx.lineWidth = 0;
+      } else {
+        this.ctx.filter = 'none';
+      }
+
       // Path = outer ring + every hole as its own subpath. fill('evenodd')
       // punches the holes out of the fill; stroke draws every subpath so
       // the holes outline too.

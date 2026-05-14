@@ -103,7 +103,7 @@ export class GMApp {
    *  inherits the selected exemplar's colour + shaderParams ("paint
    *  another like this"). Set in _startAction('paint'), cleared in
    *  _endAction. Null when paint started with no selection. */
-  private _pendingPaintInherit: { color: string; shaderParams: Record<string, number> } | null = null;
+  private _pendingPaintInherit: { color: string; shaderParams: Record<string, number>; edgeFade: number } | null = null;
   /** v2.12 — kind picked in the FoW & MapFX panel for new strokes/polygons. */
   private activeOverlayKind: OverlayKind = 'fog';
   /** v2.12 — sticky Drawing Mode preference (persisted to localStorage). */
@@ -2531,6 +2531,7 @@ export class GMApp {
         } else {
           this._rebuildShaderParamsPanel();
           this._applyKindToColourSwatch();
+          this._applyEdgeFadeSlider();
         }
         this._lastSelectedSyncedId = selectedId;
       } else if (!selectedId && this._lastSelectedSyncedId !== null) {
@@ -2539,6 +2540,7 @@ export class GMApp {
         } else {
           this._rebuildShaderParamsPanel();
           this._applyKindToColourSwatch();
+          this._applyEdgeFadeSlider();
         }
         this._lastSelectedSyncedId = null;
       }
@@ -2627,6 +2629,7 @@ export class GMApp {
       kindSelect.value = this.activeOverlayKind;
       this._applyActiveKindToBrush();
       this._applyKindToColourSwatch();
+      this._applyEdgeFadeSlider();
       this._rebuildShaderParamsPanel();
       this.fogEditor.setActiveKind(this.activeOverlayKind);
       kindSelect.addEventListener('change', () => {
@@ -2641,6 +2644,7 @@ export class GMApp {
         if (selectedId) this.state.setPolygonKind(selectedId, newKind);
         this._applyActiveKindToBrush();
         this._applyKindToColourSwatch();
+        this._applyEdgeFadeSlider();
         this._rebuildShaderParamsPanel();
         this.fogEditor.setActiveKind(newKind);
         this.fogEditor.setColor(overlayKind(newKind).defaultColor);
@@ -2669,6 +2673,27 @@ export class GMApp {
       // If mid-paint with inheritance pending, update the snapshot so
       // the new polygon picks up the tweaked colour at commit time.
       if (this._pendingPaintInherit) this._pendingPaintInherit.color = c;
+    });
+
+    // v2.12 — Edge Fade slider. Universal per-poly value baked into
+    // the alpha mask at rasterise time. Same per-poly + draft +
+    // inheritance pattern as colour and shader params:
+    //   • Selected polygon: edits write to poly.edgeFade.
+    //   • No selection: edits write to the kind's draft so the next
+    //     new polygon inherits.
+    //   • Mid-paint with inheritance pending: edits also update the
+    //     inheritance snapshot.
+    document.querySelector<HTMLInputElement>('#fog-edge-fade')?.addEventListener('input', (e) => {
+      const v = parseFloat((e.target as HTMLInputElement).value);
+      if (!Number.isFinite(v)) return;
+      const selectedId = this.fogEditor.getSelectedId();
+      if (selectedId) {
+        const poly = this.state.getState().fog.polygons.find((p) => p.id === selectedId);
+        if (poly) this.state.setPolygonEdgeFade(selectedId, v);
+      }
+      // Always update the kind draft so the next-new polygon inherits.
+      this.state.setShaderParams(this.activeOverlayKind, { edgeFade: v });
+      if (this._pendingPaintInherit) this._pendingPaintInherit.edgeFade = v;
     });
 
     // v2.12 unified — brush + polygon commits go through the same paths.
@@ -2703,12 +2728,15 @@ export class GMApp {
         : ((k.allowColor && swatch?.value) ? swatch.value : k.defaultColor);
       const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
       const params = inherit ? inherit.shaderParams : draft;
+      const draftEdgeFade = typeof draft.edgeFade === 'number' ? draft.edgeFade : 0;
+      const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
       const poly: FogPolygon = {
         id:        generateId(),
         kind:      this.activeOverlayKind,
         vertices,
         color,
         ...(Object.keys(params).length > 0 ? { shaderParams: { ...params } } : {}),
+        ...(edgeFade > 0 ? { edgeFade } : {}),
         createdAt: Date.now(),
       };
       this.state.setFog({ polygons: [...fog.polygons, poly] });
@@ -2727,6 +2755,7 @@ export class GMApp {
     if (kindSelect) kindSelect.value = kind;
     this._applyActiveKindToBrush();
     this._applyKindToColourSwatch();
+    this._applyEdgeFadeSlider();
     this._rebuildShaderParamsPanel();
     this.fogEditor.setActiveKind(kind);
     this.fogEditor.setColor(overlayKind(kind).defaultColor);
@@ -2839,6 +2868,31 @@ export class GMApp {
     return row;
   }
 
+  /** v2.12 — sync the universal Edge Fade slider to the current
+   *  selection + kind. Mirrors the colour-swatch logic: if a poly of
+   *  the active kind is selected, show its value; mid-paint with
+   *  inheritance pending, show the snapshot; otherwise show the
+   *  kind's draft. */
+  private _applyEdgeFadeSlider(): void {
+    const slider = document.getElementById('fog-edge-fade') as HTMLInputElement | null;
+    if (!slider) return;
+    const fog = this.state.getState().fog;
+    const selectedId = this.fogEditor.getSelectedId();
+    const selectedPoly = selectedId ? fog.polygons.find((p) => p.id === selectedId) ?? null : null;
+    const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
+    const inherit = !editingPoly ? this._pendingPaintInherit : null;
+    let value: number;
+    if (editingPoly) {
+      value = typeof editingPoly.edgeFade === 'number' ? editingPoly.edgeFade : 0;
+    } else if (inherit) {
+      value = inherit.edgeFade;
+    } else {
+      const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
+      value = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : 0;
+    }
+    slider.value = String(value);
+  }
+
   /** Sync the colour swatch to the current selection + kind.
    *    • A polygon of the active kind selected → swatch shows that
    *      polygon's colour (or kind default if the polygon has none).
@@ -2885,7 +2939,8 @@ export class GMApp {
         const k = overlayKind(exemplar.kind);
         const color = (k.allowColor && exemplar.color) ? exemplar.color : k.defaultColor;
         const shaderParams = exemplar.shaderParams ? { ...exemplar.shaderParams } : {};
-        this._pendingPaintInherit = { color, shaderParams };
+        const edgeFade = typeof exemplar.edgeFade === 'number' ? exemplar.edgeFade : 0;
+        this._pendingPaintInherit = { color, shaderParams, edgeFade };
         // Push the inherited colour into the brush + polygon-outline
         // colour so the live draw preview matches the exemplar.
         this.fogEditor.setColor(color);
@@ -2922,6 +2977,7 @@ export class GMApp {
     if (this._pendingPaintInherit) {
       const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
       if (swatch) swatch.value = this._pendingPaintInherit.color;
+      this._applyEdgeFadeSlider();
       this._rebuildShaderParamsPanel();
     }
   }
@@ -2982,13 +3038,17 @@ export class GMApp {
     const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
     const params = inherit ? inherit.shaderParams : draft;
     const inheritedColor = inherit?.color;
+    const draftEdgeFade = typeof draft.edgeFade === 'number' ? draft.edgeFade : 0;
+    const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
     const paramsCopy = Object.keys(params).length > 0 ? { shaderParams: { ...params } } : {};
+    const edgeFadeCopy = edgeFade > 0 ? { edgeFade } : {};
     const newPolys: FogPolygon[] = blobs.map((blob) => ({
       id:        generateId(),
       kind:      this.activeOverlayKind,
       vertices:  blob.outer,
       ...(blob.holes.length > 0 ? { holes: blob.holes } : {}),
       ...paramsCopy,
+      ...edgeFadeCopy,
       color:     inheritedColor ?? settings.color ?? k.defaultColor,
       createdAt: now,
     }));

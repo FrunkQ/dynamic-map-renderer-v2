@@ -153,6 +153,21 @@ export class PolygonMaskCompositor {
     const toX = (x: number) => ((x - bbox.x) / bbox.w) * width;
     const toY = (y: number) => ((y - bbox.y) / bbox.h) * height;
 
+    // Edge fade (v2.12) — apply a Gaussian blur to the mask alpha so
+    // the polygon's edges soften organically. Blur radius scales with
+    // the mask's shorter dimension so the fade looks similar across
+    // polygons of any size. 0 = hard edge (existing behaviour),
+    // 1 = ~15% of mask shorter side blurred. Fades inward from the
+    // original polygon outline because the canvas is sized to the
+    // bbox exactly (no padding) -- visually reads as a soft edge.
+    const fade = Math.max(0, Math.min(1, poly.edgeFade ?? 0));
+    if (fade > 0) {
+      const blurPx = fade * Math.min(width, height) * 0.15;
+      ctx.filter = `blur(${blurPx}px)`;
+    } else {
+      ctx.filter = 'none';
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     const v0 = poly.vertices[0]!;
@@ -175,6 +190,7 @@ export class PolygonMaskCompositor {
       }
     }
     ctx.fill('evenodd');
+    ctx.filter = 'none';
     entry.texture.needsUpdate = true;
   }
 }

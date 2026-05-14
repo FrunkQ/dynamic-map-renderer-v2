@@ -113,9 +113,10 @@ export function migrateSessionState(saved: any): SessionState | null {
       vertices:  Array.isArray(p?.vertices) ? p.vertices : [],
       createdAt: typeof p?.createdAt === 'number' ? p.createdAt : Date.now(),
     };
-    if (typeof p?.color === 'string') out.color = p.color;
-    if (typeof p?.label === 'string') out.label = p.label;
-    if (Array.isArray(p?.holes))      out.holes = p.holes;
+    if (typeof p?.color === 'string')    out.color = p.color;
+    if (typeof p?.label === 'string')    out.label = p.label;
+    if (Array.isArray(p?.holes))         out.holes = p.holes;
+    if (typeof p?.edgeFade === 'number') out.edgeFade = p.edgeFade;
     if (p?.shaderParams && typeof p.shaderParams === 'object') out.shaderParams = p.shaderParams;
     return out;
   }).filter((p: any) => p.id && p.vertices.length >= 3);

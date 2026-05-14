@@ -143,6 +143,21 @@ export class StateManager {
     this.setFog({ ...fog, polygons });
   }
 
+  /** v2.12 — set a polygon's edge-fade amount (0..1). Universal: works
+   *  for fog and every MapFX kind because the fade is baked into the
+   *  alpha mask. No-op if the polygon id isn't found. */
+  setPolygonEdgeFade(polyId: string, edgeFade: number): void {
+    const fog = this.state.fog;
+    let touched = false;
+    const polygons = fog.polygons.map((p) => {
+      if (p.id !== polyId) return p;
+      touched = true;
+      return { ...p, edgeFade };
+    });
+    if (!touched) return;
+    this.setFog({ ...fog, polygons });
+  }
+
   /** v2.12 — change a polygon's colour. No-op if the polygon id isn't
    *  found. Goes through setFog so the change broadcasts on the
    *  fog_update path. */

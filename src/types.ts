@@ -82,6 +82,15 @@ export interface FogPolygon {
    * fog.shaderParams[kind][id], then the param's registry default.
    */
   shaderParams?: Record<string, number>;
+  /**
+   * v2.12 — universal edge-fade amount, 0..1. Applied as a Gaussian
+   * blur to the polygon's alpha mask when it's rasterised. 0 = hard
+   * edge (default; original behaviour); 1 = blur radius equal to
+   * 15% of the mask's shorter side (very soft fade). Works for fog
+   * AND every MapFX shader kind because the mask is what each
+   * effect samples for coverage — soft mask → soft visible edge.
+   */
+  edgeFade?: number;
   /** Creation timestamp (ms epoch) — stable sort + z-order key. */
   createdAt: number;
 }

@@ -130,6 +130,14 @@
           <input  type="color" id="fog-colour" value="#000000" title="Colour (fog only — other kinds use their own colour)" />
         </div>
 
+        <!-- Edge Fade — universal, applies to fog + every MapFX kind.
+             Per-polygon value baked into the alpha mask so the shape's
+             outline softens organically. -->
+        <label class="fog-brush-row fog-row--edge">
+          <span>Edge Fade</span>
+          <input id="fog-edge-fade" type="range" min="0" max="1" step="0.05" value="0" title="Soft fade of the polygon edge — 0 hard, 1 maximally blurred" />
+        </label>
+
         <!-- Drawing Mode — sticky toggle, persists in localStorage. -->
         <div class="fog-row fog-row--mode">
           <span class="fog-row-label">Drawing Mode</span>
