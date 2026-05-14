@@ -198,13 +198,20 @@ const FIRE_SHADER_PARAMS: ShaderParamDef[] = [
 // map.
 const OCEAN_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'intensity', label: 'Intensity', min: 0.05, max: 1.5, step: 0.05, default: 1.0 },
-  { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0, step: 0.05, default: 1.0 },
+  // uScale tunes wave feature size relative to the polygon. Range
+  // extended to 0.02 at the low end so vast horizon-ocean polygons
+  // can dial down to fine-ripple texture; the original 0.25 minimum
+  // left "huge polygon" still showing big swells. 4.0 max still
+  // gives lazy-rollers on small polygons.
+  { id: 'scale',     label: 'Scale',     min: 0.02, max: 4.0, step: 0.01, default: 1.0 },
   { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0, step: 0.05, default: 1.0 },
 ];
 
 const RIVER_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'intensity', label: 'Intensity', min: 0.05, max: 1.5,            step: 0.05, default: 1.0 },
-  { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0,            step: 0.05, default: 1.0 },
+  // Same lower min as ocean — large river polys (deltas, lakes the
+  // GM chose to treat as flowing water) need much smaller features.
+  { id: 'scale',     label: 'Scale',     min: 0.02, max: 4.0,            step: 0.01, default: 1.0 },
   // uSpeed = 0 → still pool. 1 → gentle stream (default). 2 → brisk
   // river. 4 → proper rapids. Range widened from 0..2 once the base
   // time coefficient dropped to 0.08 so the slider stays useful at
