@@ -6,6 +6,7 @@ import { confirmDialog } from './confirmDialog.ts';
 import type { OverlayKind, FogPolygon } from '../types.ts';
 import { offsetPolyline } from '../mapfx/polylineOffset.ts';
 import { subtractFromAll, cleanRibbonToBlobs } from '../mapfx/polygonOps.ts';
+import { floodFillToPolygon } from '../mapfx/floodFill.ts';
 import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
@@ -108,7 +109,13 @@ export class GMApp {
   /** v2.12 — kind picked in the FoW & MapFX panel for new strokes/polygons. */
   private activeOverlayKind: OverlayKind = 'fog';
   /** v2.12 — sticky Drawing Mode preference (persisted to localStorage). */
-  private drawingMode: 'polygon' | 'brush' = 'polygon';
+  private drawingMode: 'polygon' | 'brush' | 'fill' = 'polygon';
+  /** v2.12 Magic Wand — last fill polygon's state so the Tolerance
+   *  slider can re-run the flood-fill and replace its vertices
+   *  without committing a new polygon. Cleared when the GM clicks
+   *  again (new fill), changes drawing mode, or commits via the
+   *  action buttons. */
+  private _lastFillState: { polyId: string; seedX: number; seedY: number; action: 'paint' | 'erase' } | null = null;
   private viewportEditor!: ViewportEditor;
   private projectorEditor!: ProjectorViewportEditor;
 
@@ -2554,22 +2561,26 @@ export class GMApp {
     // active Drawing Mode kicks in for one polygon/stroke, then auto-exits.
     const modePolyBtn  = document.querySelector<HTMLButtonElement>('#fog-mode-poly-btn');
     const modeBrushBtn = document.querySelector<HTMLButtonElement>('#fog-mode-brush-btn');
+    const modeFillBtn  = document.querySelector<HTMLButtonElement>('#fog-mode-fill-btn');
     const brushControls = document.querySelector<HTMLElement>('.fog-brush-controls');
+    const fillControls  = document.querySelector<HTMLElement>('.fog-fill-controls');
     const paintBtn = document.querySelector<HTMLButtonElement>('#fog-paint-btn');
     const eraseBtn = document.querySelector<HTMLButtonElement>('#fog-erase-btn');
 
     // Restore persisted drawing mode (Polygon by default).
-    const savedMode = (localStorage.getItem(DRAWING_MODE_LS_KEY) ?? 'polygon') as 'polygon' | 'brush';
-    this.drawingMode = savedMode === 'brush' ? 'brush' : 'polygon';
+    const savedMode = (localStorage.getItem(DRAWING_MODE_LS_KEY) ?? 'polygon') as 'polygon' | 'brush' | 'fill';
+    this.drawingMode = (savedMode === 'brush' || savedMode === 'fill') ? savedMode : 'polygon';
 
     const applyDrawingMode = () => {
       modePolyBtn?.classList.toggle('is-active',  this.drawingMode === 'polygon');
       modeBrushBtn?.classList.toggle('is-active', this.drawingMode === 'brush');
+      modeFillBtn?.classList.toggle('is-active',  this.drawingMode === 'fill');
       if (brushControls) brushControls.hidden = this.drawingMode !== 'brush';
+      if (fillControls)  fillControls.hidden  = this.drawingMode !== 'fill';
     };
     applyDrawingMode();
 
-    const setDrawingMode = (mode: 'polygon' | 'brush') => {
+    const setDrawingMode = (mode: 'polygon' | 'brush' | 'fill') => {
       if (this.drawingMode === mode) return;
       // Exit any in-progress action when the mode changes — keeps the user
       // from accidentally committing a half-built polygon under the new tool.
@@ -2580,6 +2591,7 @@ export class GMApp {
     };
     modePolyBtn?.addEventListener('click',  () => setDrawingMode('polygon'));
     modeBrushBtn?.addEventListener('click', () => setDrawingMode('brush'));
+    modeFillBtn?.addEventListener('click',  () => setDrawingMode('fill'));
 
     paintBtn?.addEventListener('click', () => {
       if (paintBtn.classList.contains('is-active')) this._endAction();
@@ -2708,6 +2720,21 @@ export class GMApp {
     );
     this.fogEditor.setPolygonCompleteHandler((action, vertices) => {
       this._commitOverlayPolygon(action, vertices);
+    });
+    // v2.12 Magic Wand — single click in Fill mode runs flood-fill at
+    // the click point and commits a polygon. Subsequent tolerance
+    // slider changes mutate the same polygon until the GM clicks
+    // again (new fill) or ends the action.
+    this.fogEditor.setFillHandler((action, mapPos) => {
+      this._commitOverlayFill(action, mapPos);
+    });
+
+    // Tolerance slider — re-runs the flood-fill on the last fill's
+    // seed position and replaces that polygon's vertices live.
+    document.querySelector<HTMLInputElement>('#fog-fill-tolerance')?.addEventListener('input', (e) => {
+      const tolerance = parseFloat((e.target as HTMLInputElement).value);
+      if (!Number.isFinite(tolerance)) return;
+      this._reflowLastFill(tolerance);
     });
   }
 
@@ -3001,16 +3028,24 @@ export class GMApp {
     const eraseBtn = document.querySelector<HTMLButtonElement>('#fog-erase-btn');
     paintBtn?.classList.toggle('is-active', action === 'paint');
     eraseBtn?.classList.toggle('is-active', action === 'erase');
-    // Push the action mode into both editor paths so the eventual commit
-    // routes correctly.
+    // Push the action mode into the three editor paths so the eventual
+    // commit routes correctly.
     this.fogEditor.setPolygonAction(action);
     this.fogEditor.setBrushSettings({ mode: action });
+    this.fogEditor.setFillAction(action);
     if (this.drawingMode === 'polygon') {
       this.fogEditor.setBrushActive(false);
+      this.fogEditor.setFillActive(false);
       this.fogEditor.enable();
-    } else {
+    } else if (this.drawingMode === 'brush') {
       this.fogEditor.disable();
+      this.fogEditor.setFillActive(false);
       this.fogEditor.setBrushActive(true);
+    } else {
+      // Fill mode — Magic Wand. Disable polygon + brush, enable fill.
+      this.fogEditor.disable();
+      this.fogEditor.setBrushActive(false);
+      this.fogEditor.setFillActive(true);
     }
     this.markerEditor?.setPointerCapture(false);
 
@@ -3034,12 +3069,14 @@ export class GMApp {
    *  starts fresh. */
   private _endAction(): void {
     this._pendingPaintInherit = null;
+    this._lastFillState = null;
     const paintBtn = document.querySelector<HTMLButtonElement>('#fog-paint-btn');
     const eraseBtn = document.querySelector<HTMLButtonElement>('#fog-erase-btn');
     paintBtn?.classList.remove('is-active');
     eraseBtn?.classList.remove('is-active');
     this.fogEditor.disable();
     this.fogEditor.setBrushActive(false);
+    this.fogEditor.setFillActive(false);
     this.markerEditor?.setPointerCapture(true);
   }
 
@@ -3102,6 +3139,102 @@ export class GMApp {
     this.state.setFog({ polygons: [...fog.polygons, ...newPolys] });
     // Single-shot Paint/Erase: brush stroke committed → leave action mode.
     this._endAction();
+  }
+
+  /** v2.12 Magic Wand commit. Click in Fill mode runs flood-fill at
+   *  the click position on the map and creates a polygon. Subsequent
+   *  Tolerance slider drags re-run from the same seed via
+   *  _reflowLastFill, mutating that polygon's vertices live.
+   *  Clicking again starts a fresh fill. */
+  private _commitOverlayFill(action: 'paint' | 'erase', mapPos: import('../types.ts').FogVertex): void {
+    const tol = this._currentFillTolerance();
+    const polyVerts = this._runFloodFill(mapPos, tol);
+    if (!polyVerts) {
+      // Bad seed (off-map, tiny region, or no map loaded). Leave the
+      // action mode active so the GM can try clicking a different
+      // spot or widening the tolerance first.
+      return;
+    }
+    const fog = this.state.getState().fog;
+    if (action === 'erase') {
+      const result = subtractFromAll(fog.polygons, polyVerts);
+      this.state.setFog({ polygons: result });
+      // Erase doesn't have a "last fill" to mutate via tolerance —
+      // each erase commits.
+      this._lastFillState = null;
+      this._endAction();
+      return;
+    }
+    // Paint — inheritance + draft + default chain like the other commits.
+    const k = overlayKind(this.activeOverlayKind);
+    const inherit = this._pendingPaintInherit;
+    const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
+    const color = inherit
+      ? inherit.color
+      : ((k.allowColor && swatch?.value) ? swatch.value : k.defaultColor);
+    const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
+    const params = inherit ? inherit.shaderParams : draft;
+    const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
+    const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
+    const poly: FogPolygon = {
+      id:        generateId(),
+      kind:      this.activeOverlayKind,
+      vertices:  polyVerts,
+      color,
+      ...(Object.keys(params).length > 0 ? { shaderParams: { ...params } } : {}),
+      ...(edgeFade > 0 ? { edgeFade } : {}),
+      createdAt: Date.now(),
+    };
+    this.state.setFog({ polygons: [...fog.polygons, poly] });
+    // Stash the seed so the Tolerance slider can re-flood and
+    // replace this polygon's vertices. Stays alive until another
+    // fill click or end-of-action.
+    this._lastFillState = { polyId: poly.id, seedX: mapPos.x, seedY: mapPos.y, action };
+    // Fill stays in action mode -- each click is a new fill -- so we
+    // DON'T call _endAction here. The GM exits by re-clicking Paint
+    // or switching mode.
+  }
+
+  /** v2.12 — re-run the last fill at a new tolerance and replace the
+   *  polygon's vertices. No-op if there's no last fill or the seed
+   *  no longer flood-fills cleanly at the new tolerance (e.g.
+   *  tolerance 0 on a noisy map gives nothing). */
+  private _reflowLastFill(tolerance: number): void {
+    const last = this._lastFillState;
+    if (!last) return;
+    const polyVerts = this._runFloodFill({ x: last.seedX, y: last.seedY }, tolerance);
+    if (!polyVerts) return;
+    const fog = this.state.getState().fog;
+    const polygons = fog.polygons.map((p) =>
+      p.id === last.polyId ? { ...p, vertices: polyVerts } : p
+    );
+    this.state.setFog({ ...fog, polygons });
+  }
+
+  /** Read the Tolerance slider's current value (0..1). Defaults to
+   *  0.1 if the slider hasn't been initialised. */
+  private _currentFillTolerance(): number {
+    const slider = document.getElementById('fog-fill-tolerance') as HTMLInputElement | null;
+    const v = slider ? parseFloat(slider.value) : 0.1;
+    return Number.isFinite(v) ? v : 0.1;
+  }
+
+  /** Run flood-fill at the given map-norm position with the given
+   *  tolerance. Returns vertices in map-norm space, or null on
+   *  failure (no map loaded, seed off-map, fill too small). */
+  private _runFloodFill(mapPos: import('../types.ts').FogVertex, tolerance: number): import('../types.ts').FogVertex[] | null {
+    const imgData = this.renderer.getMapImageData();
+    if (!imgData) return null;
+    const seedX = Math.round(mapPos.x * (imgData.width - 1));
+    const seedY = Math.round(mapPos.y * (imgData.height - 1));
+    const result = floodFillToPolygon(imgData, seedX, seedY, { tolerance });
+    if (!result || result.pixels.length < 3) return null;
+    // Convert image-pixel vertices back to map-normalised coords.
+    const verts: import('../types.ts').FogVertex[] = result.pixels.map((p) => ({
+      x: p.x / (imgData.width - 1),
+      y: p.y / (imgData.height - 1),
+    }));
+    return verts;
   }
 
   private bindFilterPanel(): void {

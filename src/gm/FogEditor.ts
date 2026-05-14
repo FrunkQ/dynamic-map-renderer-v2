@@ -54,6 +54,15 @@ export interface FogPolygonCompleteHandler {
   (action: 'paint' | 'erase', vertices: FogVertex[]): void;
 }
 
+/** v2.12 — Magic Wand fill click handler. FogEditor reports the
+ *  map-norm position the GM clicked; GMApp runs the flood-fill there
+ *  and commits a polygon. Returning a clean callback (no auto-commit
+ *  inside the editor) keeps fill-mode consistent with the existing
+ *  polygon / brush handler patterns. */
+export interface FogFillHandler {
+  (action: 'paint' | 'erase', mapPos: FogVertex): void;
+}
+
 export class FogEditor {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -109,6 +118,15 @@ export class FogEditor {
   private brushController: BrushController;
   private brushLive: FogBrushLiveHandler | null = null;
   private brushEnd:  FogBrushEndHandler  | null = null;
+  /** v2.12 — Magic Wand. When true, single canvas clicks route to
+   *  the fill handler with the map-norm position; GMApp runs the
+   *  flood-fill and produces a polygon. Mutually exclusive with
+   *  brushActive + enabled (the polygon-vertex flow). */
+  private fillActive = false;
+  private fillHandler: FogFillHandler | null = null;
+  /** Action for the next fill click: paint = add the filled region,
+   *  erase = carve it out of overlapping polygons. */
+  private fillAction: 'paint' | 'erase' = 'paint';
   /** Latest cursor position in map-norm coords for the brush-size outline. */
   private brushCursor: FogVertex | null = null;
   /** Points being collected during an in-progress brush drag, in map-norm
@@ -184,6 +202,34 @@ export class FogEditor {
 
   getBrushSettings(): BrushSettings {
     return this.brushController.getSettings();
+  }
+
+  /** v2.12 — Magic Wand mode. When `on`, single canvas clicks emit
+   *  to the fill handler with the click's map-norm coords. Polygon
+   *  draw + brush are suspended while fill is active.  */
+  setFillActive(on: boolean): void {
+    if (this.fillActive === on) return;
+    this.fillActive = on;
+    if (on) {
+      this.enabled = false;
+      this.brushActive = false;
+      this.setSelection(null);
+      this.canvas.classList.add('fog-active', 'fog-fill');
+      this.canvas.classList.remove('fog-draw', 'fog-brush');
+    } else {
+      this.canvas.classList.remove('fog-fill');
+    }
+    this.redraw();
+    this.emitMode();
+  }
+
+  /** Set the Paint/Erase action for the next fill click. */
+  setFillAction(action: 'paint' | 'erase'): void {
+    this.fillAction = action;
+  }
+
+  setFillHandler(fn: FogFillHandler): void {
+    this.fillHandler = fn;
   }
 
   /** Convert a client (clientX, clientY) into map-norm coords. Mirrors the
@@ -415,6 +461,19 @@ export class FogEditor {
     // firing simultaneously — without it, mouse drags during a brush stroke
     // also scrolled the camera, which made painting unusable.
     this.canvas.addEventListener('pointerdown', (e) => {
+      // v2.12 — Magic Wand fill: a single click on the canvas
+      // produces a polygon via the GMApp's flood-fill pipeline.
+      // No pointer capture; one click = one flood-fill.
+      if (this.fillActive) {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const pos = this._clientToMapNorm(e.clientX, e.clientY);
+        if (pos && this.fillHandler) {
+          this.fillHandler(this.fillAction, pos);
+        }
+        return;
+      }
       if (!this.brushActive) return;
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       e.preventDefault();

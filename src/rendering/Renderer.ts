@@ -56,6 +56,11 @@ export class Renderer {
   private mapMesh:      THREE.Mesh | null = null;
   private fogMesh:      THREE.Mesh | null = null;
   private mapTexture:   THREE.Texture | null = null;
+  /** Lazily-built ImageData cache for the loaded map's pixels. Used
+   *  by the Magic Wand fill (src/mapfx/floodFill.ts) which needs to
+   *  read the map's raw pixels to flood-fill from a click point.
+   *  Invalidated on every loadMap() call. */
+  private _mapImageDataCache: ImageData | null = null;
   private fogCompositor: FogCompositor;
   /** v2.12 — per-polygon alpha masks for shader-driven overlay kinds.
    *  One mask canvas per polygon, sized to the polygon's bbox; the
@@ -97,6 +102,27 @@ export class Renderer {
   private aspectRatio = 1;
   /** Read-only map aspect ratio (width / height). Set when a map loads. */
   get mapAspect(): number { return this.aspectRatio; }
+  /** Magic Wand: return the loaded map's ImageData (cached). Builds
+   *  on first call by drawing the map's HTMLImageElement to an
+   *  OffscreenCanvas and reading pixels. Returns null if no map is
+   *  loaded yet or if the canvas2D context isn't available. */
+  getMapImageData(): ImageData | null {
+    if (this._mapImageDataCache) return this._mapImageDataCache;
+    if (!this.mapTexture?.image) return null;
+    const img = this.mapTexture.image as HTMLImageElement;
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return null;
+    try {
+      const canvas = new OffscreenCanvas(w, h);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0);
+      this._mapImageDataCache = ctx.getImageData(0, 0, w, h);
+      return this._mapImageDataCache;
+    } catch {
+      return null;
+    }
+  }
   private fogOpacity = 1.0;
   /**
    * Dirty flag: when true the next animation frame will render.
@@ -249,6 +275,10 @@ export class Renderer {
         if (this.mapTexture) this.mapTexture.dispose();
         tex.colorSpace = THREE.SRGBColorSpace;
         this.mapTexture = tex;
+        // Magic wand cache invalidates with every map switch — next
+        // call to getMapImageData() will re-rasterise from the new
+        // texture's HTMLImageElement.
+        this._mapImageDataCache = null;
 
         const img = tex.image as HTMLImageElement;
         this.aspectRatio = img.naturalWidth / img.naturalHeight;

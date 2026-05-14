@@ -147,6 +147,7 @@
           <div class="fog-mode-toggle">
             <button id="fog-mode-poly-btn"  class="btn btn--sm fog-mode-btn is-active" title="Click vertices to define an outline">Polygon</button>
             <button id="fog-mode-brush-btn" class="btn btn--sm fog-mode-btn"           title="Drag to paint a shape">Brush</button>
+            <button id="fog-mode-fill-btn"  class="btn btn--sm fog-mode-btn"           title="Magic wand — click a region on the map to fill it">Fill</button>
           </div>
         </div>
 
@@ -155,6 +156,16 @@
           <label class="fog-brush-row">
             <span>Size</span>
             <input id="fog-brush-radius" type="range" min="2" max="80" step="1" value="20" title="Brush size in screen pixels — zoom in for finer detail" />
+          </label>
+        </div>
+
+        <!-- Fill (magic wand) tolerance — only visible when Drawing Mode = Fill.
+             Drag after a fill click to widen / narrow the matched area; the
+             most-recent fill polygon updates live. -->
+        <div class="fog-fill-controls" hidden>
+          <label class="fog-brush-row">
+            <span>Tolerance</span>
+            <input id="fog-fill-tolerance" type="range" min="0.01" max="0.6" step="0.01" value="0.1" title="How permissive the colour-match is. Drag after a fill click to widen / narrow the captured area." />
           </label>
         </div>
 

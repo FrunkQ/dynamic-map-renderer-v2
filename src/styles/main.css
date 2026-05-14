@@ -1566,6 +1566,21 @@ option.select-option--add {
 /* Crosshair cursor while brush mode is active. */
 #fog-canvas.fog-brush { pointer-events: auto; cursor: crosshair; }
 
+/* v2.12 — Magic Wand controls panel + cursor (mirrors fog-brush-
+   controls style). cell-pointer cursor reads as "click to pick", a
+   visual hint that single-click does the work. */
+.fog-fill-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+#fog-canvas.fog-fill { pointer-events: auto; cursor: cell; }
+
 /* v2.12 — Per-kind shader-params panel. Mirrors the brush-controls
    styling so the sliders read as part of the same family. */
 .fog-shader-params {
