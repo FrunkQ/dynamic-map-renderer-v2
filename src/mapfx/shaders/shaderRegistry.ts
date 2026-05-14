@@ -17,9 +17,16 @@ const textureGlobs  = import.meta.glob<string>('./*/*.{png,webp,jpg,jpeg}', { ea
 export interface KindShader {
   vertex:   string;
   fragment: string;
-  /** Pre-resolved textures keyed by uniform name. Hardcoded to one
-   *  texture per kind for now (`uNoise`) — generalises easily later. */
+  /** Pre-resolved textures keyed by uniform name. Files named
+   *  `noise.{png,jpg,jpeg,webp}` are bound to `uNoise` automatically. */
   textures: Record<string, THREE.Texture>;
+  /** True when the fragment source declares `uniform sampler2D uMap`.
+   *  Renderer reads this to decide whether to wire the map texture +
+   *  per-plane uMapUv (bbox of the map covered by this poly's plane)
+   *  into the material. Lets a shader sample what's UNDER the polygon
+   *  on the rendered map — e.g. a river's refraction shows the GM's
+   *  painted river bed shimmering rather than a procedural pattern. */
+  wantsMap: boolean;
 }
 
 /** Lazy texture cache so each shader's noise / etc. loads once. */
@@ -50,5 +57,8 @@ export function loadKindShader(shaderId: string): KindShader | null {
     const file = key.slice(`./${shaderId}/`.length).toLowerCase();
     if (file.startsWith('noise')) textures['uNoise'] = _loadTexture(url);
   }
-  return { vertex, fragment, textures };
+  // Detect whether the shader wants the underlying map texture passed
+  // in. Renderer wires uMap + uMapUv per-plane when this is true.
+  const wantsMap = /uniform\s+sampler2D\s+uMap\b/.test(fragment);
+  return { vertex, fragment, textures, wantsMap };
 }

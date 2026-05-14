@@ -368,6 +368,15 @@ export class Renderer {
       // don't z-fight.
       const slotZ = 0.002 + Math.min(0.006, k.z * 0.00005);
 
+      // Map-UV bbox the plane covers (used by shaders that opt in to
+      // sampling the underlying map). Y component is flipped because
+      // texture sampling has flipY=true: vUv (0,0) on the plane is the
+      // map's TOP-of-bbox row in canvas space.
+      const mapUvX = maskEntry.bbox.x;
+      const mapUvY = 1.0 - maskEntry.bbox.y - maskEntry.bbox.h;
+      const mapUvW = maskEntry.bbox.w;
+      const mapUvH = maskEntry.bbox.h;
+
       let entry = this.shaderPlanes.get(poly.id);
       if (!entry) {
         // First sighting of this polygon — build material + mesh.
@@ -375,23 +384,40 @@ export class Renderer {
         for (const p of k.shaderParams ?? []) {
           paramUniforms[`u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`] = { value: p.default };
         }
+        const baseUniforms: Record<string, { value: unknown }> = {
+          uMask:    { value: maskEntry.texture },
+          uNoise:   { value: shader.textures['uNoise'] ?? null },
+          uColor:   { value: new THREE.Color(k.allowColor && poly.color ? poly.color : k.defaultColor) },
+          uAspect:  { value: planeW / planeH },
+          time:     { value: 0 },
+          ...paramUniforms,
+        };
+        // Self-sample feature: shaders that declare `uniform sampler2D
+        // uMap` get the map texture + their plane's bbox-in-map-UV
+        // (offset.xy + scale.zw) so they can sample the GM's painted
+        // art underneath the polygon. Used by the river shader for
+        // refraction; available to any future shader.
+        if (shader.wantsMap) {
+          baseUniforms['uMap']   = { value: this.mapTexture };
+          baseUniforms['uMapUv'] = { value: new THREE.Vector4(mapUvX, mapUvY, mapUvW, mapUvH) };
+        }
+        // Blend mode follows the kind. Fire ('screen') and similar
+        // glow-y kinds use additive so radiance reads as light over
+        // the map. River + opaque-surface kinds use normal alpha so
+        // the shader output (which already samples the underlying
+        // map for refraction) reads as a real surface that obscures
+        // the bare map. Multiply for darkening kinds.
+        const threeBlend =
+          k.blend === 'multiply' ? THREE.MultiplyBlending :
+          k.blend === 'normal'   ? THREE.NormalBlending   :
+                                   THREE.AdditiveBlending;
         const material = new THREE.ShaderMaterial({
           vertexShader:   shader.vertex,
           fragmentShader: shader.fragment,
           transparent:    true,
           depthWrite:     false,
-          // Additive blending so the shader's radiance adds on top of
-          // the map. Filter pass still sees "map + shader plane(s)" as
-          // one composited image after RenderPass.
-          blending:       THREE.AdditiveBlending,
-          uniforms: {
-            uMask:    { value: maskEntry.texture },
-            uNoise:   { value: shader.textures['uNoise'] ?? null },
-            uColor:   { value: new THREE.Color(k.allowColor && poly.color ? poly.color : k.defaultColor) },
-            uAspect:  { value: planeW / planeH },
-            time:     { value: 0 },
-            ...paramUniforms,
-          },
+          blending:       threeBlend,
+          uniforms:       baseUniforms,
         });
         const geo = new THREE.PlaneGeometry(planeW, planeH);
         const mesh = new THREE.Mesh(geo, material);
@@ -415,6 +441,12 @@ export class Renderer {
         const colHex = k.allowColor && poly.color ? poly.color : k.defaultColor;
         const colU = entry.material.uniforms['uColor'];
         if (colU) (colU.value as THREE.Color).set(colHex);
+        // Self-sample uniforms re-sync when bbox or map texture
+        // changes (e.g. polygon edit, map switch).
+        const mapU = entry.material.uniforms['uMap'];
+        if (mapU) mapU.value = this.mapTexture;
+        const mapUvU = entry.material.uniforms['uMapUv'];
+        if (mapUvU) (mapUvU.value as THREE.Vector4).set(mapUvX, mapUvY, mapUvW, mapUvH);
       }
     }
 

@@ -91,6 +91,7 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 | Effect | Name | Source |
 |--------|------|--------|
 | Coloured Flames | Promethean (4tB3zV) | https://www.shadertoy.com/view/4tB3zV |
+| River | A river (MsSGWK, Pierco fork) | https://www.shadertoy.com/view/MsSGWK |
 
 Modifications made to "Promethean":
 - Translated from ShaderToy GLSL to Three.js ShaderMaterial / GLSL ES 1.00.
@@ -100,6 +101,14 @@ Modifications made to "Promethean":
 - Added `uMask` (per-polygon alpha mask), `uColor` (polygon tint colour), `uIntensity` (0.05–1.5 output multiplier), `uScale` (0.25–4 procedural feature scale), and `uAspect` (plane width/height for non-square polygons).
 - Removed the hard-coded warm palette inside `vmarch`; the orb now produces a luminance signal that is multiplicatively tinted by `uColor` at composite time, so the GM can paint red / blue / green / purple flames using the same shader.
 - Output uses additive blending in the renderer's scene composite so the flame reads as glowing fire over the underlying map.
+
+Modifications made to "A river" (Pierco fork):
+- Reduced the 3D mouse-rotated camera + plane intersection to a fixed top-down view — Mappadux is a battlemap, not a scenic close-up. Each shader-plane pixel maps directly to a wave surface point via `vUv`.
+- Replaced the `iChannel0` skybox cubemap with a procedural sky tint (no horizon visible top-down).
+- Replaced the `iChannel1` riverbed texture with a refraction-offset sample of the map texture itself, so the GM's painted river bed shimmers under the surface. Required new generic `uMap` + `uMapUv` uniform support in `shaderRegistry` — any shader declaring `uniform sampler2D uMap` now gets the map texture + its plane's bbox-in-map-UV passed automatically.
+- `iChannel2` wave noise is the original Shadertoy asset (`noise.jpg` in the river folder) — softer than our generic noise.png and gives the rolling-wavelet look the original was tuned for.
+- Added per-poly uniforms: `uColor` (water hue tint), `uIntensity` (output multiplier), `uScale` (wave feature density), `uSpeed` (flow rate), `uDirection` (flow direction in radians, compass convention with 0 = north). Each is a slider in the GM panel.
+- Output uses normal alpha blending (not additive) — a real river has a definite surface that obscures what's strictly under it, modulated by refraction. Additive would have just brightened the bed.
 
 ### Under evaluation *(may be removed before v2.12 ships)*
 

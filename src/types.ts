@@ -47,6 +47,7 @@ export type OverlayKind =
   | 'light'
   | 'blood'
   | 'water'
+  | 'river'
   | 'shadow'
   | 'electric'
   | 'poison'

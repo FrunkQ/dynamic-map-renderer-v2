@@ -182,6 +182,21 @@ const FIRE_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0, step: 0.05, default: 1.0 },
 ];
 
+// River shader params:
+//   • intensity — output multiplier (universal).
+//   • scale     — wave feature density. < 1 = finer ripples; > 1 = lazy swells.
+//   • speed     — flow rate. 0 = still pool; 1 = normal river; 2 = rapids.
+//   • direction — flow direction in radians, compass convention. 0 = north
+//     (water flows toward the top of the map). Polygon-scoped naturally:
+//     every river bends differently and the inheritance pattern carries
+//     the last-tuned direction onto the next-painted polygon.
+const RIVER_SHADER_PARAMS: ShaderParamDef[] = [
+  { id: 'intensity', label: 'Intensity', min: 0.05, max: 1.5,            step: 0.05, default: 1.0 },
+  { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0,            step: 0.05, default: 1.0 },
+  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 2.0,            step: 0.05, default: 1.0 },
+  { id: 'direction', label: 'Direction', min: 0.0,  max: 6.2831853,      step: 0.087266, default: 0.0 },
+];
+
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   fog:      { id: 'fog',      label: 'Fog of War',    iconSvg: SVG_FOG,       defaultColor: '#000000', defaultRadius: 25, blend: 'normal',   animated: false, selectByInterior: true,  allowColor: true,  z: 100 },
   fire:     { id: 'fire',     label: 'Coloured Flames', iconSvg: SVG_FLAME,   defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire', shaderParams: FIRE_SHADER_PARAMS },
@@ -190,6 +205,7 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   light:    { id: 'light',    label: 'Magical Light', iconSvg: SVG_LIGHT,     defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 5   },
   blood:    { id: 'blood',    label: 'Blood',         iconSvg: SVG_BLOOD,     defaultColor: '#8a0d18', defaultRadius: 15, blend: 'multiply', animated: false, selectByInterior: false, allowColor: false, z: 5   },
   water:    { id: 'water',    label: 'Water',         iconSvg: SVG_WATER,     defaultColor: '#4aa3ff', defaultRadius: 35, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: true,  z: 5   },
+  river:    { id: 'river',    label: 'River',         iconSvg: SVG_WATER,     defaultColor: '#5aa9d6', defaultRadius: 35, blend: 'normal',   animated: true,  selectByInterior: false, allowColor: true,  z: 5, shader: 'river', shaderParams: RIVER_SHADER_PARAMS },
   shadow:   { id: 'shadow',   label: 'Shadow',        iconSvg: SVG_SHADOW,    defaultColor: '#10131c', defaultRadius: 35, blend: 'multiply', animated: false, selectByInterior: false, allowColor: false, z: 30  },
   electric: { id: 'electric', label: 'Lightning',     iconSvg: SVG_ELECTRIC,  defaultColor: '#a0c8ff', defaultRadius: 12, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: false, z: 15  },
   poison:   { id: 'poison',   label: 'Poison',        iconSvg: SVG_POISON,    defaultColor: '#7dd23a', defaultRadius: 20, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 10  },
@@ -201,7 +217,7 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
 /** Order for the kind dropdown — fog first (most-used), then groupings. */
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   'fog',
-  'fire', 'cold', 'water', 'smoke', 'electric',
+  'fire', 'cold', 'river', 'water', 'smoke', 'electric',
   'light', 'holy', 'healing',
   'blood', 'shadow', 'poison', 'fear',
 ];
