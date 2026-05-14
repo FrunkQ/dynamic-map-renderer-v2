@@ -229,12 +229,22 @@ const LIGHT_SHADER_PARAMS: ShaderParamDef[] = [
 //   • intensity — brightness of the stars (universal).
 //   • scale     — star density. Lower = larger / sparser stars, higher
 //     = many small stars per polygon.
-//   • speed     — warp travel rate. 0 = static starfield (no parallax
-//     motion); 4 = "starship at warp" feel.
+//   • speed     — warp travel rate. 0 = static starfield (no motion);
+//     10 = proper "warp drive" feel. Range bumped from the previous
+//     0..4 so genuine warp-speed reads as warp-speed.
+//   • direction — 0..π sweep, replacing the original mouse-driven
+//     view rotation with explicit control:
+//       0     = stars approaching head-on
+//       π/4   = angled approach
+//       π/2   = pure sideways (stars stream past)
+//       3π/4  = angled recede
+//       π     = stars receding head-on
+//     Per-polygon naturally, like river's flow direction.
 const STARFIELD_SHADER_PARAMS: ShaderParamDef[] = [
-  { id: 'intensity', label: 'Intensity', min: 0.05, max: 2.0, step: 0.05, default: 1.0 },
-  { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0, step: 0.05, default: 1.0 },
-  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0, step: 0.05, default: 1.0 },
+  { id: 'intensity', label: 'Intensity', min: 0.05, max: 2.0,        step: 0.05,     default: 1.0 },
+  { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0,        step: 0.05,     default: 1.0 },
+  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 10.0,       step: 0.1,      default: 1.0 },
+  { id: 'direction', label: 'Direction', min: 0.0,  max: 3.1415927,  step: 0.087266, default: 0.0 },
 ];
 
 // Portal shader params:

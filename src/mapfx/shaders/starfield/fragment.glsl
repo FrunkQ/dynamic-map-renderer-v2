@@ -4,10 +4,14 @@
 //   ACKNOWLEDGEMENTS.md.
 //
 // Adaptation notes:
-//   • iTime → time; iResolution → uAspect; iMouse → not used.
-//   • The original's mouse-driven view offset is replaced with the
-//     auto-rotation (cos/sin of time * 0.22) that the demo had as a
-//     secondary effect — keeps the stars gently drifting.
+//   • iTime → time; iResolution → uAspect.
+//   • The original's mouse-driven view offset is replaced with an
+//     explicit uDirection slider (0..π). The slider sweeps through
+//     "stars approaching head-on" (0), through "stars flying past
+//     sideways" (π/2), to "stars receding behind you" (π). Forward
+//     component (cos) drives the depth-warp rate; lateral component
+//     (sin) drives a horizontal scroll. Same effect the mouse drag
+//     gave the original Shadertoy, now under explicit GM control.
 //   • Per-poly plane: each vUv pixel maps to a starfield coordinate
 //     centred on the polygon. The CanvasView constant (was 20) is
 //     scaled by uScale so the GM picks star density.
@@ -31,6 +35,7 @@ uniform vec3      uColor;
 uniform float     uIntensity;
 uniform float     uScale;
 uniform float     uSpeed;
+uniform float     uDirection; // 0..π — 0 approaching, π/2 sideways, π receding
 
 varying vec2 vUv;
 
@@ -90,14 +95,27 @@ void main() {
   vec2 uv = (vUv - 0.5);
   uv.x *= uAspect;
 
-  // Auto-rotation offset — slow circular drift, same shape as the
-  // original demo. Replaces the mouse-driven view offset.
-  vec2 M = vec2(sin(time * 0.22), -cos(time * 0.22)) * 0.3;
+  // Direction sweep — uDirection in radians, 0..π.
+  //   cos(uDirection) drives the depth-warp rate (positive at 0 =
+  //     stars approach, negative at π = stars recede).
+  //   sin(uDirection) drives a lateral horizontal scroll (peaks at
+  //     π/2 = pure sideways flight, no convergence).
+  // At intermediate angles the two combine for the "angled flight
+  // past stars" feel.
+  float forward = cos(uDirection);
+  float lateral = sin(uDirection);
 
   // Warp travel rate. Original Velocity = 0.025 (≈ 40s per full
-  // depth cycle). uSpeed scales it for "drifting nebula" up to
-  // "starship at warp" feel.
-  float t = time * uSpeed * 0.025;
+  // depth cycle). uSpeed scales it; forward sign drives the
+  // approach/recede direction. Range now extends to 10 so "warp
+  // speed" reads as proper warp speed.
+  float t = time * uSpeed * 0.025 * forward;
+
+  // Lateral scroll for sideways / angled flight. Coefficient
+  // picked so uSpeed=1 / direction=π/2 moves stars across the
+  // polygon at roughly one star-cell per second — comfortable to
+  // watch without being twitchy.
+  vec2 lateralOffset = vec2(lateral * time * uSpeed * 0.8, 0.0);
 
   vec3 col = vec3(0.0);
   for (int li = 0; li < NUM_LAYERS; li++) {
@@ -105,7 +123,7 @@ void main() {
     float depth = fract(i + t);
     float scale = mix(CANVAS_VIEW / max(uScale, 0.01), 0.5, depth);
     float fade = depth * smoothstep(1.0, 0.9, depth);
-    col += StarLayer(uv * scale + i * 453.2 - time * 0.05 + M) * fade;
+    col += StarLayer(uv * scale + i * 453.2 - time * 0.05 + lateralOffset) * fade;
   }
 
   // Additive blend on the material: stars add over the map.
