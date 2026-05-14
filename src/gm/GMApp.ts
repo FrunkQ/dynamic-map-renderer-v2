@@ -86,6 +86,22 @@ function rangeToSlider(r: number): number {
  */
 const DRAWING_MODE_LS_KEY = 'mappadux:drawingMode';
 
+/** Map ASCII letters to their Mathematical Sans-Serif Bold Unicode
+ *  equivalents. Used for the dropdown's "Fog of War" entry so it
+ *  visually stands out from the MapFX kinds without needing CSS
+ *  styling on <option> (which browsers largely ignore). */
+function _toUnicodeBold(s: string): string {
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0x41 && c <= 0x5A)       out += String.fromCodePoint(0x1D5D4 + (c - 0x41)); // A-Z
+    else if (c >= 0x61 && c <= 0x7A)  out += String.fromCodePoint(0x1D5EE + (c - 0x61)); // a-z
+    else if (c >= 0x30 && c <= 0x39)  out += String.fromCodePoint(0x1D7EC + (c - 0x30)); // 0-9
+    else                              out += s[i];
+  }
+  return out;
+}
+
 export class GMApp {
   private state   = new StateManager();
   private maps    = new MapManager();
@@ -2637,7 +2653,12 @@ export class GMApp {
       for (const id of OVERLAY_KIND_ORDER) {
         const opt = document.createElement('option');
         opt.value = id;
-        opt.textContent = OVERLAY_KIND_REGISTRY[id].label;
+        const label = OVERLAY_KIND_REGISTRY[id].label;
+        // Visually distinguish Fog of War from the MapFX kinds. Most
+        // browsers ignore CSS on <option>, so we lean on Mathematical
+        // Sans-Serif Bold Unicode codepoints — renders as a bold
+        // typeface in every dropdown without any font-weight CSS.
+        opt.textContent = id === 'fog' ? _toUnicodeBold(label) : label;
         kindSelect.appendChild(opt);
       }
       kindSelect.value = this.activeOverlayKind;
