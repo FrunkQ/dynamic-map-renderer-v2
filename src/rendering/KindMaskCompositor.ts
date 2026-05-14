@@ -1,89 +1,99 @@
 import * as THREE from 'three';
-import type { FogPolygon, OverlayKind } from '../types.ts';
+import type { FogPolygon } from '../types.ts';
 import { overlayKind } from '../mapfx/overlayKindRegistry.ts';
 
 /**
- * KindMaskCompositor (v2.12) — for shader-driven overlay kinds.
+ * PolygonMaskCompositor (v2.12) — one alpha mask per shader-driven
+ * polygon, sized to the polygon's bounding box.
  *
- * Maintains one OffscreenCanvas per kind that has a `shader` set in the
- * registry. Each canvas holds an RGBA mask: the alpha channel encodes
- * polygon coverage (1 where any polygon of that kind is, 0 elsewhere);
- * the RGB channels carry the polygon's own colour. The custom shader
- * plane for that kind samples this mask + time to produce the actual
- * effect (animated flames, electric crackle, etc.) — including using
- * mask.rgb as the per-polygon tint when allowColor is honoured.
+ * Each shader-driven polygon (fire, electric, etc.) gets its own plane
+ * positioned at its bbox centre so the shader's procedural effect
+ * (curling flames, crackling lightning, …) appears centred on the
+ * polygon, not on the centre of the map. This compositor owns the
+ * per-polygon alpha mask each plane samples to clip its output to the
+ * polygon's actual shape (the plane geometry covers the bbox, but the
+ * polygon may be any concave shape inside).
  *
- * Two fire polygons with different colours produce different tints in
- * their respective regions naturally because of how the canvas paints
- * them; if they overlap, the later-drawn polygon's colour wins (which
- * matches FogCompositor's z + createdAt sort).
+ * Mask canvas dimensions track the polygon's footprint on the map so
+ * tiny polys don't waste memory and big ones don't lose edge detail.
+ * Polygon colour does NOT live in the mask — it travels as a per-plane
+ * uniform (uColor), which means a fire-poly recolour is a single
+ * uniform update with no rasterisation.
  *
- * Mask resolution mirrors the fog compositor (1024×1024 with normalised
- * UVs); the kind's z-stacked Three plane stretches it onto the map.
+ * Backwards-compatibility note: the file kept its old name through this
+ * refactor to minimise import churn; the exported class is now named
+ * PolygonMaskCompositor and `KindMaskCompositor` is re-exported as an
+ * alias so the Renderer keeps working without a sweep.
  */
-export class KindMaskCompositor {
-  private size: number;
-  /** Per-kind mask canvas + texture. Created lazily on first sighting of
-   *  a polygon for that kind; lives for the renderer's lifetime once
-   *  created (dispose() tears them all down on map switch). */
-  private entries = new Map<OverlayKind, { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D; texture: THREE.CanvasTexture }>();
-  /** Last polygon snapshot — used so tickAnimation can re-mask if needed
-   *  (animation is handled by the per-kind shader's time uniform; we
-   *  don't re-redraw the masks per frame). */
+export interface PolygonMaskEntry {
+  /** Polygon id this mask belongs to. */
+  id:       string;
+  /** Bounding box in map-normalised coords (x, y top-left; w, h size). */
+  bbox:     { x: number; y: number; w: number; h: number };
+  /** Canvas backing the texture; sized to bbox aspect. */
+  canvas:   OffscreenCanvas;
+  ctx:      OffscreenCanvasRenderingContext2D;
+  texture:  THREE.CanvasTexture;
+}
+
+/** Target mask longest-axis size in pixels for an entry. Scales with
+ *  polygon bbox so tiny polys are cheap and big ones keep detail. */
+const MASK_MAX = 512;
+const MASK_MIN = 64;
+
+export class PolygonMaskCompositor {
+  /** Per-polygon mask entries. Keyed by polygon id. */
+  private entries = new Map<string, PolygonMaskEntry>();
+
+  /** Snapshot of the polygons this compositor last knew about — exposed
+   *  so callers can iterate the same set without re-deriving it. */
   private lastPolygons: FogPolygon[] = [];
 
-  constructor(size: number = 1024) {
-    this.size = size;
+  /** Returns the mask entry for a polygon id, or undefined if no entry
+   *  has been rasterised yet (e.g. polygon is too small to need one or
+   *  its kind has no shader). */
+  entryFor(polyId: string): PolygonMaskEntry | undefined {
+    return this.entries.get(polyId);
   }
 
-  /** Returns the mask texture for a kind, creating the canvas lazily.
-   *  Returns null if the kind has no shader (caller shouldn't ask). */
-  textureFor(kind: OverlayKind): THREE.CanvasTexture | null {
-    const k = overlayKind(kind);
-    if (!k.shader) return null;
-    return this._ensure(kind).texture;
+  /** Iterate all current entries — used by the Renderer when spinning
+   *  up matching shader planes. */
+  *allEntries(): IterableIterator<PolygonMaskEntry> {
+    yield* this.entries.values();
   }
 
-  /** Rebuild all kind masks from the polygon list. Cheap — one canvas
-   *  redraw per shader-driven kind, only when state changes. The shader
-   *  itself animates via its time uniform between redraws. */
+  /** Rebuild masks for every shader-driven polygon. Cheap when the
+   *  polygon set hasn't changed (we re-rasterise on every update to
+   *  keep the mask exactly in sync, but for small polys this is
+   *  microseconds). */
   redraw(polygons: FogPolygon[]): void {
     this.lastPolygons = polygons;
-    // Bucket polygons by kind, only for kinds that need a mask.
-    const byKind = new Map<OverlayKind, FogPolygon[]>();
+
+    // Build the set of polygon ids that should have masks this round.
+    const wantedIds = new Set<string>();
+    for (const p of polygons) {
+      if (overlayKind(p.kind).shader) wantedIds.add(p.id);
+    }
+
+    // Drop entries for polygons that no longer exist (or whose kind no
+    // longer has a shader — kind reassignment is rare but possible).
+    for (const [id, entry] of this.entries) {
+      if (wantedIds.has(id)) continue;
+      entry.texture.dispose();
+      this.entries.delete(id);
+    }
+
+    // Rebuild / create entries for current shader-driven polygons.
     for (const poly of polygons) {
-      const k = overlayKind(poly.kind);
-      if (!k.shader) continue;
-      const list = byKind.get(poly.kind) ?? [];
-      list.push(poly);
-      byKind.set(poly.kind, list);
-    }
-
-    // For each existing mask, redraw with its bucket (empty if no polygons
-    // of that kind remain → mask goes blank).
-    for (const [kind, entry] of this.entries) {
-      const polys = byKind.get(kind) ?? [];
-      this._rasterise(entry, polys);
-    }
-
-    // For kinds that have polygons but no mask canvas yet, create one.
-    for (const [kind, polys] of byKind) {
-      if (this.entries.has(kind)) continue;
-      const entry = this._ensure(kind);
-      this._rasterise(entry, polys);
+      if (!wantedIds.has(poly.id)) continue;
+      this._rebuildPoly(poly);
     }
   }
 
-  /** Returns the set of shader-driven kinds that currently have any
-   *  polygons painted. The Renderer uses this to decide which shader
-   *  planes need to be visible. */
-  activeKinds(): OverlayKind[] {
-    const set = new Set<OverlayKind>();
-    for (const p of this.lastPolygons) {
-      const k = overlayKind(p.kind);
-      if (k.shader) set.add(p.kind);
-    }
-    return Array.from(set);
+  /** Set of shader-driven polygons known to this compositor. The
+   *  Renderer uses these to decide which shader planes need to exist. */
+  activePolygons(): FogPolygon[] {
+    return this.lastPolygons.filter((p) => overlayKind(p.kind).shader);
   }
 
   dispose(): void {
@@ -91,62 +101,100 @@ export class KindMaskCompositor {
     this.entries.clear();
   }
 
-  private _ensure(kind: OverlayKind) {
-    let entry = this.entries.get(kind);
-    if (entry) return entry;
-    const canvas = new OffscreenCanvas(this.size, this.size);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error(`KindMaskCompositor: 2D context unavailable for ${kind}`);
-    const texture = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-    entry = { canvas, ctx, texture };
-    this.entries.set(kind, entry);
-    return entry;
-  }
-
-  private _rasterise(entry: { canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D; texture: THREE.CanvasTexture }, polys: FogPolygon[]): void {
-    const { ctx, canvas } = entry;
-    const { width, height } = canvas;
-    ctx.clearRect(0, 0, width, height);
-    if (polys.length === 0) {
-      entry.texture.needsUpdate = true;
+  private _rebuildPoly(poly: FogPolygon): void {
+    const bbox = polygonBounds(poly);
+    if (bbox.w <= 0 || bbox.h <= 0) {
+      // Degenerate; drop any existing entry.
+      const existing = this.entries.get(poly.id);
+      if (existing) {
+        existing.texture.dispose();
+        this.entries.delete(poly.id);
+      }
       return;
     }
-    // Sort by createdAt so overlapping polygons of the same kind paint in
-    // the same order the FogCompositor uses — newest wins on top. (Z is
-    // the same for all polys of a kind, so createdAt is the tiebreaker.)
-    const sorted = polys.slice().sort((a, b) => a.createdAt - b.createdAt);
-    for (const poly of sorted) {
-      if (poly.vertices.length < 3) continue;
-      const kind = overlayKind(poly.kind);
-      // Tint the mask with the polygon's own colour when the kind allows
-      // per-poly colour; otherwise use the kind default. The shader reads
-      // mask.rgb as the polygon tint at composite time.
-      const tint = (kind.allowColor && poly.color) ? poly.color : kind.defaultColor;
-      ctx.fillStyle = tint;
-      ctx.beginPath();
-      const v0 = poly.vertices[0]!;
-      ctx.moveTo(v0.x * width, v0.y * height);
-      for (let i = 1; i < poly.vertices.length; i++) {
-        const v = poly.vertices[i]!;
-        ctx.lineTo(v.x * width, v.y * height);
-      }
-      ctx.closePath();
-      if (poly.holes) {
-        for (const hole of poly.holes) {
-          if (hole.length < 3) continue;
-          const h0 = hole[0]!;
-          ctx.moveTo(h0.x * width, h0.y * height);
-          for (let i = 1; i < hole.length; i++) {
-            const h = hole[i]!;
-            ctx.lineTo(h.x * width, h.y * height);
-          }
-          ctx.closePath();
-        }
-      }
-      ctx.fill('evenodd');
+
+    // Choose mask dimensions in pixels: long axis hits MASK_MAX when the
+    // polygon covers a full map side, scales down to MASK_MIN for small
+    // polys so tiny shapes still get readable edges.
+    const longSide = Math.max(bbox.w, bbox.h);
+    const pixels   = Math.max(MASK_MIN, Math.min(MASK_MAX, Math.round(longSide * MASK_MAX)));
+    const aspect   = bbox.w / bbox.h;
+    const maskW    = aspect >= 1 ? pixels : Math.max(MASK_MIN, Math.round(pixels * aspect));
+    const maskH    = aspect >= 1 ? Math.max(MASK_MIN, Math.round(pixels / aspect)) : pixels;
+
+    let entry = this.entries.get(poly.id);
+    if (!entry || entry.canvas.width !== maskW || entry.canvas.height !== maskH) {
+      // First time, or bbox aspect changed enough to need a fresh canvas.
+      // Disposing the old texture is critical or the GPU side keeps the
+      // stale dimensions and copySubTexture asserts.
+      if (entry) entry.texture.dispose();
+      const canvas = new OffscreenCanvas(maskW, maskH);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error(`PolygonMaskCompositor: 2D context unavailable for ${poly.id}`);
+      const texture = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.needsUpdate = true;
+      entry = { id: poly.id, bbox, canvas, ctx, texture };
+      this.entries.set(poly.id, entry);
+    } else {
+      // Update bbox in place; the canvas size already matches.
+      entry.bbox = bbox;
     }
+
+    this._rasterise(entry, poly);
+  }
+
+  private _rasterise(entry: PolygonMaskEntry, poly: FogPolygon): void {
+    const { ctx, canvas, bbox } = entry;
+    const { width, height } = canvas;
+    ctx.clearRect(0, 0, width, height);
+
+    // Project a map-norm vertex into mask-pixel coords (bbox-local).
+    const toX = (x: number) => ((x - bbox.x) / bbox.w) * width;
+    const toY = (y: number) => ((y - bbox.y) / bbox.h) * height;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    const v0 = poly.vertices[0]!;
+    ctx.moveTo(toX(v0.x), toY(v0.y));
+    for (let i = 1; i < poly.vertices.length; i++) {
+      const v = poly.vertices[i]!;
+      ctx.lineTo(toX(v.x), toY(v.y));
+    }
+    ctx.closePath();
+    if (poly.holes) {
+      for (const hole of poly.holes) {
+        if (hole.length < 3) continue;
+        const h0 = hole[0]!;
+        ctx.moveTo(toX(h0.x), toY(h0.y));
+        for (let i = 1; i < hole.length; i++) {
+          const h = hole[i]!;
+          ctx.lineTo(toX(h.x), toY(h.y));
+        }
+        ctx.closePath();
+      }
+    }
+    ctx.fill('evenodd');
     entry.texture.needsUpdate = true;
   }
 }
+
+/** Outer-ring bounding box in map-norm coords. Holes don't extend the
+ *  bbox by definition (they punch out of the outer ring). */
+function polygonBounds(poly: FogPolygon): { x: number; y: number; w: number; h: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const v of poly.vertices) {
+    if (v.x < minX) minX = v.x;
+    if (v.y < minY) minY = v.y;
+    if (v.x > maxX) maxX = v.x;
+    if (v.y > maxY) maxY = v.y;
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+    return { x: 0, y: 0, w: 0, h: 0 };
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/** Alias for the old class name so Renderer imports stay working
+ *  through this refactor — TODO sweep + delete in a follow-up. */
+export { PolygonMaskCompositor as KindMaskCompositor };

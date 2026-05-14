@@ -57,11 +57,17 @@ export class Renderer {
   private fogMesh:      THREE.Mesh | null = null;
   private mapTexture:   THREE.Texture | null = null;
   private fogCompositor: FogCompositor;
-  /** v2.12 — per-kind alpha masks for shader-driven overlay kinds. */
+  /** v2.12 — per-polygon alpha masks for shader-driven overlay kinds.
+   *  One mask canvas per polygon, sized to the polygon's bbox; the
+   *  matching shader plane samples its own mask directly. */
   private kindMaskCompositor: KindMaskCompositor;
-  /** v2.12 — Three.js plane + ShaderMaterial per shader-driven kind that
-   *  has any polygons painted. Created lazily; disposed on map switch. */
-  private shaderPlanes: Map<OverlayKind, { mesh: THREE.Mesh; material: THREE.ShaderMaterial }> = new Map();
+  /** v2.12 — Three.js plane + ShaderMaterial per shader-driven polygon.
+   *  Each plane sits at its polygon's bbox centre so the shader's
+   *  procedural effect (curling flames, etc.) is centred on the polygon
+   *  itself rather than on the map. Keyed by polygon id; the entry
+   *  carries the kind so per-frame uniform updates can find the right
+   *  shaderParams. Created lazily; disposed on map switch. */
+  private shaderPlanes: Map<string, { mesh: THREE.Mesh; material: THREE.ShaderMaterial; kind: OverlayKind }> = new Map();
   /** v2.12 — when false (set by GMApp), shader planes are not created and
    *  shader-driven kinds render as flat fills via FogCompositor instead.
    *  Default true; player + projector keep the fancy effects. */
@@ -150,7 +156,7 @@ export class Renderer {
     this.camera.position.set(0, 0, 10);
 
     this.fogCompositor = new FogCompositor(1024, 1024);
-    this.kindMaskCompositor = new KindMaskCompositor(1024);
+    this.kindMaskCompositor = new KindMaskCompositor();
 
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
@@ -270,7 +276,7 @@ export class Renderer {
         // Tear down per-kind shader planes + masks for the previous map.
         this._disposeShaderPlanes();
         this.kindMaskCompositor.dispose();
-        this.kindMaskCompositor = new KindMaskCompositor(1024);
+        this.kindMaskCompositor = new KindMaskCompositor();
         if (this.shaderPlanesEnabled) {
           this.kindMaskCompositor.redraw(this.lastFogState.polygons);
           this._syncShaderPlanes();
@@ -318,85 +324,117 @@ export class Renderer {
     this.needsRender = true;
   }
 
-  /** Ensure there is exactly one shader plane per kind that currently has
-   *  any polygons painted. Spins up new planes lazily; tears down planes
-   *  for kinds that no longer have polygons. */
+  /** Ensure there is exactly one shader plane per shader-driven polygon
+   *  currently painted. Each plane sits at its polygon's bbox centre so
+   *  the shader's procedural effect is centred on the polygon itself.
+   *  Spins up new planes lazily; tears down planes for polygons that no
+   *  longer exist. Re-positions / re-sizes existing planes when their
+   *  polygon's bbox changes (vertex drag, etc.). */
   private _syncShaderPlanes(): void {
-    const active = new Set(this.kindMaskCompositor.activeKinds());
+    const activePolys = this.kindMaskCompositor.activePolygons();
+    const activeIds = new Set(activePolys.map((p) => p.id));
 
-    // Drop planes for kinds that no longer have polygons.
-    for (const [kind, entry] of this.shaderPlanes) {
-      if (active.has(kind)) continue;
+    // Drop planes for polygons that no longer exist.
+    for (const [polyId, entry] of this.shaderPlanes) {
+      if (activeIds.has(polyId)) continue;
       this.scene.remove(entry.mesh);
       entry.mesh.geometry.dispose();
       entry.material.dispose();
-      this.shaderPlanes.delete(kind);
+      this.shaderPlanes.delete(polyId);
     }
 
-    // Spin up planes for newly-active kinds.
-    for (const kind of active) {
-      if (this.shaderPlanes.has(kind)) continue;
-      const k = overlayKind(kind);
+    // Spin up planes for newly-active polygons; re-fit existing ones to
+    // their current bbox (geometry rebuild is cheap relative to a
+    // ShaderMaterial recompile, which we avoid by mutating the mesh
+    // geometry in place).
+    for (const poly of activePolys) {
+      const maskEntry = this.kindMaskCompositor.entryFor(poly.id);
+      if (!maskEntry) continue;
+      const k = overlayKind(poly.kind);
       if (!k.shader) continue;
       const shader = loadKindShader(k.shader);
       if (!shader) continue;
-      const maskTex = this.kindMaskCompositor.textureFor(kind);
-      if (!maskTex) continue;
 
-      // Build per-kind shader-param uniforms from the registry (intensity,
-      // scale, …). Default values come from the param defs; live values are
-      // overlaid by _pushShaderParamsToPlane() whenever fog state changes.
-      const paramUniforms: Record<string, { value: number }> = {};
-      for (const p of k.shaderParams ?? []) {
-        paramUniforms[`u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`] = { value: p.default };
+      const planeW = maskEntry.bbox.w * this.aspectRatio;
+      const planeH = maskEntry.bbox.h;
+      // Plane centred at the polygon's bbox centre in world coords. World
+      // y is map-norm y inverted: y=0 at top of map → world +0.5; y=1 at
+      // bottom → world -0.5.
+      const planeX = (maskEntry.bbox.x + maskEntry.bbox.w / 2 - 0.5) * this.aspectRatio;
+      const planeY = 0.5 - (maskEntry.bbox.y + maskEntry.bbox.h / 2);
+      // Z between map (0) and fog (0.01). Kind z-bias keeps fire below
+      // electric below shadow etc.; per-poly createdAt mod gives a tiny
+      // tie-break within a kind so overlapping polys of the same kind
+      // don't z-fight.
+      const slotZ = 0.002 + Math.min(0.006, k.z * 0.00005);
+
+      let entry = this.shaderPlanes.get(poly.id);
+      if (!entry) {
+        // First sighting of this polygon — build material + mesh.
+        const paramUniforms: Record<string, { value: number }> = {};
+        for (const p of k.shaderParams ?? []) {
+          paramUniforms[`u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`] = { value: p.default };
+        }
+        const material = new THREE.ShaderMaterial({
+          vertexShader:   shader.vertex,
+          fragmentShader: shader.fragment,
+          transparent:    true,
+          depthWrite:     false,
+          // Additive blending so the shader's radiance adds on top of
+          // the map. Filter pass still sees "map + shader plane(s)" as
+          // one composited image after RenderPass.
+          blending:       THREE.AdditiveBlending,
+          uniforms: {
+            uMask:    { value: maskEntry.texture },
+            uNoise:   { value: shader.textures['uNoise'] ?? null },
+            uColor:   { value: new THREE.Color(k.allowColor && poly.color ? poly.color : k.defaultColor) },
+            uAspect:  { value: planeW / planeH },
+            time:     { value: 0 },
+            ...paramUniforms,
+          },
+        });
+        const geo = new THREE.PlaneGeometry(planeW, planeH);
+        const mesh = new THREE.Mesh(geo, material);
+        mesh.position.set(planeX, planeY, slotZ);
+        this.scene.add(mesh);
+        entry = { mesh, material, kind: poly.kind };
+        this.shaderPlanes.set(poly.id, entry);
+      } else {
+        // Existing plane — refresh geometry, position, mask, colour.
+        // Re-build the PlaneGeometry only if size actually changed; mutating
+        // the position is always cheap.
+        const geo = entry.mesh.geometry as THREE.PlaneGeometry;
+        const params = geo.parameters;
+        if (params.width !== planeW || params.height !== planeH) {
+          entry.mesh.geometry.dispose();
+          entry.mesh.geometry = new THREE.PlaneGeometry(planeW, planeH);
+        }
+        entry.mesh.position.set(planeX, planeY, slotZ);
+        if (entry.material.uniforms['uMask']) entry.material.uniforms['uMask']!.value = maskEntry.texture;
+        if (entry.material.uniforms['uAspect']) entry.material.uniforms['uAspect']!.value = planeW / planeH;
+        const colHex = k.allowColor && poly.color ? poly.color : k.defaultColor;
+        const colU = entry.material.uniforms['uColor'];
+        if (colU) (colU.value as THREE.Color).set(colHex);
       }
-
-      const material = new THREE.ShaderMaterial({
-        vertexShader:   shader.vertex,
-        fragmentShader: shader.fragment,
-        transparent:    true,
-        depthWrite:     false,
-        // Additive blending so the shader's radiance adds on top of the
-        // map (fire glows; mask-zero pixels contribute nothing). The
-        // shader still gets filtered by any whole-frame filter pass on
-        // the EffectComposer pipeline — the filter pass runs AFTER the
-        // scene composite, so it sees "map + shader plane(s)" as one
-        // image.
-        blending:       THREE.AdditiveBlending,
-        uniforms: {
-          uMask:      { value: maskTex },
-          uNoise:     { value: shader.textures['uNoise'] ?? null },
-          resolution: { value: this.resolution },
-          time:       { value: 0 },
-          ...paramUniforms,
-        },
-      });
-      const geo = new THREE.PlaneGeometry(this.aspectRatio, 1);
-      const mesh = new THREE.Mesh(geo, material);
-      // Z between map (0) and fog (0.01). Each kind gets its own slot in
-      // [0.002, 0.008] keyed by its z so kinds stack predictably with
-      // each other and with the fog plane on top.
-      const slot = 0.002 + Math.min(0.006, k.z * 0.00005);
-      mesh.position.z = slot;
-      this.scene.add(mesh);
-      this.shaderPlanes.set(kind, { mesh, material });
     }
 
-    // Live shader-param values may have changed alongside the polygon set
-    // (e.g. GM moved the Intensity slider) — push them now so newly-spun
-    // planes pick up the GM's current tuning and existing planes refresh.
+    // Live shader-param values (intensity, scale, …) may have changed
+    // alongside the polygon set (e.g. GM moved the slider) — push them
+    // now so newly-spun planes pick up the GM's current tuning and
+    // existing planes refresh.
     this._pushShaderParamsToPlanes();
   }
 
   /** Push per-kind shader-param values from the current fog state into
-   *  each active shader plane's uniforms. Falls back to each param's
-   *  registry default when the state doesn't have an explicit value. */
+   *  each active shader plane's uniforms. Each polygon's plane gets its
+   *  kind's current param set (one slider value applies to all polygons
+   *  of that kind, as designed). */
   private _pushShaderParamsToPlanes(): void {
     const stateParams = this.lastFogState.shaderParams ?? {};
-    for (const [kind, entry] of this.shaderPlanes) {
-      const k = overlayKind(kind);
+    for (const entry of this.shaderPlanes.values()) {
+      const k = overlayKind(entry.kind);
       const defs = k.shaderParams ?? [];
-      const values = stateParams[kind] ?? {};
+      const values = stateParams[entry.kind] ?? {};
       for (const p of defs) {
         const uName = `u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`;
         const u = entry.material.uniforms[uName];

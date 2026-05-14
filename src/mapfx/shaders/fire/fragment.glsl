@@ -5,21 +5,28 @@
 // Adaptation notes:
 //   • iTime / iResolution / iChannel0 / iMouse → our standard uniforms.
 //   • Mouse-controlled camera replaced with a slow auto-rotation so the
-//     fire keeps moving without user input. The orb sits at world origin
-//     and the camera arcs gently around it.
-//   • Mask sampled as RGBA: alpha = polygon coverage, RGB = the polygon's
-//     own colour (drawn into the mask by KindMaskCompositor). The shader
-//     re-tints its output by mask.rgb so a GM can paint red fire, blue
-//     soulfire, green wisp-flame, purple eldritch fire — same shader.
-//   • uIntensity (0..~1.5) scales the final output — full glow down to
+//     fire keeps moving without user input.
+//   • Per-polygon plane: each shader-driven polygon owns a plane sized to
+//     its bbox; the orb sits at vUv (0.5, 0.5) which now corresponds to
+//     the polygon's bbox centre on the map. uMask is the per-polygon
+//     alpha mask in bbox-local UV (no offset/scale needed).
+//   • uAspect: plane width / height in world units. Used in place of
+//     resolution.x/resolution.y so the orb projection doesn't squash on
+//     non-square polygons.
+//   • uColor (vec3): the polygon's chosen tint, passed as a uniform
+//     rather than encoded in the mask. Red fire by default, blue
+//     soulfire, etc.
+//   • uIntensity (0.05..1.5): output multiplier — full glow down to
 //     barely-there ember haze.
-//   • uScale (~0.25..4) pre-scales the procedural volume so flame features
-//     can be tuned to roughly match the polygon size on the map.
+//   • uScale (~0.25..4): pre-scales the procedural volume so flame
+//     features can be tuned to roughly match the polygon size on the
+//     map.
 
-uniform sampler2D uMask;       // RGBA: rgb = poly colour, a = coverage
+uniform sampler2D uMask;       // per-polygon alpha mask, plane-local
 uniform sampler2D uNoise;      // grayscale noise texture, repeat-wrapped
-uniform vec2      resolution;
 uniform float     time;
+uniform float     uAspect;     // plane width / height in world units
+uniform vec3      uColor;      // polygon tint colour
 uniform float     uIntensity;  // 0.05..1.5 — output multiplier
 uniform float     uScale;      // 0.25..4   — procedural feature scale
 
@@ -77,10 +84,8 @@ vec4 mapVol(in vec3 p) {
   vec4 col = vec4(1.0) * r;
   vec3 lv = mix(p, vec3(0.25), 1.25);
   float grd = clamp((col.w - fbm(p + lv * 0.045)) * 4.5, 0.01, 2.0);
-  // Original used a fixed warm palette — we now drive the tint from the
-  // mask RGB at composite time, so the volume just produces a luminance
-  // signal here. Keep a mild warm shaping curve so highlights still feel
-  // flame-like (rolled-off toward bright yellow) before the recolour.
+  // Mild warm shaping so highlights still feel flame-like before the
+  // polygon tint multiplies in.
   col.rgb *= grd * vec3(0.9, 1.0, 0.65) + vec3(0.05, 0.1, 0.0);
   col.a   *= clamp(dtp * 0.5 - 0.14, 0.0, 1.0) * 0.7 + 0.3;
   return col;
@@ -100,40 +105,28 @@ vec4 vmarch(in vec3 ro, in vec3 rd) {
     rz = rz + col * (1.0 - rz.a);
     t  += BASE_STEP - den * BASE_STEP;
   }
-  // Hot inner glow — biased toward warm reds so the natural fire base
-  // colour reads even before the polygon tint multiplies in.
+  // Hot inner glow — warm bias so the natural fire base colour reads
+  // even before uColor multiplies in.
   rz.rgb += vec3(1.2, 0.2, 0.0) * rz.w;
   return rz;
 }
 
-// Luminance helper so we can tint by polygon colour without losing the
-// fire's internal bright/dark structure.
-float luma(vec3 c) {
-  return dot(c, vec3(0.299, 0.587, 0.114));
-}
-
 void main() {
-  vec4 mask = texture2D(uMask, vUv);
-  float maskAlpha = mask.a;
+  float maskAlpha = texture2D(uMask, vUv).r;
   if (maskAlpha < 0.01) {
     gl_FragColor = vec4(0.0);
     return;
   }
-  // Polygon colour drawn into the mask's RGB. Empty mask (no polygons)
-  // falls back to neutral white so the kind's default fire colour
-  // dominates via vmarch's own warm shaping.
-  vec3 polyColor = mask.rgb;
-  if (luma(polyColor) < 0.01) polyColor = vec3(1.0);
 
   // Slow auto-rotation around the orb — replaces nimitz's iMouse input.
   mo = vec2(0.5 + time * 0.01, 0.6);
 
-  // Aspect-corrected screen UV mapped to [-1, 1] like the original, then
-  // pre-scaled by uScale. The fire volume's apparent size on the polygon
-  // scales inversely (uScale = 2 → flames look ~2× bigger; uScale = 0.5
-  // → ~half the size, more "packed" feature density).
+  // Plane-local screen coords in [-1, 1], aspect-corrected by the plane's
+  // own aspect (not the screen aspect) so the orb doesn't squash on a
+  // tall narrow polygon. Then divide by uScale so the GM can tune the
+  // apparent feature size on the polygon.
   vec2 p = vUv * 2.0 - 1.0;
-  p.x *= resolution.x / resolution.y * 0.95;
+  p.x *= uAspect * 0.95;
   p /= max(uScale, 0.01);
 
   vec3 ro  = 4.0 * normalize(vec3(cos(2.75 - 3.0 * mo.x), sin(time * 0.22) * 0.2, sin(2.75 - 3.0 * mo.x)));
@@ -147,12 +140,12 @@ void main() {
   // Tint by polygon colour. Multiplicative recolour preserves the
   // fire's internal contrast (bright centre, dimmer edges) while
   // shifting the hue to whatever the GM picked.
-  col.rgb *= polyColor;
+  col.rgb *= uColor;
 
-  // Mask cuts the orb down to just where fire polygons exist, then
-  // uIntensity scales the whole thing 0..1.5. RGB stays
-  // pre-multiplied so the additive blend over the map reads as glowing
-  // fire of the chosen hue.
+  // Mask cuts the orb down to the polygon's actual shape inside the
+  // bbox; uIntensity scales the whole thing 0..1.5. RGB stays
+  // pre-multiplied so the additive blend reads as glowing fire of the
+  // chosen hue.
   gl_FragColor = vec4(
     col.rgb * maskAlpha * uIntensity,
     maskAlpha * min(1.0, col.a + 0.2) * uIntensity
