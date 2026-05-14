@@ -36,6 +36,17 @@ export const FAFF_MESSAGES: readonly string[] = [
   'SAN check pending. Please hold.',
   'The stars are nearly right.',
   'Something stirs in the basement…',
+  // ── v2.12 release batch ──────────────────────────────────────────────────
+  'Tuning the river. Apparently every river bends differently.',
+  'Painting fire that is somehow blue. Don’t ask.',
+  'Picking the perfect shade of haunted mist.',
+  'Just feeding the starfield. It’s peckish.',
+  'Lining up a magic portal. The receiver said "two minutes".',
+  'Calibrating thundercloud lightning. Currently set to "yes".',
+  'Counting wave crests. There are many.',
+  'Softening edges so the polygons don’t look so… polygonal.',
+  'Choosing between "ocean" and "very rough ocean".',
+  'Auditioning shaders for the next encounter.',
 ];
 
 let _lastIndex = -1;
