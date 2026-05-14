@@ -193,7 +193,11 @@ const FIRE_SHADER_PARAMS: ShaderParamDef[] = [
 const RIVER_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'intensity', label: 'Intensity', min: 0.05, max: 1.5,            step: 0.05, default: 1.0 },
   { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0,            step: 0.05, default: 1.0 },
-  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 2.0,            step: 0.05, default: 1.0 },
+  // uSpeed = 0 → still pool. 1 → gentle stream (default). 2 → brisk
+  // river. 4 → proper rapids. Range widened from 0..2 once the base
+  // time coefficient dropped to 0.08 so the slider stays useful at
+  // both ends of the spectrum.
+  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0,            step: 0.05, default: 1.0 },
   { id: 'direction', label: 'Direction', min: 0.0,  max: 6.2831853,      step: 0.087266, default: 0.0 },
 ];
 

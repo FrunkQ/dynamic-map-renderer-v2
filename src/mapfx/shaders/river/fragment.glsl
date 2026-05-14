@@ -52,9 +52,14 @@ vec2 flowDir() {
 // Surface noise sum at a UV point. Three samples offset and combined,
 // scrolled along the flow direction — same recipe as Pierco's original
 // but in plane-local coords so wave feature size is meaningful per-poly.
+//
+// Base time coefficient is 0.08 (not Pierco's 0.33). Our noise period
+// is ~5× denser per visible area than the original close-up view, so
+// the same scroll rate visually reads ~5× faster. 0.08 × uSpeed=1 gives
+// a gentle stream; uSpeed=2 a brisk river; uSpeed=4 proper rapids.
 float waveAt(vec2 uv) {
   vec2 d = flowDir();
-  float t = time * 0.33 * uSpeed;
+  float t = time * 0.08 * uSpeed;
   // Three samples scrolled in the flow direction at different rates +
   // phase offsets. The sum produces the soft rolling wave look.
   vec3 c1 = texture2D(uNoise, uv + d * (t * 2.0  ) + vec2(0.07, 0.07)).rgb;
@@ -123,24 +128,26 @@ void main() {
 
   // Procedural sky reflection — soft cool light from above, modulated
   // by surface tilt so wave crests catch the "sky" colour. No
-  // cubemap involved.
+  // cubemap involved. Kept fairly dim so the bed colour dominates.
   vec3 skyTop  = vec3(0.62, 0.78, 1.0);
   vec3 ref = skyTop * (0.25 + 0.55 * max(0.0, n.y));
   // Mix the reflection toward white at high wave gradients for a
-  // glinting feel.
+  // glinting feel. Small factor — runaway gradients on wave crests
+  // were blowing the whole river out to white before this was tamed.
   float gradient = length(n.xz);
-  ref = mix(ref, vec3(1.0), gradient * 0.6);
+  ref = mix(ref, vec3(1.0), gradient * 0.25);
   // Tint sky reflection slightly by uColor so blue water gets blue
   // sky, green water gets green sky — keeps the look coherent across
   // GM colour choices.
   ref = mix(ref, ref * uColor * 1.2, 0.25);
-  ref *= 0.5;
+  ref *= 0.3;
 
   // Specular highlight from a fixed overhead-side sun. Tilted off
   // vertical so we actually see specs on wave crests (a straight-down
-  // sun would just light flat regions).
+  // sun would just light flat regions). Halved so it reads as a
+  // glint, not a flashlight.
   vec3 sun = normalize(vec3(0.4, 1.0, 0.3));
-  float spc = pow(max(0.0, dot(reflect(sun, n), viewDir)), 30.0);
+  float spc = pow(max(0.0, dot(reflect(sun, n), viewDir)), 30.0) * 0.5;
 
   vec3 col = rfa + ref + spc;
 
