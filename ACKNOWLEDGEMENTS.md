@@ -85,12 +85,21 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 
 ## MapFX Shaders
 
-The MapFX *Fire* effect's shader is adapted from **"Promethean" by nimitz (@stormoid)**,
+The MapFX *Coloured Flames* effect's shader is adapted from **"Promethean" by nimitz (@stormoid)**,
 used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported](https://creativecommons.org/licenses/by-nc-sa/3.0/) licence.
 
 | Effect | Name | Source |
 |--------|------|--------|
-| Fire | Promethean (4tB3zV) | https://www.shadertoy.com/view/4tB3zV |
+| Coloured Flames | Promethean (4tB3zV) | https://www.shadertoy.com/view/4tB3zV |
+
+Modifications made to "Promethean":
+- Translated from ShaderToy GLSL to Three.js ShaderMaterial / GLSL ES 1.00.
+- Replaced `iTime` with `time`; kept the `iChannel0` noise texture purpose as `uNoise`.
+- Replaced mouse-controlled camera (`iMouse`) with a slow time-driven auto-rotation so the orb keeps moving without user input.
+- Per-polygon plane: each painted fire polygon owns its own plane sized to its bounding box, so the orb appears centred on the polygon rather than at the centre of the map.
+- Added `uMask` (per-polygon alpha mask), `uColor` (polygon tint colour), `uIntensity` (0.05–1.5 output multiplier), `uScale` (0.25–4 procedural feature scale), and `uAspect` (plane width/height for non-square polygons).
+- Removed the hard-coded warm palette inside `vmarch`; the orb now produces a luminance signal that is multiplicatively tinted by `uColor` at composite time, so the GM can paint red / blue / green / purple flames using the same shader.
+- Output uses additive blending in the renderer's scene composite so the flame reads as glowing fire over the underlying map.
 
 ### Under evaluation *(may be removed before v2.12 ships)*
 
@@ -101,11 +110,3 @@ files in `src/mapfx/shaders/fire-fluid/` and this entry will be removed.
 | Effect | Name | Author | Licence | Source |
 |--------|------|--------|---------|--------|
 | Fire (fluid sim, multi-pass) | Volumetric fluid fire (dsKfWR) | al-ro | MIT | https://www.shadertoy.com/view/dsKfWR |
-
-Modifications made:
-- Translated from ShaderToy GLSL to Three.js EffectComposer / GLSL ES 1.00
-- Replaced `iChannel0` (video/image input) with `tDiffuse` (rendered scene texture)
-- Replaced `iChannel1`/`iChannel2` (noise/paper textures) with procedural GLSL noise
-- Replaced ShaderToy uniforms (`iResolution`, `iTime`) with equivalent Three.js uniforms
-- Reduced iteration counts for real-time performance
-- Exposed artistic parameters as user-adjustable sliders
