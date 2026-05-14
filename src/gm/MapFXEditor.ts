@@ -33,6 +33,10 @@ export interface MapFXEditorHandlers {
   onLivePaint?: (kind: MapFXKind, points: FogVertex[], radius: number) => void;
   /** Paint mode finished a stroke — caller should clear any live preview. */
   onLivePaintEnd?: () => void;
+  /** Cursor moved over the canvas while in a MapFX mode. Caller draws the
+   *  brush-size outline at the given client coords. Pass null when the
+   *  cursor leaves the canvas to hide the preview. */
+  onCursor?: (clientX: number | null, clientY: number | null) => void;
 }
 
 export class MapFXEditor {
@@ -132,24 +136,40 @@ export class MapFXEditor {
   // ─── Private ──────────────────────────────────────────────────────────────
 
   private _bindEvents(): void {
+    // stopPropagation prevents the canvas-wrapper's drag-pan from running
+    // simultaneously with the brush stroke (without it, mouse drags during
+    // paint also scrolled the camera).
     this.canvas.addEventListener('pointerdown', (e) => {
       if (this.mode === 'off') return;
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       if (this.mode === 'paint') {
         e.preventDefault();
+        e.stopPropagation();
         try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ok */ }
         this.brushController.begin(e.clientX, e.clientY);
+      } else if (this.mode === 'poly') {
+        e.stopPropagation();
       }
-      // Polygon clicks are handled via the 'click' event below so single-
-      // taps register cleanly.
+      // Polygon clicks (vertex placement) are still handled via the 'click'
+      // event below so single-taps register cleanly.
     });
     this.canvas.addEventListener('pointermove', (e) => {
-      if (this.mode !== 'paint') return;
-      this.brushController.continue(e.clientX, e.clientY);
+      if (this.mode === 'off') return;
+      if (this.mode === 'paint' && this.brushController.isActive()) {
+        e.stopPropagation();
+        this.brushController.continue(e.clientX, e.clientY);
+      }
+      // Live cursor outline (drawn by the GMApp via handlers.onCursor).
+      this.handlers.onCursor?.(e.clientX, e.clientY);
+    });
+    this.canvas.addEventListener('pointerleave', () => {
+      if (this.mode === 'off') return;
+      this.handlers.onCursor?.(null, null);
     });
     const endPaint = (e: PointerEvent) => {
       if (this.mode !== 'paint') return;
       try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ok */ }
+      e.stopPropagation();
       this.brushController.end();
     };
     this.canvas.addEventListener('pointerup',     endPaint);

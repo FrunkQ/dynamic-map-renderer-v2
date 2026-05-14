@@ -1484,6 +1484,39 @@ option.select-option--add {
 /* Crosshair cursor while brush mode is active. */
 #fog-canvas.fog-brush { pointer-events: auto; cursor: crosshair; }
 
+/* v2.12/M3 — Paint vs Erase buttons sit side-by-side for the brush mode.
+   Green = paint (additive); red = erase (subtractive). Active button gets
+   a stronger fill so the current mode reads at a glance. */
+.fog-brush-modes {
+  display: flex;
+  gap: 4px;
+}
+.fog-brush-paint, .fog-brush-erase {
+  flex: 1 1 50%;
+  border-width: 1.5px;
+  font-weight: 600;
+}
+.fog-brush-paint {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: transparent;
+}
+.fog-brush-paint:hover    { background: rgba(34, 197, 94, 0.12); }
+.fog-brush-paint.is-active {
+  background: var(--ok);
+  color: #fff;
+}
+.fog-brush-erase {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+.fog-brush-erase:hover    { background: rgba(224, 62, 62, 0.12); }
+.fog-brush-erase.is-active {
+  background: var(--danger);
+  color: #fff;
+}
+
 /* v2.12/M4 — MapFX toolbar row, sits below the fog brush controls. */
 .fog-divider {
   border: none;

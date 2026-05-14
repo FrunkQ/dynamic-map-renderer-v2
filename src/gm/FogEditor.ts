@@ -69,6 +69,12 @@ export class FogEditor {
   private brushController: BrushController;
   private brushLive: FogBrushLiveHandler | null = null;
   private brushEnd:  FogBrushEndHandler  | null = null;
+  /** Latest cursor position in map-norm coords for the brush-size outline. */
+  private brushCursor: FogVertex | null = null;
+  /** External brush preview (e.g. MapFX). When set, the cursor outline
+   *  renders with these settings instead of FogEditor's own brush. Allows
+   *  the fog canvas to host the preview for ANY brush-using editor. */
+  private externalBrushPreview: { pos: FogVertex | null; radius: number; color: string; mode: 'paint' | 'erase' } | null = null;
 
   constructor(canvas: HTMLCanvasElement, onChange: FogChangeCallback) {
     this.canvas = canvas;
@@ -315,25 +321,39 @@ export class FogEditor {
     // painting (when brush on). pointerdown→pointerup spans the whole stroke;
     // pointer capture keeps us receiving events even if the cursor leaves
     // the canvas mid-stroke.
+    // stopPropagation prevents the canvas-wrapper's drag-pan handler from
+    // firing simultaneously — without it, mouse drags during a brush stroke
+    // also scrolled the camera, which made painting unusable.
     this.canvas.addEventListener('pointerdown', (e) => {
       if (!this.brushActive) return;
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       e.preventDefault();
+      e.stopPropagation();
       try { this.canvas.setPointerCapture(e.pointerId); } catch { /* not supported */ }
       this.brushController.begin(e.clientX, e.clientY);
     });
     this.canvas.addEventListener('pointermove', (e) => {
       if (!this.brushActive) return;
-      this.brushController.continue(e.clientX, e.clientY);
+      // Track cursor for the brush-size outline (drawn in redraw).
+      this.brushCursor = this._clientToMapNorm(e.clientX, e.clientY);
+      this.redraw();
+      if (this.brushController.isActive()) {
+        e.stopPropagation();
+        this.brushController.continue(e.clientX, e.clientY);
+      }
+    });
+    this.canvas.addEventListener('pointerleave', () => {
+      // Hide the brush cursor outline when the pointer leaves the canvas.
+      if (this.brushActive) { this.brushCursor = null; this.redraw(); }
     });
     const endBrush = (e: PointerEvent) => {
       if (!this.brushActive) return;
       try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ok */ }
+      e.stopPropagation();
       this.brushController.end();
     };
     this.canvas.addEventListener('pointerup',     endBrush);
     this.canvas.addEventListener('pointercancel', endBrush);
-    this.canvas.addEventListener('pointerleave',  endBrush);
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.cancelCurrent();
@@ -460,7 +480,50 @@ export class FogEditor {
       this.drawInProgress(this.currentVertices);
     }
 
+    if (this.brushActive && this.brushCursor) {
+      const s = this.brushController.getSettings();
+      this._drawBrushCursor(this.brushCursor, s.radius, s.color, s.mode);
+    } else if (this.externalBrushPreview?.pos) {
+      const p = this.externalBrushPreview;
+      this._drawBrushCursor(p.pos!, p.radius, p.color, p.mode);
+    }
+
     this._updateDeleteHandle();
+  }
+
+  /** External callers (MapFXEditor via GMApp) drive the brush-size preview
+   *  outline through this method so the cursor renders on the same fog
+   *  canvas — no new DOM layer needed. Pass null to clear. */
+  setExternalBrushPreview(preview: { pos: FogVertex; radius: number; color: string; mode: 'paint' | 'erase' } | null): void {
+    this.externalBrushPreview = preview ? { ...preview } : null;
+    this.redraw();
+  }
+
+  /** Draw the brush-size circle outline at the cursor. Two strokes — a
+   *  bright fill and a dark inner outline — so the ring reads against
+   *  any map background. The colour cue (paint vs erase) is the fill:
+   *  brush colour when painting, white when erasing (reveal). */
+  private _drawBrushCursor(pos: FogVertex, radius: number, color: string, mode: 'paint' | 'erase'): void {
+    const ctx = this.ctx;
+    const b = this.getMapBounds(this.drawW, this.drawH);
+    const cx = b.x + pos.x * b.w;
+    const cy = b.y + pos.y * b.h;
+    const rad = Math.max(2, radius * b.w);
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = mode === 'erase' ? '#ffffff' : (color || '#000000');
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad + 1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(1, rad - 1), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Position the delete-handle screen-space button at the selected

@@ -2556,10 +2556,16 @@ export class GMApp {
       this.markerEditor?.setPointerCapture(wasOn);
     });
 
-    const brushModeSel = document.querySelector<HTMLSelectElement>('#fog-brush-mode');
-    brushModeSel?.addEventListener('change', () => {
-      this.fogEditor.setBrushSettings({ mode: brushModeSel.value as 'paint' | 'erase' });
-    });
+    // Paint / Erase mode buttons (replaces the prior dropdown).
+    const brushPaintBtn = document.querySelector<HTMLButtonElement>('#fog-brush-paint-btn');
+    const brushEraseBtn = document.querySelector<HTMLButtonElement>('#fog-brush-erase-btn');
+    const setBrushMode = (mode: 'paint' | 'erase') => {
+      this.fogEditor.setBrushSettings({ mode });
+      brushPaintBtn?.classList.toggle('is-active', mode === 'paint');
+      brushEraseBtn?.classList.toggle('is-active', mode === 'erase');
+    };
+    brushPaintBtn?.addEventListener('click', () => setBrushMode('paint'));
+    brushEraseBtn?.addEventListener('click', () => setBrushMode('erase'));
     const brushRadiusInput = document.querySelector<HTMLInputElement>('#fog-brush-radius');
     brushRadiusInput?.addEventListener('input', () => {
       this.fogEditor.setBrushSettings({ radius: parseFloat(brushRadiusInput.value) });
@@ -2578,30 +2584,8 @@ export class GMApp {
       });
     });
 
-    // v2.12/M3 — Spotlight is a brush-mode preset: enable brush + flip mode
-    // to 'erase' + bump the radius. A single click then reveals a circle.
-    // Re-clicking the button toggles back to whatever brush settings were
-    // active before so it acts as a one-shot quick-tool.
-    const spotBtn = document.querySelector<HTMLButtonElement>('#fog-spotlight-btn');
-    spotBtn?.addEventListener('click', () => {
-      const on = !spotBtn.classList.contains('btn--active');
-      if (on) {
-        this.fogEditor.disable();
-        this.fogEditor.setBrushActive(true);
-        this.fogEditor.setBrushSettings({ mode: 'erase', radius: 0.10, color: '#000000' });
-        // Reflect in the panel controls + flag the button.
-        if (brushBtn) brushBtn.classList.remove('btn--active');
-        if (brushControls) brushControls.hidden = false;
-        if (brushModeSel)  brushModeSel.value = 'erase';
-        if (brushRadiusInput) brushRadiusInput.value = '0.1';
-        this.markerEditor?.setPointerCapture(false);
-      } else {
-        this.fogEditor.setBrushActive(false);
-        if (brushControls) brushControls.hidden = true;
-        this.markerEditor?.setPointerCapture(true);
-      }
-      spotBtn.classList.toggle('btn--active', on);
-    });
+    // Spotlight removed in v2.12 — Brush in Reveal mode + a single click +
+    // a bigger radius covers the same job without a redundant button.
 
     // ─── v2.12/M4 — MapFX editor wiring ──────────────────────────────────
     this.mapFXEditor = new MapFXEditor(
@@ -2645,7 +2629,6 @@ export class GMApp {
         this.fogEditor.setBrushActive(false);
         if (brushBtn) brushBtn.classList.remove('btn--active');
         if (brushControls) brushControls.hidden = true;
-        spotBtn?.classList.remove('btn--active');
       }
       this.mapFXEditor.setMode(mode);
       mapfxPaintBtn?.classList.toggle('btn--active', mode === 'paint');
@@ -2719,6 +2702,23 @@ export class GMApp {
       onLivePaintEnd: () => {
         // No-op — the entity commit triggers a clean recomposite that
         // replaces the live preview pixels.
+      },
+      onCursor: (clientX, clientY) => {
+        if (clientX === null || clientY === null) {
+          this.fogEditor.setExternalBrushPreview(null);
+          return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const m = this.renderer.canvasCssToMapNorm(clientX - rect.left, clientY - rect.top);
+        if (!m) { this.fogEditor.setExternalBrushPreview(null); return; }
+        const kind = this.mapFXEditor.getActiveKind();
+        const k = MAPFX_REGISTRY[kind] ?? MAPFX_REGISTRY.fire;
+        this.fogEditor.setExternalBrushPreview({
+          pos:    { x: m.x, y: m.y },
+          radius: k.defaultRadius,
+          color:  k.defaultColor,
+          mode:   'paint',
+        });
       },
     });
 
