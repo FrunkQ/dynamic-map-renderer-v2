@@ -121,33 +121,49 @@
     <section class="panel" id="fog-panel">
       <button type="button" class="panel-title" aria-expanded="false">Fog of War &amp; MapFX</button>
       <div class="panel-body" hidden>
-        <div class="fog-toolbar">
-          <button id="fog-draw-btn"   class="btn btn--sm btn--ghost">Polygon</button>
-          <button id="fog-brush-btn"  class="btn btn--sm btn--ghost">Brush</button>
-          <button id="fog-delete-btn" class="btn btn--sm btn--danger" hidden>Delete</button>
-          <input  type="color" id="fog-colour" value="#000000" title="Fog colour" />
+        <!-- Kind picker — fog is first / default. -->
+        <div class="fog-row fog-row--kind">
+          <span class="fog-row-label">Kind</span>
+          <select id="mapfx-kind-select" title="What gets painted — fog, fire, water, light, etc.">
+            <!-- Filled from OVERLAY_KIND_ORDER in JS. -->
+          </select>
+          <input  type="color" id="fog-colour" value="#000000" title="Colour (fog only — other kinds use their own colour)" />
         </div>
+
+        <!-- Drawing Mode — sticky toggle, persists in localStorage. -->
+        <div class="fog-row fog-row--mode">
+          <span class="fog-row-label">Drawing Mode</span>
+          <div class="fog-mode-toggle">
+            <button id="fog-mode-poly-btn"  class="btn btn--sm fog-mode-btn is-active" title="Click vertices to define an outline">Polygon</button>
+            <button id="fog-mode-brush-btn" class="btn btn--sm fog-mode-btn"           title="Drag to paint a shape">Brush</button>
+          </div>
+        </div>
+
+        <!-- Single-shot Add — click, draw one polygon/stroke, auto-exit. -->
+        <div class="fog-row fog-row--add">
+          <button id="fog-add-btn" class="btn btn--primary btn--block">+ Add</button>
+        </div>
+
+        <!-- Brush sub-controls — only visible when Drawing Mode = Brush. -->
         <div class="fog-brush-controls" hidden>
           <div class="fog-brush-modes">
-            <button id="fog-brush-paint-btn" class="btn btn--sm fog-brush-paint  is-active" title="Paint fog onto the map">Paint</button>
-            <button id="fog-brush-erase-btn" class="btn btn--sm fog-brush-erase"             title="Erase fog from the map">Erase</button>
+            <button id="fog-brush-paint-btn" class="btn btn--sm fog-brush-paint  is-active" title="Paint onto the map">Paint</button>
+            <button id="fog-brush-erase-btn" class="btn btn--sm fog-brush-erase"             title="Erase carves through everything beneath the brush">Erase</button>
           </div>
           <label class="fog-brush-row">
             <span>Size</span>
             <input id="fog-brush-radius" type="range" min="2" max="80" step="1" value="20" title="Brush size in screen pixels — zoom in for finer detail" />
           </label>
-          <button id="fog-brush-clear" class="btn btn--sm btn--ghost">Clear brush</button>
         </div>
-        <hr class="fog-divider" />
-        <div class="mapfx-toolbar">
-          <span class="mapfx-label">Kind</span>
-          <select id="mapfx-kind-select" title="What gets painted — fog, fire, water, light, etc.">
-            <!-- Filled from OVERLAY_KIND_ORDER in JS. -->
-          </select>
-        </div>
+
+        <!-- Clear-this-kind always available. Delete button gone — use the
+             trashcan handle on a selected polygon or the Del key instead. -->
+        <button id="fog-brush-clear" class="btn btn--sm btn--ghost btn--block">Clear all of this Kind</button>
+        <button id="fog-delete-btn" class="btn btn--sm btn--danger" hidden>Delete</button>
+
         <p class="fog-hint">
-          Pick a Kind, then Polygon (click vertices, click near first to close) or Brush (drag).<br/>
-          Erase carves through anything beneath it — fog and effects alike. Each stroke is one polygon; click a non-fog effect's icon to select it.
+          Pick a Kind. Drawing Mode picks Polygon or Brush (sticky). Click + Add and lay down one shape — Add resets so the next click is a fresh deliberate action.<br/>
+          Click a polygon or icon to select; trashcan or Del to remove. Erase mode carves through anything beneath it — fog and effects alike.
         </p>
       </div>
     </section>

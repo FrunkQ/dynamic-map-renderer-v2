@@ -1446,12 +1446,60 @@ option.select-option--add {
   margin-top: var(--space-xs);
 }
 
-/* ── Fog toolbar ────────────────────────────────────────────────────────── */
-.fog-toolbar {
+/* ── Fog of War & MapFX panel — v2.12 layout ─────────────────────────────── */
+.fog-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
   align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: 6px;
+}
+.fog-row-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  width: 90px;
+  flex: 0 0 auto;
+}
+.fog-row--kind > select { flex: 1 1 auto; }
+.fog-row--kind > input[type="color"] { flex: 0 0 32px; }
+
+/* Drawing Mode — Polygon / Brush sticky toggle. Active button gets a fill;
+   the inactive partner is outline only. Visually similar to Paint/Erase
+   buttons but in the panel's accent colour so it reads as a setting, not
+   a danger control. */
+.fog-mode-toggle {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+}
+.fog-mode-btn {
+  flex: 1 1 50%;
+  border-width: 1.5px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+.fog-mode-btn:hover { background: rgba(255, 255, 255, 0.04); }
+.fog-mode-btn.is-active {
+  border-color: var(--accent, #6aa3ff);
+  background: var(--accent, #6aa3ff);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Add button — large + prominent so the action is unambiguous. Active
+   state (currently mid-add) gets a stronger fill. */
+.fog-row--add { margin-bottom: 8px; }
+.btn--block {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+#fog-add-btn { font-weight: 600; }
+#fog-add-btn.is-active {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
 }
 
 .fog-hint {

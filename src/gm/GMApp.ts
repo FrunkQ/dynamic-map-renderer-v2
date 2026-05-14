@@ -82,6 +82,8 @@ function rangeToSlider(r: number): number {
  *
  * Wires together: StateManager ↔ Renderer ↔ FilterPanel ↔ FogEditor ↔ P2P Host
  */
+const DRAWING_MODE_LS_KEY = 'mappadux:drawingMode';
+
 export class GMApp {
   private state   = new StateManager();
   private maps    = new MapManager();
@@ -94,6 +96,8 @@ export class GMApp {
   private selectedOverlayId: string | null = null;
   /** v2.12 — kind picked in the FoW & MapFX panel for new strokes/polygons. */
   private activeOverlayKind: OverlayKind = 'fog';
+  /** v2.12 — sticky Drawing Mode preference (persisted to localStorage). */
+  private drawingMode: 'polygon' | 'brush' = 'polygon';
   private viewportEditor!: ViewportEditor;
   private projectorEditor!: ProjectorViewportEditor;
 
@@ -233,7 +237,6 @@ export class GMApp {
   private markerShowLabelToggle!:  HTMLInputElement;
   private markerLockedToggle!:     HTMLInputElement;
   private currentMapBlob:          ArrayBuffer | null = null;
-  private fogDrawing            = false;
   private activeFilterId        = '';
   private activeTransitionId    = 'none';
   /** Per-transition saved params — persisted in-memory for the session */
@@ -2506,19 +2509,18 @@ export class GMApp {
     // Start in select mode so the canvas is interactive immediately
     this.fogEditor.disable();
 
-    // Wire context-sensitive toolbar
+    // Wire context-sensitive toolbar.
     this.fogEditor.setOnModeChange(({ drawing, hasSelection }) => {
-      this.fogDrawing = drawing;
-      const drawBtn = document.querySelector<HTMLButtonElement>('#fog-draw-btn');
-      if (drawBtn) {
-        drawBtn.classList.toggle('btn--active', drawing);
-      }
-      const deleteBtn = document.querySelector<HTMLButtonElement>('#fog-delete-btn');
-      if (deleteBtn) deleteBtn.hidden = !hasSelection;
-      // Restore marker interaction whenever draw mode ends (covers both the Draw
-      // button and auto-exit after polygon completion via closePolygon).
+      // Restore marker interaction whenever draw mode ends.
       this.markerEditor?.setPointerCapture(!drawing);
-      // Auto-open the Fog panel when a polygon is selected or draw mode activates
+      // Auto-exit Add when polygon draw closes (closePolygon → disable()
+      // → drawing=false fires here). Brush commits exit Add via the brush
+      // commit handler directly.
+      const addBtn = document.querySelector<HTMLButtonElement>('#fog-add-btn');
+      if (!drawing && addBtn?.classList.contains('is-active') && this.drawingMode === 'polygon') {
+        addBtn.classList.remove('is-active');
+      }
+      // Auto-open the Fog panel when a polygon is selected or draw mode activates.
       if (drawing || hasSelection) {
         const body  = document.querySelector<HTMLElement>('#fog-panel .panel-body');
         const title = document.querySelector<HTMLElement>('#fog-panel .panel-title');
@@ -2529,29 +2531,44 @@ export class GMApp {
       }
     });
 
-    // Polygon button toggles draw / select mode (renamed from "Draw" in v2.12).
-    document.querySelector('#fog-draw-btn')?.addEventListener('click', () => {
-      if (this.fogDrawing) {
-        this.fogEditor.disable();
-        this.markerEditor?.setPointerCapture(true);
-      } else {
-        this.fogEditor.setBrushActive(false);          // brush off → polygon on
-        this.fogEditor.enable();
-        this.markerEditor?.setPointerCapture(false);
-      }
-    });
-
-    // v2.12/M3 — Brush button toggles brush mode. Mutually exclusive with
-    // polygon draw; markers stay clickable when brush is off.
-    const brushBtn = document.querySelector<HTMLButtonElement>('#fog-brush-btn');
+    // ─── v2.12 unified UI — Drawing Mode toggle + single-shot Add ────────
+    // Drawing Mode (Polygon | Brush) is a sticky preference, persisted in
+    // localStorage so it survives reloads but doesn't end up in save files.
+    // Add is a single-shot action — click → draw one shape → auto-exit.
+    const modePolyBtn  = document.querySelector<HTMLButtonElement>('#fog-mode-poly-btn');
+    const modeBrushBtn = document.querySelector<HTMLButtonElement>('#fog-mode-brush-btn');
     const brushControls = document.querySelector<HTMLElement>('.fog-brush-controls');
-    brushBtn?.addEventListener('click', () => {
-      const wasOn = brushBtn.classList.contains('btn--active');
-      if (!wasOn) this.fogEditor.disable();            // polygon off → brush on
-      this.fogEditor.setBrushActive(!wasOn);
-      brushBtn.classList.toggle('btn--active', !wasOn);
-      if (brushControls) brushControls.hidden = wasOn;
-      this.markerEditor?.setPointerCapture(wasOn);
+    const addBtn = document.querySelector<HTMLButtonElement>('#fog-add-btn');
+
+    // Restore persisted drawing mode (Polygon by default).
+    const savedMode = (localStorage.getItem(DRAWING_MODE_LS_KEY) ?? 'polygon') as 'polygon' | 'brush';
+    this.drawingMode = savedMode === 'brush' ? 'brush' : 'polygon';
+
+    const applyDrawingMode = () => {
+      modePolyBtn?.classList.toggle('is-active',  this.drawingMode === 'polygon');
+      modeBrushBtn?.classList.toggle('is-active', this.drawingMode === 'brush');
+      if (brushControls) brushControls.hidden = this.drawingMode !== 'brush';
+    };
+    applyDrawingMode();
+
+    const setDrawingMode = (mode: 'polygon' | 'brush') => {
+      if (this.drawingMode === mode) return;
+      // Exit any in-progress add when the mode changes — keeps the user
+      // from accidentally committing a half-built polygon under the new tool.
+      this._exitAddMode();
+      this.drawingMode = mode;
+      localStorage.setItem(DRAWING_MODE_LS_KEY, mode);
+      applyDrawingMode();
+    };
+    modePolyBtn?.addEventListener('click',  () => setDrawingMode('polygon'));
+    modeBrushBtn?.addEventListener('click', () => setDrawingMode('brush'));
+
+    addBtn?.addEventListener('click', () => {
+      if (addBtn.classList.contains('is-active')) {
+        this._exitAddMode();
+      } else {
+        this._enterAddMode();
+      }
     });
 
     // Paint / Erase mode buttons (replaces the prior dropdown).
@@ -2633,6 +2650,34 @@ export class GMApp {
     this.fogEditor.setBrushSettings({ color: k.defaultColor, radius: k.defaultRadius });
   }
 
+  /** v2.12 — enter single-shot Add mode under the current Drawing Mode.
+   *  Polygon: enables vertex-click draw. Brush: enables drag-paint. The
+   *  editor's own close-polygon / stroke-end paths fire _exitAddMode once
+   *  a shape commits — so the next action is deliberate. */
+  private _enterAddMode(): void {
+    const addBtn = document.querySelector<HTMLButtonElement>('#fog-add-btn');
+    addBtn?.classList.add('is-active');
+    if (this.drawingMode === 'polygon') {
+      this.fogEditor.setBrushActive(false);
+      this.fogEditor.enable();
+    } else {
+      this.fogEditor.disable();
+      this.fogEditor.setBrushActive(true);
+    }
+    this.markerEditor?.setPointerCapture(false);
+  }
+
+  /** v2.12 — exit Add mode. Called by the Add button (toggle off), by the
+   *  Drawing Mode switch, and automatically by commit handlers so single-
+   *  shot Add returns to a neutral "click polygons to select" state. */
+  private _exitAddMode(): void {
+    const addBtn = document.querySelector<HTMLButtonElement>('#fog-add-btn');
+    addBtn?.classList.remove('is-active');
+    this.fogEditor.disable();
+    this.fogEditor.setBrushActive(false);
+    this.markerEditor?.setPointerCapture(true);
+  }
+
   /** Brush stroke commit. Converts the polyline to a polygon (offset at
    *  brush radius, converted from CSS px to map-norm at commit time so the
    *  GM gets fine-detail painting by zooming in), then either pushes it as
@@ -2657,6 +2702,7 @@ export class GMApp {
       let polys = fog.polygons;
       for (const blob of blobs) polys = subtractFromAll(polys, blob.outer);
       this.state.setFog({ polygons: polys });
+      this._exitAddMode();
       return;
     }
     // Paint — one new polygon per blob, with the blob's holes preserved.
@@ -2671,6 +2717,8 @@ export class GMApp {
       createdAt: now,
     }));
     this.state.setFog({ polygons: [...fog.polygons, ...newPolys] });
+    // Single-shot Add: brush stroke committed → leave Add mode.
+    this._exitAddMode();
   }
 
   private bindFilterPanel(): void {
