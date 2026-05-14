@@ -42,6 +42,10 @@ export interface OverlayKindEntry {
   /** True → interior clicks select the polygon (fog uses this). False →
    *  the GM must click the selector icon to select. */
   selectByInterior:  boolean;
+  /** True → the colour swatch in the panel is enabled for this kind and
+   *  per-polygon color overrides are honoured. False → kind defaultColor
+   *  is canonical and the swatch is greyed out (e.g. fire isn't blue). */
+  allowColor:        boolean;
   /** Optional render z-bias so kinds stack predictably. Higher = renders on
    *  top of lower. Fog is the highest so it covers MapFX effects beneath. */
   z:                 number;
@@ -111,20 +115,28 @@ const SVG_FEAR =
 // defaultRadius is now in CSS pixels — see the type doc above. Brush stays
 // visually the same size as you zoom in / out; the resulting map polygon
 // shrinks at higher zoom which gives fine-detail painting for free.
+//
+// allowColor:
+//   • fog / smoke / water — these are "stuff" with a wide range of natural
+//     colours (black/grey fog, white/green/poison smoke, muddy or clean
+//     water) — GM picks. Per-polygon colour overrides honoured.
+//   • everything else — the kind colour IS the kind's identity (fire is
+//     orange, electric is electric blue, light is warm yellow). Per-polygon
+//     overrides aren't honoured; the swatch is greyed out in the panel.
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
-  fog:      { id: 'fog',      label: 'Fog of War',    iconSvg: SVG_FOG,       defaultColor: '#000000', defaultRadius: 25, blend: 'normal',   animated: false, selectByInterior: true,  z: 100 },
-  fire:     { id: 'fire',     label: 'Fire',          iconSvg: SVG_FLAME,     defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen',   animated: true,  selectByInterior: false, z: 10  },
-  cold:     { id: 'cold',     label: 'Ice / Cold',    iconSvg: SVG_SNOWFLAKE, defaultColor: '#9fd6ff', defaultRadius: 30, blend: 'screen',   animated: false, selectByInterior: false, z: 10  },
-  smoke:    { id: 'smoke',    label: 'Smoke',         iconSvg: SVG_SMOKE,     defaultColor: '#9aa3ad', defaultRadius: 50, blend: 'normal',   animated: true,  selectByInterior: false, z: 20  },
-  light:    { id: 'light',    label: 'Magical Light', iconSvg: SVG_LIGHT,     defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen',   animated: false, selectByInterior: false, z: 5   },
-  blood:    { id: 'blood',    label: 'Blood',         iconSvg: SVG_BLOOD,     defaultColor: '#8a0d18', defaultRadius: 15, blend: 'multiply', animated: false, selectByInterior: false, z: 5   },
-  water:    { id: 'water',    label: 'Water',         iconSvg: SVG_WATER,     defaultColor: '#4aa3ff', defaultRadius: 35, blend: 'screen',   animated: true,  selectByInterior: false, z: 5   },
-  shadow:   { id: 'shadow',   label: 'Shadow',        iconSvg: SVG_SHADOW,    defaultColor: '#10131c', defaultRadius: 35, blend: 'multiply', animated: false, selectByInterior: false, z: 30  },
-  electric: { id: 'electric', label: 'Lightning',     iconSvg: SVG_ELECTRIC,  defaultColor: '#a0c8ff', defaultRadius: 12, blend: 'screen',   animated: true,  selectByInterior: false, z: 15  },
-  poison:   { id: 'poison',   label: 'Poison',        iconSvg: SVG_POISON,    defaultColor: '#7dd23a', defaultRadius: 20, blend: 'screen',   animated: false, selectByInterior: false, z: 10  },
-  holy:     { id: 'holy',     label: 'Holy',          iconSvg: SVG_HOLY,      defaultColor: '#ffe9a0', defaultRadius: 35, blend: 'screen',   animated: false, selectByInterior: false, z: 5   },
-  healing:  { id: 'healing',  label: 'Healing',       iconSvg: SVG_HEALING,   defaultColor: '#a3e8a0', defaultRadius: 25, blend: 'screen',   animated: false, selectByInterior: false, z: 5   },
-  fear:     { id: 'fear',     label: 'Fear',          iconSvg: SVG_FEAR,      defaultColor: '#3c0a4a', defaultRadius: 30, blend: 'multiply', animated: true,  selectByInterior: false, z: 20  },
+  fog:      { id: 'fog',      label: 'Fog of War',    iconSvg: SVG_FOG,       defaultColor: '#000000', defaultRadius: 25, blend: 'normal',   animated: false, selectByInterior: true,  allowColor: true,  z: 100 },
+  fire:     { id: 'fire',     label: 'Fire',          iconSvg: SVG_FLAME,     defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: false, z: 10  },
+  cold:     { id: 'cold',     label: 'Ice / Cold',    iconSvg: SVG_SNOWFLAKE, defaultColor: '#9fd6ff', defaultRadius: 30, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 10  },
+  smoke:    { id: 'smoke',    label: 'Smoke',         iconSvg: SVG_SMOKE,     defaultColor: '#9aa3ad', defaultRadius: 50, blend: 'normal',   animated: true,  selectByInterior: false, allowColor: true,  z: 20  },
+  light:    { id: 'light',    label: 'Magical Light', iconSvg: SVG_LIGHT,     defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 5   },
+  blood:    { id: 'blood',    label: 'Blood',         iconSvg: SVG_BLOOD,     defaultColor: '#8a0d18', defaultRadius: 15, blend: 'multiply', animated: false, selectByInterior: false, allowColor: false, z: 5   },
+  water:    { id: 'water',    label: 'Water',         iconSvg: SVG_WATER,     defaultColor: '#4aa3ff', defaultRadius: 35, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: true,  z: 5   },
+  shadow:   { id: 'shadow',   label: 'Shadow',        iconSvg: SVG_SHADOW,    defaultColor: '#10131c', defaultRadius: 35, blend: 'multiply', animated: false, selectByInterior: false, allowColor: false, z: 30  },
+  electric: { id: 'electric', label: 'Lightning',     iconSvg: SVG_ELECTRIC,  defaultColor: '#a0c8ff', defaultRadius: 12, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: false, z: 15  },
+  poison:   { id: 'poison',   label: 'Poison',        iconSvg: SVG_POISON,    defaultColor: '#7dd23a', defaultRadius: 20, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 10  },
+  holy:     { id: 'holy',     label: 'Holy',          iconSvg: SVG_HOLY,      defaultColor: '#ffe9a0', defaultRadius: 35, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 5   },
+  healing:  { id: 'healing',  label: 'Healing',       iconSvg: SVG_HEALING,   defaultColor: '#a3e8a0', defaultRadius: 25, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 5   },
+  fear:     { id: 'fear',     label: 'Fear',          iconSvg: SVG_FEAR,      defaultColor: '#3c0a4a', defaultRadius: 30, blend: 'multiply', animated: true,  selectByInterior: false, allowColor: false, z: 20  },
 };
 
 /** Order for the kind dropdown — fog first (most-used), then groupings. */

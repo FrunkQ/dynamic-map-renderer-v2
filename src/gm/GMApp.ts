@@ -2597,10 +2597,12 @@ export class GMApp {
       }
       kindSelect.value = this.activeOverlayKind;
       this._applyActiveKindToBrush();
+      this._applyKindToColourSwatch();
       this.fogEditor.setActiveKind(this.activeOverlayKind);
       kindSelect.addEventListener('change', () => {
         this.activeOverlayKind = kindSelect.value as OverlayKind;
         this._applyActiveKindToBrush();
+        this._applyKindToColourSwatch();
         this.fogEditor.setActiveKind(this.activeOverlayKind);
         this.fogEditor.setColor(overlayKind(this.activeOverlayKind).defaultColor);
       });
@@ -2642,12 +2644,13 @@ export class GMApp {
       this.state.setFog({ polygons: result });
     } else {
       const k = overlayKind(this.activeOverlayKind);
-      const fogColor = (document.getElementById('fog-colour') as HTMLInputElement | null)?.value;
+      const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
+      const color = (k.allowColor && swatch?.value) ? swatch.value : k.defaultColor;
       const poly: FogPolygon = {
         id:        generateId(),
         kind:      this.activeOverlayKind,
         vertices,
-        color:     (this.activeOverlayKind === 'fog' && fogColor) ? fogColor : k.defaultColor,
+        color,
         createdAt: Date.now(),
       };
       this.state.setFog({ polygons: [...fog.polygons, poly] });
@@ -2660,6 +2663,21 @@ export class GMApp {
   private _applyActiveKindToBrush(): void {
     const k = overlayKind(this.activeOverlayKind);
     this.fogEditor.setBrushSettings({ color: k.defaultColor, radius: k.defaultRadius });
+  }
+
+  /** Reflect the active kind in the colour swatch — set the swatch value
+   *  to the kind's default colour and grey it out if the kind doesn't
+   *  honour per-polygon colour overrides (most MapFX kinds — fire is
+   *  always orange, electric always electric-blue, etc.). */
+  private _applyKindToColourSwatch(): void {
+    const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
+    if (!swatch) return;
+    const k = overlayKind(this.activeOverlayKind);
+    swatch.value = k.defaultColor;
+    swatch.disabled = !k.allowColor;
+    swatch.title = k.allowColor
+      ? 'Colour for new shapes of this kind'
+      : `Colour is fixed for ${k.label} — kind colour is part of its identity`;
   }
 
   /** v2.12 — start a Paint or Erase action under the current Drawing Mode.
@@ -2717,19 +2735,21 @@ export class GMApp {
     const fog = this.state.getState().fog;
     if (settings.mode === 'erase') {
       let polys = fog.polygons;
-      for (const blob of blobs) polys = subtractFromAll(polys, blob);
+      for (const blob of blobs) polys = subtractFromAll(polys, blob.outer);
       this.state.setFog({ polygons: polys });
       this._endAction();
       return;
     }
-    // Paint — one new polygon per blob (cleanRibbonToBlobs returns
-    // outer rings only; brush strokes don't keep their own holes).
+    // Paint — one new polygon per blob, holes preserved (a donut scribble
+    // keeps its hole). Erase carving still preserves target-polygon holes
+    // separately via subtractFromAll.
     const k = overlayKind(this.activeOverlayKind);
     const now = Date.now();
-    const newPolys: FogPolygon[] = blobs.map((vertices) => ({
+    const newPolys: FogPolygon[] = blobs.map((blob) => ({
       id:        generateId(),
       kind:      this.activeOverlayKind,
-      vertices,
+      vertices:  blob.outer,
+      ...(blob.holes.length > 0 ? { holes: blob.holes } : {}),
       color:     settings.color || k.defaultColor,
       createdAt: now,
     }));

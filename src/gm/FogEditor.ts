@@ -646,19 +646,27 @@ export class FogEditor {
     ctx.save();
     for (const blob of blobs) {
       ctx.beginPath();
-      ctx.moveTo(b.x + blob[0]!.x * b.w, b.y + blob[0]!.y * b.h);
-      for (let i = 1; i < blob.length; i++) {
-        ctx.lineTo(b.x + blob[i]!.x * b.w, b.y + blob[i]!.y * b.h);
+      ctx.moveTo(b.x + blob.outer[0]!.x * b.w, b.y + blob.outer[0]!.y * b.h);
+      for (let i = 1; i < blob.outer.length; i++) {
+        ctx.lineTo(b.x + blob.outer[i]!.x * b.w, b.y + blob.outer[i]!.y * b.h);
       }
       ctx.closePath();
+      for (const h of blob.holes) {
+        if (h.length < 3) continue;
+        ctx.moveTo(b.x + h[0]!.x * b.w, b.y + h[0]!.y * b.h);
+        for (let i = 1; i < h.length; i++) {
+          ctx.lineTo(b.x + h[i]!.x * b.w, b.y + h[i]!.y * b.h);
+        }
+        ctx.closePath();
+      }
       // Crosshatch the in-progress shape so the GM can see what's about to
       // commit, regardless of how closely the kind colour matches the map.
       // Reverts to subtle colour-only fill once the polygon commits.
       ctx.fillStyle = stroke + '40';
-      ctx.fill();
+      ctx.fill('evenodd');
       if (hatch) {
         ctx.fillStyle = hatch;
-        ctx.fill();
+        ctx.fill('evenodd');
       }
       ctx.setLineDash([6, 6]);
       ctx.lineDashOffset = -this.dashOffset;

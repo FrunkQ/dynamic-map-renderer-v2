@@ -1462,6 +1462,11 @@ option.select-option--add {
 }
 .fog-row--kind > select { flex: 1 1 auto; }
 .fog-row--kind > input[type="color"] { flex: 0 0 32px; }
+.fog-row--kind > input[type="color"]:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
 
 /* Drawing Mode — Polygon / Brush sticky toggle. Active button gets a fill;
    the inactive partner is outline only. Visually similar to Paint/Erase

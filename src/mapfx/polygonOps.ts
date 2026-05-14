@@ -59,20 +59,17 @@ function outerAndHolesFromPC(p: pc.Polygon): { outer: FogVertex[]; holes: FogVer
 }
 
 /**
- * Union one or more rings into a clean set of "blob" outlines.
+ * Union one or more rings into a clean set of "blob" outlines, preserving
+ * any holes the union produces.
  *
  * Called with the polygons emitted by `offsetPolyline` (the flat-ended
  * ribbon plus a full disc at each endpoint). polygon-clipping.union
- * absorbs the overlaps so the discs round the ribbon endpoints naturally,
- * AND any self-overlap in the ribbon (e.g. a stroke that loops back on
- * itself) collapses cleanly without leaving the semicircular end-cap
- * imprints that an inline half-disc cap used to produce.
- *
- * Holes from the union are DROPPED — a brush stroke should leave a solid
- * blob, not a polygon with a hole. (Holes from explicit erase carving
- * via `subtractFromAll` ARE kept; that's a separate semantic.)
+ * absorbs the overlaps so the discs round the ribbon endpoints naturally.
+ * If the stroke shape encloses a true gap (e.g. a donut scribble), the
+ * union emits an outer + an inner ring; we keep both so the GM sees the
+ * shape they intended to draw.
  */
-export function cleanRibbonToBlobs(rings: FogVertex[][]): FogVertex[][] {
+export function cleanRibbonToBlobs(rings: FogVertex[][]): Array<{ outer: FogVertex[]; holes: FogVertex[][] }> {
   const inputs: pc.Geom[] = [];
   for (const r of rings) {
     if (r.length >= 3) inputs.push(toPCPolygon(r) as pc.Geom);
@@ -84,14 +81,12 @@ export function cleanRibbonToBlobs(rings: FogVertex[][]): FogVertex[][] {
       ? pc.union(inputs[0]!)
       : pc.union(inputs[0]!, ...inputs.slice(1));
   } catch {
-    // Library balked on a numerical edge case — fall back to the largest
-    // input ring so the stroke isn't lost entirely.
-    return rings.length > 0 ? [rings[0]!] : [];
+    return rings.length > 0 ? [{ outer: rings[0]!, holes: [] }] : [];
   }
-  const result: FogVertex[][] = [];
+  const result: Array<{ outer: FogVertex[]; holes: FogVertex[][] }> = [];
   for (const poly of cleaned) {
-    const outer = ringFromPC(poly[0] ?? []);
-    if (outer.length >= 3) result.push(outer);
+    const oh = outerAndHolesFromPC(poly);
+    if (oh.outer.length >= 3) result.push(oh);
   }
   return result;
 }
