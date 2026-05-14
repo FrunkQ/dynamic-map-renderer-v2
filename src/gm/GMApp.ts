@@ -2699,6 +2699,9 @@ export class GMApp {
     this.mapFXEditor.setHandlers({
       onCommit: (entity: MapFXEntity) => {
         this.state.addMapFXEntity(entity);
+        // Auto-select the new entity so the selector icon + trashcan are
+        // immediately visible — discoverable workflow for first-time users.
+        this.selectedMapFXEntityId = entity.id;
         // After committing, hop out of paint/poly so the user picks up a
         // fresh action rather than accidentally double-creating.
         // (Broadcast + renderer composite happen via the 'mapfx' state branch.)
@@ -2724,7 +2727,10 @@ export class GMApp {
     });
 
     document.querySelector<HTMLInputElement>('#fog-colour')?.addEventListener('input', (e) => {
-      this.fogEditor.setColor((e.target as HTMLInputElement).value);
+      const c = (e.target as HTMLInputElement).value;
+      this.fogEditor.setColor(c);
+      // Also drive the FoW brush colour so paint mode uses the same fill.
+      this.fogEditor.setBrushSettings({ color: c });
     });
 
     // v2.12/M3 — FoW brush mode handlers. Live paints into the renderer for
