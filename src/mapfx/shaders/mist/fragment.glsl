@@ -51,15 +51,19 @@ float noise(vec2 st) {
   );
 }
 
+// 5 octaves (original used 4) — extra fine detail breaks up the
+// soft mid-frequency areas that made my earlier version read as
+// "flat haze" instead of "wisps". The starting scale is a bit
+// higher too so dense regions actually reach high density.
 float fbm(vec2 coord) {
   float value = 0.0;
-  float scale = 0.2;
-  for (int i = 0; i < 4; i++) {
+  float scale = 0.25;
+  for (int i = 0; i < 5; i++) {
     value += noise(coord) * scale;
     coord *= 2.0;
     scale *= 0.5;
   }
-  return value + 0.2;
+  return value + 0.25;
 }
 
 void main() {
@@ -82,11 +86,23 @@ void main() {
   vec2 motion = vec2(fbm(pos + vec2(t * -0.5, t * -0.3)));
 
   // Second FBM, sampled at the warped position, is the final mist
-  // density. INTENSITY = 2 in the original; absorbed into uIntensity.
-  float final = fbm(pos + motion);
+  // density. The original baked an INTENSITY=2 multiplier here for
+  // the visible-mist look; we keep that and let uIntensity scale
+  // further so the slider default of 1.0 reads as proper mist
+  // rather than a faint haze.
+  float density = fbm(pos + motion) * 2.0 * uIntensity;
 
-  vec3 col = uColor * final * uIntensity;
-  float alpha = clamp(final * uIntensity, 0.0, 1.0) * maskAlpha;
+  // Soft S-curve so wisp edges read as "shape" rather than a
+  // straight transparency gradient; also pushes the dense centres
+  // of wisps closer to fully opaque.
+  density = smoothstep(0.05, 1.0, density);
+
+  // Normal-blend output: col is the full mist hue (uColor), alpha
+  // controls visibility. Previously I had col = uColor * density,
+  // which double-attenuated against the alpha-blend and made even
+  // dense regions read as a thin haze. Single-attenuation now.
+  vec3 col = uColor;
+  float alpha = density * maskAlpha;
 
   gl_FragColor = vec4(col, alpha);
 }
