@@ -2716,23 +2716,20 @@ export class GMApp {
     if (blobs.length === 0) return;
     const fog = this.state.getState().fog;
     if (settings.mode === 'erase') {
-      // Erase: subtract each blob's outer (holes inside an erase stroke
-      // are unusual but harmless — they're carved-from-the-eraser regions
-      // that would put fog back; just drop them).
       let polys = fog.polygons;
-      for (const blob of blobs) polys = subtractFromAll(polys, blob.outer);
+      for (const blob of blobs) polys = subtractFromAll(polys, blob);
       this.state.setFog({ polygons: polys });
       this._endAction();
       return;
     }
-    // Paint — one new polygon per blob, with the blob's holes preserved.
+    // Paint — one new polygon per blob (cleanRibbonToBlobs returns
+    // outer rings only; brush strokes don't keep their own holes).
     const k = overlayKind(this.activeOverlayKind);
     const now = Date.now();
-    const newPolys: FogPolygon[] = blobs.map((blob) => ({
+    const newPolys: FogPolygon[] = blobs.map((vertices) => ({
       id:        generateId(),
       kind:      this.activeOverlayKind,
-      vertices:  blob.outer,
-      ...(blob.holes.length > 0 ? { holes: blob.holes } : {}),
+      vertices,
       color:     settings.color || k.defaultColor,
       createdAt: now,
     }));

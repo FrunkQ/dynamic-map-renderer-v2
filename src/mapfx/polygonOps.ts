@@ -60,26 +60,27 @@ function outerAndHolesFromPC(p: pc.Polygon): { outer: FogVertex[]; holes: FogVer
 
 /**
  * Clean a self-intersecting ribbon polygon (from offsetPolyline) into one or
- * more non-self-intersecting "blob" outlines, preserving any holes the
- * union produces (e.g. a donut scribble).
+ * more non-self-intersecting "blob" outlines.
  *
- * A wiggly stroke that crosses itself collapses to the outline of the swept
- * area, not the ribbon path — matching the GM's intuition that "scribbling
- * in a circle should fill it in". Disconnected components become separate
- * polygons.
+ * Holes that the union produces are DROPPED — a brush stroke that loops
+ * back over itself should leave a solid blob, not a polygon with a
+ * semicircle window into the background. (Holes from explicit erase
+ * carving — via `subtractFromAll` — ARE kept.)
+ *
+ * Disconnected components become separate polygons (each its own blob).
  */
-export function cleanRibbonToBlobs(ring: FogVertex[]): Array<{ outer: FogVertex[]; holes: FogVertex[][] }> {
+export function cleanRibbonToBlobs(ring: FogVertex[]): FogVertex[][] {
   if (ring.length < 3) return [];
   let cleaned: pc.MultiPolygon;
   try {
     cleaned = pc.union(toPCPolygon(ring) as pc.Geom);
   } catch {
-    return [{ outer: ring, holes: [] }];
+    return [ring];
   }
-  const result: Array<{ outer: FogVertex[]; holes: FogVertex[][] }> = [];
+  const result: FogVertex[][] = [];
   for (const poly of cleaned) {
-    const oh = outerAndHolesFromPC(poly);
-    if (oh.outer.length >= 3) result.push(oh);
+    const outer = ringFromPC(poly[0] ?? []);
+    if (outer.length >= 3) result.push(outer);
   }
   return result;
 }

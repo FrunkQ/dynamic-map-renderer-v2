@@ -642,24 +642,24 @@ export class FogEditor {
     const ctx = this.ctx;
     const b = this.getMapBounds(this.drawW, this.drawH);
     const stroke = settings.mode === 'erase' ? '#ffffff' : (settings.color || '#000000');
+    const hatch = this._getHatchPattern();
     ctx.save();
     for (const blob of blobs) {
       ctx.beginPath();
-      ctx.moveTo(b.x + blob.outer[0]!.x * b.w, b.y + blob.outer[0]!.y * b.h);
-      for (let i = 1; i < blob.outer.length; i++) {
-        ctx.lineTo(b.x + blob.outer[i]!.x * b.w, b.y + blob.outer[i]!.y * b.h);
+      ctx.moveTo(b.x + blob[0]!.x * b.w, b.y + blob[0]!.y * b.h);
+      for (let i = 1; i < blob.length; i++) {
+        ctx.lineTo(b.x + blob[i]!.x * b.w, b.y + blob[i]!.y * b.h);
       }
       ctx.closePath();
-      for (const h of blob.holes) {
-        if (h.length < 3) continue;
-        ctx.moveTo(b.x + h[0]!.x * b.w, b.y + h[0]!.y * b.h);
-        for (let i = 1; i < h.length; i++) {
-          ctx.lineTo(b.x + h[i]!.x * b.w, b.y + h[i]!.y * b.h);
-        }
-        ctx.closePath();
-      }
+      // Crosshatch the in-progress shape so the GM can see what's about to
+      // commit, regardless of how closely the kind colour matches the map.
+      // Reverts to subtle colour-only fill once the polygon commits.
       ctx.fillStyle = stroke + '40';
-      ctx.fill('evenodd');
+      ctx.fill();
+      if (hatch) {
+        ctx.fillStyle = hatch;
+        ctx.fill();
+      }
       ctx.setLineDash([6, 6]);
       ctx.lineDashOffset = -this.dashOffset;
       ctx.lineWidth = 2;
@@ -770,18 +770,11 @@ export class FogEditor {
       }
     }
 
-    // Two-pass fill on the GM canvas: the kind colour at low alpha (so the
-    // user can see what kind / colour it is) and a black/white crosshatch
-    // on top (so the shape is always visible regardless of how closely
-    // the fog colour matches the map background). Player view stays clean —
-    // crosshatch is GM-canvas-only; the compositor renders the solid fill.
+    // Subtle fill on the GM canvas — kind colour at low alpha. The
+    // crosshatch is reserved for the in-progress shape during a draw
+    // (see _drawInProgressBrush) so committed polygons stay quiet.
     ctx.fillStyle = color + '40';
     ctx.fill('evenodd');
-    const hatch = this._getHatchPattern();
-    if (hatch) {
-      ctx.fillStyle = hatch;
-      ctx.fill('evenodd');
-    }
 
     // Always draw marching ants around every polygon.
     // Selected: bright white/black ants (high contrast).
