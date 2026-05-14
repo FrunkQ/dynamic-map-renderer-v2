@@ -32,13 +32,20 @@ export interface KindShader {
 /** Lazy texture cache so each shader's noise / etc. loads once. */
 const textureCache = new Map<string, THREE.Texture>();
 
-function _loadTexture(url: string): THREE.Texture {
-  const cached = textureCache.get(url);
+function _loadTexture(url: string, colorSpace: THREE.ColorSpace): THREE.Texture {
+  const key = `${url}::${colorSpace}`;
+  const cached = textureCache.get(key);
   if (cached) return cached;
   const tex = new THREE.TextureLoader().load(url);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  textureCache.set(url, tex);
+  // Colour textures (bed, etc.) need SRGBColorSpace so Three converts
+  // from sRGB to linear when sampled. Without it the OutputPass re-encodes
+  // raw bytes again on the way out, giving a noticeably darker / muddier
+  // result. Data textures (noise) stay LinearSRGBColorSpace -- their
+  // values are sampled numerically, not as colour.
+  tex.colorSpace = colorSpace;
+  textureCache.set(key, tex);
   return tex;
 }
 
@@ -51,14 +58,14 @@ export function loadKindShader(shaderId: string): KindShader | null {
 
   // Find any image assets in the same folder and bind them by uniform
   // name. Filename-prefix convention:
-  //   • noise.*  →  uNoise   (surface displacement / hashing source)
-  //   • bed.*    →  uBed     (refraction-bed / second texture channel)
+  //   • noise.*  →  uNoise   (data texture; sampled numerically)
+  //   • bed.*    →  uBed     (colour texture; sRGB-encoded source)
   const textures: Record<string, THREE.Texture> = {};
   for (const [key, url] of Object.entries(textureGlobs)) {
     if (!key.startsWith(`./${shaderId}/`)) continue;
     const file = key.slice(`./${shaderId}/`.length).toLowerCase();
-    if (file.startsWith('noise')) textures['uNoise'] = _loadTexture(url);
-    else if (file.startsWith('bed')) textures['uBed'] = _loadTexture(url);
+    if (file.startsWith('noise')) textures['uNoise'] = _loadTexture(url, THREE.LinearSRGBColorSpace);
+    else if (file.startsWith('bed')) textures['uBed'] = _loadTexture(url, THREE.SRGBColorSpace);
   }
   // Detect whether the shader wants the underlying map texture passed
   // in. Renderer wires uMap + uMapUv per-plane when this is true.

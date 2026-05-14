@@ -108,11 +108,12 @@ void main() {
   vec2 bedUv = wuv * 0.2 + rfd.xz * 0.4;
   vec3 bed = texture2D(uBed, bedUv).rgb;
 
-  // Tint the refracted bed sample by uColor — multiplicative so a
-  // blue uColor gives "blue water" without crushing the underlying
-  // art's contrast. Mix back toward the original art so the tint
-  // doesn't fully recolour everything.
-  vec3 rfa = mix(bed, bed * uColor * 2.0, 0.4);
+  // Tint the refracted bed sample by uColor as a gentle hue shift.
+  // Original Pierco shader does no tinting; we mix in only a small
+  // amount so the GM's chosen colour reads as a "hint of blue / green
+  // / etc." rather than recolouring the whole bed. Set uColor to white
+  // for the original look.
+  vec3 rfa = mix(bed, bed * uColor * 1.4, 0.15);
 
   // Water depth attenuation — pretend the deeper parts of the wave
   // crests attenuate the bed visibility. Cheap fake of the original
