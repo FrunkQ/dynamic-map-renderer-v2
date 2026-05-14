@@ -151,8 +151,10 @@ export class MapAssetStore {
   }
 
   /**
-   * Decode a blob and read the image's intrinsic pixel dimensions. Returns
-   * null if the blob isn't a decodable image.
+   * Decode a blob and read its intrinsic pixel dimensions. Tries image
+   * decode first; on failure, falls back to a video probe (webm / mp4
+   * map assets are first-class as of v2.12). Returns null if neither
+   * succeeds.
    */
   static async readDimensions(blob: Blob): Promise<{ width: number; height: number } | null> {
     try {
@@ -161,8 +163,34 @@ export class MapAssetStore {
       bitmap.close();
       return dims;
     } catch {
+      // Not a decodable image — try a video probe. Cheap: we read
+      // metadata only (no playback) and tear the element down right
+      // after.
+      if (blob.type.startsWith('video/')) {
+        return MapAssetStore._readVideoDimensions(blob);
+      }
       return null;
     }
+  }
+
+  /** Internal — load the blob into a hidden <video>, await metadata,
+   *  read videoWidth/Height, then dispose. Resolves null on error. */
+  private static _readVideoDimensions(blob: Blob): Promise<{ width: number; height: number } | null> {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(blob);
+      const v   = document.createElement('video');
+      v.preload = 'metadata';
+      v.muted   = true;
+      v.src     = url;
+      const done = (w: number, h: number) => {
+        URL.revokeObjectURL(url);
+        v.removeAttribute('src');
+        v.load();
+        resolve(w > 0 && h > 0 ? { width: w, height: h } : null);
+      };
+      v.addEventListener('loadedmetadata', () => done(v.videoWidth, v.videoHeight), { once: true });
+      v.addEventListener('error', () => done(0, 0), { once: true });
+    });
   }
 
   /**

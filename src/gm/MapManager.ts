@@ -6,8 +6,18 @@ import { MapAssetStore } from '../maps/MapAssetStore.ts';
 import { generateMissingMapPlaceholder } from '../maps/placeholder.ts';
 import { generateId } from '../utils/id.ts';
 
-const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
-const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
+const ALLOWED_TYPES = new Set([
+  // Still images.
+  'image/png', 'image/jpeg', 'image/webp',
+  // v2.12 — animated maps. Browsers reliably play webm (vp8/vp9) and
+  // mp4 (h.264). The renderer wraps these in a THREE.VideoTexture so
+  // they animate over the GM canvas just like a still image map.
+  'video/webm', 'video/mp4',
+]);
+// 200 MB — videos pack more bytes than stills, but going much beyond
+// this puts memory pressure on browsers (and IndexedDB blobs slow
+// down to enumerate). Tuned by gut, not benchmark.
+const MAX_BYTES = 200 * 1024 * 1024;
 
 /**
  * MapManager — owns the relationship between named map instances (StoredMap)
@@ -24,7 +34,7 @@ export class MapManager {
    */
   async importFile(file: File): Promise<StoredMap> {
     if (!ALLOWED_TYPES.has(file.type)) {
-      throw new Error(`Unsupported file type: ${file.type}. Use PNG, JPG, or WebP.`);
+      throw new Error(`Unsupported file type: ${file.type}. Use PNG, JPG, WebP, WebM, or MP4.`);
     }
     if (file.size > MAX_BYTES) {
       throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max 50 MB.`);

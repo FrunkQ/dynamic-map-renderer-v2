@@ -63,6 +63,14 @@ export class Renderer {
   private mapMesh:      THREE.Mesh | null = null;
   private fogMesh:      THREE.Mesh | null = null;
   private mapTexture:   THREE.Texture | null = null;
+  /** v2.12 — set when the loaded map is a video. Held so the renderer
+   *  can play / pause / dispose the underlying element separately
+   *  from the THREE.VideoTexture, which only owns the GPU side. */
+  private mapVideo:     HTMLVideoElement | null = null;
+  /** v2.12 — true while a VideoTexture is the active map texture.
+   *  Drives the renderFrame keep-alive (animated maps must redraw
+   *  every frame so the texture's auto-update has a tick to land on). */
+  private hasVideoMap = false;
   /** Lazily-built ImageData cache for the loaded map's pixels. Used
    *  by the Magic Wand fill (src/mapfx/floodFill.ts) which needs to
    *  read the map's raw pixels to flood-fill from a click point.
@@ -109,11 +117,29 @@ export class Renderer {
   private aspectRatio = 1;
   /** Read-only map aspect ratio (width / height). Set when a map loads. */
   get mapAspect(): number { return this.aspectRatio; }
-  /** Magic Wand: return the loaded map's ImageData (cached). Builds
-   *  on first call by drawing the map's HTMLImageElement to an
-   *  OffscreenCanvas and reading pixels. Returns null if no map is
+  /** Magic Wand: return ImageData representing the map's current
+   *  visual.  For still images this is cached after first build (the
+   *  pixels never change).  For animated maps (v2.12 video sources) it
+   *  re-samples the CURRENT video frame each call so the magic wand
+   *  fills the contour the GM is actually looking at — the cache is
+   *  bypassed to keep tooling honest. Returns null if no map is
    *  loaded yet or if the canvas2D context isn't available. */
   getMapImageData(): ImageData | null {
+    if (this.hasVideoMap && this.mapVideo) {
+      const v = this.mapVideo;
+      const w = v.videoWidth, h = v.videoHeight;
+      if (!w || !h || v.readyState < 2) return null;
+      try {
+        const canvas = new OffscreenCanvas(w, h);
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return null;
+        ctx.drawImage(v, 0, 0);
+        return ctx.getImageData(0, 0, w, h);
+      } catch {
+        return null;
+      }
+    }
+
     if (this._mapImageDataCache) return this._mapImageDataCache;
     if (!this.mapTexture?.image) return null;
     const img = this.mapTexture.image as HTMLImageElement;
@@ -129,6 +155,114 @@ export class Renderer {
     } catch {
       return null;
     }
+  }
+
+  /** Sniff the first bytes of a map blob to tell image apart from video.
+   *  Used by loadMap to pick the right Three.js texture path. Returns
+   *  'image' for the common still formats, 'video' for webm / mp4,
+   *  'image' otherwise (TextureLoader's error path handles malformed
+   *  inputs gracefully so the conservative default is safe). */
+  private static _sniffMediaKind(buffer: ArrayBuffer): 'image' | 'video' {
+    if (buffer.byteLength < 12) return 'image';
+    const a = new Uint8Array(buffer, 0, 12);
+    // WebM (EBML)
+    if (a[0] === 0x1a && a[1] === 0x45 && a[2] === 0xdf && a[3] === 0xa3) return 'video';
+    // MP4 / MOV — ftyp atom at offset 4
+    if (a[4] === 0x66 && a[5] === 0x74 && a[6] === 0x79 && a[7] === 0x70) return 'video';
+    return 'image';
+  }
+
+  /** Tear down whichever map texture is live (image Texture or
+   *  VideoTexture + underlying video element). Centralised so the
+   *  loadMap branches can both dispose the previous map uniformly. */
+  private _disposeMapTexture(): void {
+    if (this.mapTexture) {
+      this.mapTexture.dispose();
+      this.mapTexture = null;
+    }
+    if (this.mapVideo) {
+      this.mapVideo.pause();
+      this.mapVideo.removeAttribute('src');
+      try { this.mapVideo.load(); } catch { /* OK if it errors */ }
+      this.mapVideo = null;
+    }
+    this.hasVideoMap = false;
+  }
+
+  /** v2.12 — Video-map load path. Mirrors the image branch in loadMap
+   *  but builds a hidden <video> element, wires a VideoTexture
+   *  around it, and starts looped muted playback. Browsers reliably
+   *  autoplay muted videos without a user gesture, so this works
+   *  even on initial app load. */
+  private _loadVideoMap(url: string, gen: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const video = document.createElement('video');
+      video.src = url;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = 'anonymous';
+      video.preload = 'auto';
+
+      const finish = () => {
+        URL.revokeObjectURL(url);
+        if (gen !== this.loadGen) {
+          // Superseded — discard.
+          video.pause();
+          video.removeAttribute('src');
+          try { video.load(); } catch { /* OK */ }
+          resolve();
+          return;
+        }
+
+        this._disposeMapTexture();
+
+        const tex = new THREE.VideoTexture(video);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+
+        this.mapTexture = tex;
+        this.mapVideo = video;
+        this.hasVideoMap = true;
+        this._mapImageDataCache = null;
+
+        const vw = video.videoWidth || 1;
+        const vh = video.videoHeight || 1;
+        this.aspectRatio = vw / vh;
+
+        // Same fog / shader-plane reset path as the image branch.
+        this.fogCompositor.dispose();
+        this.fogCompositor = new FogCompositor(1024, 1024);
+        this.fogCompositor.redraw(this.lastFogState, 0, !this.shaderPlanesEnabled);
+        this._disposeShaderPlanes();
+        this.kindMaskCompositor.dispose();
+        this.kindMaskCompositor = new KindMaskCompositor();
+        if (this.shaderPlanesEnabled) {
+          this.kindMaskCompositor.redraw(this.lastFogState.polygons);
+          this._syncShaderPlanes();
+        }
+
+        this.rebuildLayerMeshes();
+        this.refreshCamera();
+        this.needsRender = true;
+        this.onMapLoaded?.(this.aspectRatio);
+
+        // Kick playback. Muted autoplay works without a user gesture
+        // in all current browsers — but we still .catch() so a
+        // sandbox / policy block doesn't reject the whole load.
+        void video.play().catch(() => { /* will show paused first frame */ });
+
+        resolve();
+      };
+
+      video.addEventListener('loadedmetadata', finish, { once: true });
+      video.addEventListener('error', () => {
+        URL.revokeObjectURL(url);
+        resolve(); // failed — don't block any awaiting transition
+      }, { once: true });
+    });
   }
   private fogOpacity = 1.0;
   /**
@@ -239,8 +373,14 @@ export class Renderer {
       this.lastFogState = fog;
     }
 
-    const blob = new Blob([buffer]);
+    const mediaKind = Renderer._sniffMediaKind(buffer);
+    const mimeHint  = mediaKind === 'video' ? 'video/webm' : '';
+    const blob = new Blob([buffer], mimeHint ? { type: mimeHint } : undefined);
     const url  = URL.createObjectURL(blob);
+
+    if (mediaKind === 'video') {
+      return this._loadVideoMap(url, gen);
+    }
 
     return new Promise<void>((resolve) => {
       const loader = new THREE.TextureLoader();
@@ -255,9 +395,10 @@ export class Renderer {
           return;
         }
 
-        if (this.mapTexture) this.mapTexture.dispose();
+        this._disposeMapTexture();
         tex.colorSpace = THREE.SRGBColorSpace;
         this.mapTexture = tex;
+        this.hasVideoMap = false;
         // Magic wand cache invalidates with every map switch — next
         // call to getMapImageData() will re-rasterise from the new
         // texture's HTMLImageElement.
@@ -983,7 +1124,7 @@ export class Renderer {
     this.fogCompositor.dispose();
     this._disposeShaderPlanes();
     this.kindMaskCompositor.dispose();
-    this.mapTexture?.dispose();
+    this._disposeMapTexture();
     this.markerTex?.dispose();
     this.mapBorderLine?.geometry.dispose();
     this.mapBorderMat?.dispose();
@@ -1062,9 +1203,10 @@ export class Renderer {
     const animatedOverlay = this.fogCompositor.hasAnimatedPolygons();
     const hasShaderPlanes = this.shaderPlanes.size > 0;
     const animatedBackdrop = this.backdropConfig !== null;
+    const animatedVideo = this.hasVideoMap;
 
     // Skip rendering if nothing has changed and there's no animation.
-    if (!this.needsRender && !this.isAnimatedFilter && !animatedOverlay && !hasShaderPlanes && !animatedBackdrop) return;
+    if (!this.needsRender && !this.isAnimatedFilter && !animatedOverlay && !hasShaderPlanes && !animatedBackdrop && !animatedVideo) return;
     this.needsRender = false;
 
     const elapsed = (performance.now() - this.startTime) / 1000;
