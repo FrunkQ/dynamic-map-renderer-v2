@@ -7,6 +7,7 @@ import type { OverlayKind, FogPolygon } from '../types.ts';
 import { offsetPolyline } from '../mapfx/polylineOffset.ts';
 import { subtractFromAll, cleanRibbonToBlobs } from '../mapfx/polygonOps.ts';
 import { floodFillToPolygon } from '../mapfx/floodFill.ts';
+import { attachSliderReadout } from '../utils/sliderReadout.ts';
 import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
@@ -2622,6 +2623,17 @@ export class GMApp {
     brushRadiusInput?.addEventListener('input', () => {
       this.fogEditor.setBrushSettings({ radius: parseFloat(brushRadiusInput.value) });
     });
+    // Live numeric readouts for the three HTML-defined sliders. Each
+    // gets a tabular-numeric span to its right via the shared helper.
+    const _attach = (id: string) => {
+      const slider = document.getElementById(id) as HTMLInputElement | null;
+      if (!slider) return;
+      const readout = attachSliderReadout(slider);
+      if (readout) slider.parentElement?.appendChild(readout);
+    };
+    _attach('fog-brush-radius');
+    _attach('fog-edge-fade');
+    _attach('fog-fill-tolerance');
     document.querySelector('#fog-brush-clear')?.addEventListener('click', async () => {
       // Clear all polygons of the active kind only. Lets the GM wipe
       // their current fire / fog / smoke layer without nuking the
@@ -2954,6 +2966,8 @@ export class GMApp {
     });
     row.appendChild(labelEl);
     row.appendChild(slider);
+    const readout = attachSliderReadout(slider);
+    if (readout) row.appendChild(readout);
     return row;
   }
 
