@@ -123,6 +123,26 @@ export class StateManager {
     this.setFog(next);
   }
 
+  /** v2.12 — morph a polygon's kind in place. Lets the GM repurpose a
+   *  drawn shape (e.g. promote a FoW patch to Coloured Flames, or
+   *  reskin a fire pool as fog). Drops the polygon's `color` and
+   *  `shaderParams` overrides so the renderer falls back to the new
+   *  kind's defaults / draft — the GM re-tints + re-tunes from there.
+   *  No-op if the polygon id isn't found or already on this kind. */
+  setPolygonKind(polyId: string, kind: import('../types.ts').OverlayKind): void {
+    const fog = this.state.fog;
+    let touched = false;
+    const polygons = fog.polygons.map((p) => {
+      if (p.id !== polyId) return p;
+      if (p.kind === kind) return p;
+      touched = true;
+      const { color: _color, shaderParams: _params, ...rest } = p;
+      return { ...rest, kind };
+    });
+    if (!touched) return;
+    this.setFog({ ...fog, polygons });
+  }
+
   /** v2.12 — change a polygon's colour. No-op if the polygon id isn't
    *  found. Goes through setFog so the change broadcasts on the
    *  fog_update path. */

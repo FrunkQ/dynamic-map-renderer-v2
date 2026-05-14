@@ -2624,12 +2624,20 @@ export class GMApp {
       this._rebuildShaderParamsPanel();
       this.fogEditor.setActiveKind(this.activeOverlayKind);
       kindSelect.addEventListener('change', () => {
-        this.activeOverlayKind = kindSelect.value as OverlayKind;
+        const newKind = kindSelect.value as OverlayKind;
+        this.activeOverlayKind = newKind;
+        // If a polygon is selected, morph its kind in place so the GM
+        // can repurpose a drawn shape via the dropdown ("this FoW patch
+        // is actually flames", "this fire pool should be cool-looking
+        // fog"). The polygon's colour + shaderParams reset to the new
+        // kind's defaults so the user re-tints + re-tunes from there.
+        const selectedId = this.fogEditor.getSelectedId();
+        if (selectedId) this.state.setPolygonKind(selectedId, newKind);
         this._applyActiveKindToBrush();
         this._applyKindToColourSwatch();
         this._rebuildShaderParamsPanel();
-        this.fogEditor.setActiveKind(this.activeOverlayKind);
-        this.fogEditor.setColor(overlayKind(this.activeOverlayKind).defaultColor);
+        this.fogEditor.setActiveKind(newKind);
+        this.fogEditor.setColor(overlayKind(newKind).defaultColor);
       });
     }
 
