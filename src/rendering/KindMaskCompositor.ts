@@ -153,44 +153,68 @@ export class PolygonMaskCompositor {
     const toX = (x: number) => ((x - bbox.x) / bbox.w) * width;
     const toY = (y: number) => ((y - bbox.y) / bbox.h) * height;
 
-    // Edge fade (v2.12) — apply a Gaussian blur to the mask alpha so
-    // the polygon's edges soften organically. Blur radius scales with
-    // the mask's shorter dimension so the fade looks similar across
-    // polygons of any size. 0 = hard edge (existing behaviour),
-    // 1 = ~15% of mask shorter side blurred. Fades inward from the
-    // original polygon outline because the canvas is sized to the
-    // bbox exactly (no padding) -- visually reads as a soft edge.
+    // Helper — lay down the polygon's path (outer ring + holes).
+    // Used once when there's no fade, twice when fading (once for
+    // the blurred fill, once for the destination-in clip).
+    const layPath = () => {
+      ctx.beginPath();
+      const v0 = poly.vertices[0]!;
+      ctx.moveTo(toX(v0.x), toY(v0.y));
+      for (let i = 1; i < poly.vertices.length; i++) {
+        const v = poly.vertices[i]!;
+        ctx.lineTo(toX(v.x), toY(v.y));
+      }
+      ctx.closePath();
+      if (poly.holes) {
+        for (const hole of poly.holes) {
+          if (hole.length < 3) continue;
+          const h0 = hole[0]!;
+          ctx.moveTo(toX(h0.x), toY(h0.y));
+          for (let i = 1; i < hole.length; i++) {
+            const h = hole[i]!;
+            ctx.lineTo(toX(h.x), toY(h.y));
+          }
+          ctx.closePath();
+        }
+      }
+    };
+
     const fade = Math.max(0, Math.min(1, poly.edgeFade ?? 0));
+    ctx.fillStyle = '#ffffff';
+
     if (fade > 0) {
+      // Edge fade (v2.12) — two-pass to keep the shader's effect
+      // clipped to the original polygon shape:
+      //
+      //   Pass 1: blurred fill. The blur extends outward AND inward
+      //     from the original outline, producing a halo that
+      //     reaches into the empty corners of the bbox.
+      //
+      //   Pass 2: destination-in clip with the hard polygon path.
+      //     Zeros out the outward halo while keeping the blurred
+      //     alpha inside the polygon (so the interior softens
+      //     inward as intended).
+      //
+      // Without pass 2 the shader-driven kinds (river, ocean,
+      // starfield, etc.) sample alpha > 0 in the bbox-corner halo
+      // and render their effect there — the user-reported bug
+      // "widens to a poly bounding box".
       const blurPx = fade * Math.min(width, height) * 0.15;
       ctx.filter = `blur(${blurPx}px)`;
-    } else {
+      layPath();
+      ctx.fill('evenodd');
       ctx.filter = 'none';
+      ctx.globalCompositeOperation = 'destination-in';
+      layPath();
+      ctx.fill('evenodd');
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
+      // No fade — straight hard polygon. Single fill pass.
+      ctx.filter = 'none';
+      layPath();
+      ctx.fill('evenodd');
     }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    const v0 = poly.vertices[0]!;
-    ctx.moveTo(toX(v0.x), toY(v0.y));
-    for (let i = 1; i < poly.vertices.length; i++) {
-      const v = poly.vertices[i]!;
-      ctx.lineTo(toX(v.x), toY(v.y));
-    }
-    ctx.closePath();
-    if (poly.holes) {
-      for (const hole of poly.holes) {
-        if (hole.length < 3) continue;
-        const h0 = hole[0]!;
-        ctx.moveTo(toX(h0.x), toY(h0.y));
-        for (let i = 1; i < hole.length; i++) {
-          const h = hole[i]!;
-          ctx.lineTo(toX(h.x), toY(h.y));
-        }
-        ctx.closePath();
-      }
-    }
-    ctx.fill('evenodd');
-    ctx.filter = 'none';
     entry.texture.needsUpdate = true;
   }
 }
