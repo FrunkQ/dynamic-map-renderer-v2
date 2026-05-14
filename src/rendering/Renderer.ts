@@ -258,6 +258,10 @@ export class Renderer {
         this.fogCompositor.dispose();
         this.fogCompositor = new FogCompositor(1024, 1024);
         this.fogCompositor.redraw(this.lastFogState);
+        // v2.12/M2 — the fresh compositor has an empty brush canvas. If the
+        // incoming fog carries a brush PNG, kick the async decode so the
+        // brush layer restores once the bitmap lands.
+        void this._applyBrushSnapshot(this.lastFogState.brush);
         this.mapFXCompositor.dispose();
         this.mapFXCompositor = new MapFXCompositor(1024, 1024);
 
