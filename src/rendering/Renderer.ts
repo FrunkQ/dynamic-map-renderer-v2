@@ -387,6 +387,7 @@ export class Renderer {
         const baseUniforms: Record<string, { value: unknown }> = {
           uMask:    { value: maskEntry.texture },
           uNoise:   { value: shader.textures['uNoise'] ?? null },
+          uBed:     { value: shader.textures['uBed']   ?? null },
           uColor:   { value: new THREE.Color(k.allowColor && poly.color ? poly.color : k.defaultColor) },
           uAspect:  { value: planeW / planeH },
           time:     { value: 0 },

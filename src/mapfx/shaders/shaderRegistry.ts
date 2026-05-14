@@ -50,12 +50,15 @@ export function loadKindShader(shaderId: string): KindShader | null {
   if (!vertex || !fragment) return null;
 
   // Find any image assets in the same folder and bind them by uniform
-  // name. For now we map a `noise.*` file to `uNoise`.
+  // name. Filename-prefix convention:
+  //   • noise.*  →  uNoise   (surface displacement / hashing source)
+  //   • bed.*    →  uBed     (refraction-bed / second texture channel)
   const textures: Record<string, THREE.Texture> = {};
   for (const [key, url] of Object.entries(textureGlobs)) {
     if (!key.startsWith(`./${shaderId}/`)) continue;
     const file = key.slice(`./${shaderId}/`.length).toLowerCase();
     if (file.startsWith('noise')) textures['uNoise'] = _loadTexture(url);
+    else if (file.startsWith('bed')) textures['uBed'] = _loadTexture(url);
   }
   // Detect whether the shader wants the underlying map texture passed
   // in. Renderer wires uMap + uMapUv per-plane when this is true.
