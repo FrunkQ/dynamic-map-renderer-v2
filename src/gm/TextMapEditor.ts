@@ -121,6 +121,13 @@ export class TextMapEditor {
   private animationNameEl:  HTMLElement | null = null;
   private elementNodes   = new Map<string, HTMLElement>();
   private selectedId:    string | null = null;
+  /** v2.12 — last font + colour the GM picked on ANY text element
+   *  this session. New text elements inherit these (instead of the
+   *  page-level defaults) so the GM doesn't have to re-pick on
+   *  every new box. Reset when the editor closes; not persisted to
+   *  the bundle. */
+  private _lastFontChosen:  string | null = null;
+  private _lastColorChosen: string | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private dragState: DragState | null = null;
   private libraryFonts: string[] = [];
@@ -1065,6 +1072,7 @@ export class TextMapEditor {
     colour.value = el.color ?? this.cfg.textColor;
     colour.addEventListener('input', () => {
       el.color = colour.value;
+      this._lastColorChosen = colour.value;
       const node = this.elementNodes.get(el.id);
       const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
       if (body) this._applyTextStyle(body, el);
@@ -1110,12 +1118,50 @@ export class TextMapEditor {
     }
     fontSel.addEventListener('change', () => {
       el.fontFamily = fontSel.value;
+      this._lastFontChosen = fontSel.value;
       fontSel.style.fontFamily = `'${fontSel.value}', sans-serif`;
       const node = this.elementNodes.get(el.id);
       const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
       if (body) this._applyTextStyle(body, el);
     });
     tb.appendChild(fontSel);
+
+    // Bold / Italic / Underline buttons. The body is contentEditable
+    // so CTRL-B / CTRL-I / CTRL-U already work via the browser; these
+    // buttons are for discoverability and mouse-only workflows. Each
+    // calls execCommand on the focused selection — if no selection,
+    // toggles the typing state so the next characters typed get the
+    // formatting.
+    tb.appendChild(this._toolbarLabel('Style'));
+    const styleWrap = document.createElement('div');
+    styleWrap.className = 'txt-map-align-group';
+    const styleBtn = (label: string, cmd: 'bold' | 'italic' | 'underline', italic = false): HTMLButtonElement => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn--ghost btn--sm';
+      btn.textContent = label;
+      btn.title = `${cmd.charAt(0).toUpperCase()}${cmd.slice(1)} (Ctrl+${label.toUpperCase()})`;
+      if (italic) btn.style.fontStyle = 'italic';
+      if (cmd === 'bold')      btn.style.fontWeight    = '700';
+      if (cmd === 'underline') btn.style.textDecoration = 'underline';
+      btn.addEventListener('mousedown', (e) => { e.preventDefault(); }); // keep contentEditable focused
+      btn.addEventListener('click', () => {
+        // Make sure the target body is focused (so execCommand acts
+        // on the right contentEditable). The GM may have clicked the
+        // button without first clicking into the body.
+        const node = this.elementNodes.get(el.id);
+        const body = node?.querySelector<HTMLElement>('.txt-map-el-body');
+        if (body && document.activeElement !== body) body.focus();
+        document.execCommand(cmd);
+        // Persist the resulting HTML so it survives a reload.
+        if (body) this._onTextInput(el.id, body);
+      });
+      return btn;
+    };
+    styleWrap.appendChild(styleBtn('B', 'bold'));
+    styleWrap.appendChild(styleBtn('I', 'italic', true));
+    styleWrap.appendChild(styleBtn('U', 'underline'));
+    tb.appendChild(styleWrap);
 
     // Alignment
     tb.appendChild(this._toolbarLabel('Align'));
@@ -1187,6 +1233,12 @@ export class TextMapEditor {
 
   private _addNewText(): void {
     const el = newTextElement();
+    // Inherit the last font + colour the GM picked on any text
+    // element this session, so adding several boxes in a row doesn't
+    // require re-picking on each one. Page-level defaults still apply
+    // when nothing's been chosen yet.
+    if (this._lastFontChosen)  el.fontFamily = this._lastFontChosen;
+    if (this._lastColorChosen) el.color      = this._lastColorChosen;
     this.elements.push(el);
     const node = this._mountElement(el);
     this._select(el.id);
