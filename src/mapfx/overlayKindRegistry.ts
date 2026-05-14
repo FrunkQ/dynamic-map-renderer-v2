@@ -20,6 +20,16 @@
 
 import type { OverlayKind } from '../types.ts';
 
+/**
+ * Default edge-fade value applied to newly-painted polygons (and shown
+ * by the slider when nothing else gives a value). 0.10 is the sweet
+ * spot Alex tuned by eye -- removes pixelation on every kind without
+ * dissolving the polygon shape. The slider's range narrows around it
+ * so the GM tunes within a useful band rather than fighting heavy
+ * fade.
+ */
+export const DEFAULT_EDGE_FADE = 0.10;
+
 export type BlendMode =
   | 'normal'   // standard alpha blend
   | 'screen'   // additive — for light / fire

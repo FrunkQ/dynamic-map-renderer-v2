@@ -132,10 +132,13 @@
 
         <!-- Edge Fade — universal, applies to fog + every MapFX kind.
              Per-polygon value baked into the alpha mask so the shape's
-             outline softens organically. -->
+             outline softens organically. Range narrowed to 0..0.20
+             (5 step positions) with default 0.10 at the midpoint --
+             that value removes pixelation across all kinds and is the
+             realistic sweet spot the GM will tune around. -->
         <label class="fog-brush-row fog-row--edge">
           <span>Edge Fade</span>
-          <input id="fog-edge-fade" type="range" min="0" max="1" step="0.05" value="0" title="Soft fade of the polygon edge — 0 hard, 1 maximally blurred" />
+          <input id="fog-edge-fade" type="range" min="0" max="0.20" step="0.05" value="0.10" title="Soft fade of the polygon edge — 0 hard, 0.20 maximally blurred. Default 0.10 removes pixelation cleanly." />
         </label>
 
         <!-- Drawing Mode — sticky toggle, persists in localStorage. -->

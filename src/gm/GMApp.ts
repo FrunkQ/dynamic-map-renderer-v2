@@ -1,7 +1,7 @@
 import { StateManager } from './StateManager.ts';
 import { MapManager } from './MapManager.ts';
 import { FogEditor } from './FogEditor.ts';
-import { OVERLAY_KIND_REGISTRY, OVERLAY_KIND_ORDER, overlayKind } from '../mapfx/overlayKindRegistry.ts';
+import { OVERLAY_KIND_REGISTRY, OVERLAY_KIND_ORDER, overlayKind, DEFAULT_EDGE_FADE } from '../mapfx/overlayKindRegistry.ts';
 import type { OverlayKind, FogPolygon } from '../types.ts';
 import { offsetPolyline } from '../mapfx/polylineOffset.ts';
 import { subtractFromAll, cleanRibbonToBlobs } from '../mapfx/polygonOps.ts';
@@ -2728,7 +2728,11 @@ export class GMApp {
         : ((k.allowColor && swatch?.value) ? swatch.value : k.defaultColor);
       const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
       const params = inherit ? inherit.shaderParams : draft;
-      const draftEdgeFade = typeof draft.edgeFade === 'number' ? draft.edgeFade : 0;
+      // Edge-fade fall-through: explicit poly value → inheritance →
+      // kind draft → DEFAULT_EDGE_FADE (the calibrated sweet spot).
+      // typeof check is critical so an explicit 0 (GM wants hard
+      // edge) doesn't get bumped up to the default.
+      const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
       const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
       const poly: FogPolygon = {
         id:        generateId(),
@@ -2881,14 +2885,18 @@ export class GMApp {
     const selectedPoly = selectedId ? fog.polygons.find((p) => p.id === selectedId) ?? null : null;
     const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
     const inherit = !editingPoly ? this._pendingPaintInherit : null;
+    // Fallback when nothing's been tuned: DEFAULT_EDGE_FADE. Pre-feature
+    // polygons (no edgeFade field at all) still render as hard edges
+    // because the renderer's own fallback is 0; the slider just shows
+    // the default so dragging away from it is intuitive.
     let value: number;
     if (editingPoly) {
-      value = typeof editingPoly.edgeFade === 'number' ? editingPoly.edgeFade : 0;
+      value = typeof editingPoly.edgeFade === 'number' ? editingPoly.edgeFade : DEFAULT_EDGE_FADE;
     } else if (inherit) {
       value = inherit.edgeFade;
     } else {
       const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
-      value = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : 0;
+      value = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
     }
     slider.value = String(value);
   }
@@ -3038,7 +3046,9 @@ export class GMApp {
     const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
     const params = inherit ? inherit.shaderParams : draft;
     const inheritedColor = inherit?.color;
-    const draftEdgeFade = typeof draft.edgeFade === 'number' ? draft.edgeFade : 0;
+    // Same fall-through as the polygon-mode commit: poly value (no
+    // selection here) → inheritance → kind draft → DEFAULT_EDGE_FADE.
+    const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
     const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
     const paramsCopy = Object.keys(params).length > 0 ? { shaderParams: { ...params } } : {};
     const edgeFadeCopy = edgeFade > 0 ? { edgeFade } : {};
