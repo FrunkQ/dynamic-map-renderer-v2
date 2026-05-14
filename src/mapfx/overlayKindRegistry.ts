@@ -58,6 +58,14 @@ export interface ShaderParamDef {
   max:     number;
   step:    number;
   default: number;
+  /**
+   * UI rendering hint. 'slider' (default) shows a continuous range
+   * input; 'toggle' shows a styled on/off switch. Toggle params
+   * still carry numeric uniform values to the shader (0 or 1) so
+   * GLSL code reads them as plain floats. min/max/step are ignored
+   * for toggles; default 0 = OFF, 1 = ON.
+   */
+  type?:   'slider' | 'toggle';
 }
 
 export interface OverlayKindEntry {
@@ -216,13 +224,12 @@ const RIVER_SHADER_PARAMS: ShaderParamDef[] = [
   // both ends of the spectrum.
   { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0,            step: 0.05, default: 1.0 },
   { id: 'direction', label: 'Direction', min: 0.0,  max: 6.2831853,      step: 0.087266, default: 0.0 },
-  // Slider-as-toggle (step 1, range 0..1). 0 = generic gem-pebble
-  // bed (loaded from bed.jpg); 1 = sample the actual map texture
-  // under the polygon, so the GM's painted river bed shimmers
-  // beneath the surface. Default off — most maps don't have a
-  // painted bed to show off, and the texture-bed look is the
-  // tested default.
-  { id: 'refractBackground', label: 'Refract Background', min: 0.0, max: 1.0, step: 1.0, default: 0.0 },
+  // Proper toggle. OFF = generic gem-pebble bed (loaded from
+  // bed.jpg). ON = sample the actual map texture under the polygon,
+  // so the GM's painted river bed shimmers beneath the surface.
+  // Default OFF -- most maps don't have a painted bed to show
+  // off, and the texture-bed look is the tested default.
+  { id: 'refractBackground', label: 'Refract Map Background', min: 0.0, max: 1.0, step: 1.0, default: 0.0, type: 'toggle' },
 ];
 
 // Light shader params (in-house Mappadux shader).

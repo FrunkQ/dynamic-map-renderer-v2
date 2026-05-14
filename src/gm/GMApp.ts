@@ -2830,7 +2830,7 @@ export class GMApp {
         const v = draft[p.id];
         current = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
       }
-      container.appendChild(this._buildShaderSliderRow(p, k.label, current, (v) => {
+      const onChange = (v: number) => {
         // Always update the kind draft so subsequent new polygons
         // inherit the latest value. When a polygon is selected, ALSO
         // patch that polygon's own shaderParams in a single state
@@ -2840,8 +2840,43 @@ export class GMApp {
         this.state.setShaderParams(this.activeOverlayKind, { [p.id]: v });
         if (editingPoly) this.state.setPolygonShaderParams(editingPoly.id, { [p.id]: v });
         if (this._pendingPaintInherit) this._pendingPaintInherit.shaderParams[p.id] = v;
-      }));
+      };
+      const row = (p.type === 'toggle')
+        ? this._buildShaderToggleRow(p, k.label, current, onChange)
+        : this._buildShaderSliderRow(p, k.label, current, onChange);
+      container.appendChild(row);
     }
+  }
+
+  /** Helper: build one labelled toggle row for a binary shader param.
+   *  Matches the FilterPanel's `.toggle-switch` styling. onChange
+   *  fires with 1 (on) or 0 (off). */
+  private _buildShaderToggleRow(
+    p: import('../mapfx/overlayKindRegistry.ts').ShaderParamDef,
+    kindLabel: string,
+    initial: number,
+    onChange: (v: number) => void,
+  ): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'fog-brush-row fog-brush-row--toggle';
+    const labelEl = document.createElement('span');
+    labelEl.textContent = p.label;
+    const switchLabel = document.createElement('label');
+    switchLabel.className = 'toggle-switch';
+    switchLabel.title = `${p.label} — ${kindLabel}`;
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = initial > 0.5;
+    const knob = document.createElement('span');
+    knob.className = 'toggle-slider';
+    switchLabel.appendChild(input);
+    switchLabel.appendChild(knob);
+    input.addEventListener('change', () => {
+      onChange(input.checked ? 1 : 0);
+    });
+    row.appendChild(labelEl);
+    row.appendChild(switchLabel);
+    return row;
   }
 
   /** Helper: build one labelled slider row for a shader param. The
