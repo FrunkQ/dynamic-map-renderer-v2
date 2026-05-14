@@ -2,6 +2,7 @@ import { StateManager } from './StateManager.ts';
 import { MapManager } from './MapManager.ts';
 import { FogEditor } from './FogEditor.ts';
 import { OVERLAY_KIND_REGISTRY, OVERLAY_KIND_ORDER, overlayKind, DEFAULT_EDGE_FADE } from '../mapfx/overlayKindRegistry.ts';
+import { confirmDialog } from './confirmDialog.ts';
 import type { OverlayKind, FogPolygon } from '../types.ts';
 import { offsetPolyline } from '../mapfx/polylineOffset.ts';
 import { subtractFromAll, cleanRibbonToBlobs } from '../mapfx/polygonOps.ts';
@@ -2593,21 +2594,22 @@ export class GMApp {
     brushRadiusInput?.addEventListener('input', () => {
       this.fogEditor.setBrushSettings({ radius: parseFloat(brushRadiusInput.value) });
     });
-    document.querySelector('#fog-brush-clear')?.addEventListener('click', () => {
+    document.querySelector('#fog-brush-clear')?.addEventListener('click', async () => {
       // Clear all polygons of the active kind only. Lets the GM wipe
       // their current fire / fog / smoke layer without nuking the
       // others. Destructive — confirm first, and name the kind +
-      // count so the GM knows exactly what they're about to delete
-      // (it's easy to leave the panel on a different kind than the
-      // one you think you're clearing).
+      // count so the GM knows exactly what they're about to delete.
       const fog = this.state.getState().fog;
       const k = overlayKind(this.activeOverlayKind);
       const targets = fog.polygons.filter((p) => p.kind === this.activeOverlayKind);
       if (targets.length === 0) return;
       const noun = targets.length === 1 ? 'polygon' : 'polygons';
-      const ok = window.confirm(
-        `Delete all ${targets.length} ${k.label} ${noun} on this map? This can't be undone.`
-      );
+      const ok = await confirmDialog({
+        title: `Delete all ${k.label} on this map?`,
+        body: `${targets.length} ${noun} will be removed. This can't be undone.`,
+        confirmLabel: 'Delete',
+        confirmTone: 'danger',
+      });
       if (!ok) return;
       const kept = fog.polygons.filter((p) => p.kind !== this.activeOverlayKind);
       this.state.setFog({ polygons: kept });

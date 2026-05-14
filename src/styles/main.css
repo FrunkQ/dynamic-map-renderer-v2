@@ -3453,6 +3453,33 @@ option.select-option--add {
 }
 .modal-close:hover { color: var(--text-primary); background: var(--bg-hover); }
 
+/* v2.12 — styled confirm dialog (replaces window.confirm() for
+   destructive actions). */
+.confirm-dialog {
+  width: 420px;
+}
+.confirm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.confirm-body {
+  padding: 16px 18px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.confirm-body p { margin: 0; }
+.confirm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--border);
+}
+
 .modal-tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
