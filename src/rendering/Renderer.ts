@@ -4,10 +4,13 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FogCompositor } from './FogCompositor.ts';
+import { KindMaskCompositor } from './KindMaskCompositor.ts';
 import { buildShaderObject, updateUniforms } from './ShaderMaterial.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
+import { overlayKind } from '../mapfx/overlayKindRegistry.ts';
+import { loadKindShader } from '../mapfx/shaders/shaderRegistry.ts';
 import type { FilterDefinition } from '../filters/schema.ts';
-import type { FilterParamValues, FilterState, FogState, ViewState } from '../types.ts';
+import type { FilterParamValues, FilterState, FogState, ViewState, OverlayKind } from '../types.ts';
 
 /**
  * Renderer
@@ -54,6 +57,11 @@ export class Renderer {
   private fogMesh:      THREE.Mesh | null = null;
   private mapTexture:   THREE.Texture | null = null;
   private fogCompositor: FogCompositor;
+  /** v2.12 — per-kind alpha masks for shader-driven overlay kinds. */
+  private kindMaskCompositor: KindMaskCompositor;
+  /** v2.12 — Three.js plane + ShaderMaterial per shader-driven kind that
+   *  has any polygons painted. Created lazily; disposed on map switch. */
+  private shaderPlanes: Map<OverlayKind, { mesh: THREE.Mesh; material: THREE.ShaderMaterial }> = new Map();
 
   // Marker layer split as of v2.10.29:
   //   - Motion overlay (return blobs, scan rings) → single shared OffscreenCanvas
@@ -138,6 +146,7 @@ export class Renderer {
     this.camera.position.set(0, 0, 10);
 
     this.fogCompositor = new FogCompositor(1024, 1024);
+    this.kindMaskCompositor = new KindMaskCompositor(1024);
 
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
@@ -254,6 +263,12 @@ export class Renderer {
         this.fogCompositor.dispose();
         this.fogCompositor = new FogCompositor(1024, 1024);
         this.fogCompositor.redraw(this.lastFogState);
+        // Tear down per-kind shader planes + masks for the previous map.
+        this._disposeShaderPlanes();
+        this.kindMaskCompositor.dispose();
+        this.kindMaskCompositor = new KindMaskCompositor(1024);
+        this.kindMaskCompositor.redraw(this.lastFogState.polygons);
+        this._syncShaderPlanes();
 
         this.rebuildLayerMeshes();
         this.refreshCamera();
@@ -270,7 +285,71 @@ export class Renderer {
   updateFog(fog: FogState): void {
     this.lastFogState = fog;
     this.fogCompositor.redraw(fog);
+    // Per-kind shader-driven kinds need their alpha masks rebuilt + the
+    // matching Three.js planes spun up / torn down based on which kinds
+    // are present.
+    this.kindMaskCompositor.redraw(fog.polygons);
+    this._syncShaderPlanes();
     this.needsRender = true;
+  }
+
+  /** Ensure there is exactly one shader plane per kind that currently has
+   *  any polygons painted. Spins up new planes lazily; tears down planes
+   *  for kinds that no longer have polygons. */
+  private _syncShaderPlanes(): void {
+    const active = new Set(this.kindMaskCompositor.activeKinds());
+
+    // Drop planes for kinds that no longer have polygons.
+    for (const [kind, entry] of this.shaderPlanes) {
+      if (active.has(kind)) continue;
+      this.scene.remove(entry.mesh);
+      entry.mesh.geometry.dispose();
+      entry.material.dispose();
+      this.shaderPlanes.delete(kind);
+    }
+
+    // Spin up planes for newly-active kinds.
+    for (const kind of active) {
+      if (this.shaderPlanes.has(kind)) continue;
+      const k = overlayKind(kind);
+      if (!k.shader) continue;
+      const shader = loadKindShader(k.shader);
+      if (!shader) continue;
+      const maskTex = this.kindMaskCompositor.textureFor(kind);
+      if (!maskTex) continue;
+
+      const material = new THREE.ShaderMaterial({
+        vertexShader:   shader.vertex,
+        fragmentShader: shader.fragment,
+        transparent:    true,
+        depthWrite:     false,
+        uniforms: {
+          uMask:      { value: maskTex },
+          uNoise:     { value: shader.textures['uNoise'] ?? null },
+          resolution: { value: this.resolution },
+          time:       { value: 0 },
+        },
+      });
+      const geo = new THREE.PlaneGeometry(this.aspectRatio, 1);
+      const mesh = new THREE.Mesh(geo, material);
+      // Z between map (0) and fog (0.01). Each kind gets its own slot in
+      // [0.002, 0.008] keyed by its z so kinds stack predictably with
+      // each other and with the fog plane on top.
+      const slot = 0.002 + Math.min(0.006, k.z * 0.00005);
+      mesh.position.z = slot;
+      this.scene.add(mesh);
+      this.shaderPlanes.set(kind, { mesh, material });
+    }
+  }
+
+  /** Tear down every shader plane (map switch / dispose). */
+  private _disposeShaderPlanes(): void {
+    for (const entry of this.shaderPlanes.values()) {
+      this.scene.remove(entry.mesh);
+      entry.mesh.geometry.dispose();
+      entry.material.dispose();
+    }
+    this.shaderPlanes.clear();
   }
 
   /**
@@ -281,6 +360,8 @@ export class Renderer {
   clearFog(): void {
     this.lastFogState = { polygons: [] };
     this.fogCompositor.redraw({ polygons: [] });
+    this.kindMaskCompositor.redraw([]);
+    this._syncShaderPlanes();
     this.needsRender = true;
   }
 
@@ -659,6 +740,8 @@ export class Renderer {
   dispose(): void {
     this.stop();
     this.fogCompositor.dispose();
+    this._disposeShaderPlanes();
+    this.kindMaskCompositor.dispose();
     this.mapTexture?.dispose();
     this.markerTex?.dispose();
     this.mapBorderLine?.geometry.dispose();
@@ -676,15 +759,21 @@ export class Renderer {
     // Cheap because the compositor just re-runs polygon path ops at a
     // modulated alpha; no PNG decoding involved.
     const animatedOverlay = this.fogCompositor.hasAnimatedPolygons();
+    const hasShaderPlanes = this.shaderPlanes.size > 0;
 
     // Skip rendering if nothing has changed and there's no animation.
-    if (!this.needsRender && !this.isAnimatedFilter && !animatedOverlay) return;
+    if (!this.needsRender && !this.isAnimatedFilter && !animatedOverlay && !hasShaderPlanes) return;
     this.needsRender = false;
 
     const elapsed = (performance.now() - this.startTime) / 1000;
 
     if (animatedOverlay) {
       this.fogCompositor.tickAnimation(elapsed);
+    }
+
+    // Tick each shader plane's `time` uniform.
+    for (const entry of this.shaderPlanes.values()) {
+      if (entry.material.uniforms['time']) entry.material.uniforms['time']!.value = elapsed;
     }
 
     // Tick time uniform only for animated filters (no-op for static ones)

@@ -49,6 +49,18 @@ export interface OverlayKindEntry {
   /** Optional render z-bias so kinds stack predictably. Higher = renders on
    *  top of lower. Fog is the highest so it covers MapFX effects beneath. */
   z:                 number;
+  /**
+   * v2.12 — Custom GLSL shader for this kind on the player view.
+   * Undefined → FogCompositor renders the polygons as flat colour fills
+   * (current behaviour for fog/blood/shadow/poison/etc.). Set → a
+   * dedicated Three.js plane with the named shader handles this kind
+   * instead, receiving an alpha mask of the polygon shape + a `time`
+   * uniform. Shader files live in src/mapfx/shaders/<id>/.
+   *
+   * Kinds left undefined stay on the flat-fill path; we'll opt-in one at
+   * a time as user picks shaders.
+   */
+  shader?:           string;
 }
 
 const SVG_FOG =
@@ -125,7 +137,7 @@ const SVG_FEAR =
 //     overrides aren't honoured; the swatch is greyed out in the panel.
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   fog:      { id: 'fog',      label: 'Fog of War',    iconSvg: SVG_FOG,       defaultColor: '#000000', defaultRadius: 25, blend: 'normal',   animated: false, selectByInterior: true,  allowColor: true,  z: 100 },
-  fire:     { id: 'fire',     label: 'Fire',          iconSvg: SVG_FLAME,     defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: false, z: 10  },
+  fire:     { id: 'fire',     label: 'Fire',          iconSvg: SVG_FLAME,     defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen',   animated: true,  selectByInterior: false, allowColor: false, z: 10, shader: 'fire' },
   cold:     { id: 'cold',     label: 'Ice / Cold',    iconSvg: SVG_SNOWFLAKE, defaultColor: '#9fd6ff', defaultRadius: 30, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 10  },
   smoke:    { id: 'smoke',    label: 'Smoke',         iconSvg: SVG_SMOKE,     defaultColor: '#9aa3ad', defaultRadius: 50, blend: 'normal',   animated: true,  selectByInterior: false, allowColor: true,  z: 20  },
   light:    { id: 'light',    label: 'Magical Light', iconSvg: SVG_LIGHT,     defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen',   animated: false, selectByInterior: false, allowColor: false, z: 5   },

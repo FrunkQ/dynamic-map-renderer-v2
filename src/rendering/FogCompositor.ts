@@ -60,6 +60,10 @@ export class FogCompositor {
     for (const poly of sorted) {
       if (poly.vertices.length < 3) continue;
       const kind = overlayKind(poly.kind);
+      // Shader-driven kinds render via their own Three.js plane + custom
+      // GLSL (see KindMaskCompositor / Renderer's shader planes). Skip
+      // them in the flat-fill compositor so the two paths don't double up.
+      if (kind.shader) continue;
 
       // Per-kind blend mode.
       this.ctx.save();

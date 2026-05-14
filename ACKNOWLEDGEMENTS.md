@@ -83,6 +83,15 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 | Watercolour | Watercolor (ltyGRV) | https://www.shadertoy.com/view/ltyGRV |
 | Oil Painting | Oil Painting (Mlcczf) | https://www.shadertoy.com/view/Mlcczf |
 
+## MapFX Shaders
+
+The MapFX *Fire* effect's shader is adapted from **"Promethean" by nimitz (@stormoid)**,
+used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported](https://creativecommons.org/licenses/by-nc-sa/3.0/) licence.
+
+| Effect | Name | Source |
+|--------|------|--------|
+| Fire | Promethean (4tB3zV) | https://www.shadertoy.com/view/4tB3zV |
+
 Modifications made:
 - Translated from ShaderToy GLSL to Three.js EffectComposer / GLSL ES 1.00
 - Replaced `iChannel0` (video/image input) with `tDiffuse` (rendered scene texture)
