@@ -32,12 +32,19 @@ uniform vec3      uColor;
 uniform float     uIntensity;
 uniform float     uScale;
 uniform float     uSpeed;
+uniform float     uWaveHeight; // 0 = mirror calm, 1 = default, 2 = stormy
 
 varying vec2 vUv;
 
 #define DRAG_MULT 0.38
 #define WATER_DEPTH 1.0
-#define ITERATIONS_NORMAL 16
+// Octave count for the wave sum. Each iteration adds another wave
+// direction; higher counts hide the underlying directional regularity
+// at extreme zoom-out (uScale near 0.02). 20 is the trade-off between
+// "smooth, varied surface" and per-pixel cost (each normal calc runs
+// the wave sum 3 times). Original Shadertoy used 36 for a static
+// close-up; we don't need that much.
+#define ITERATIONS_NORMAL 20
 
 // Single wave sample + derivative at the given position along the
 // given direction at given frequency, time-shifted.
@@ -101,11 +108,15 @@ vec3 extra_cheap_atmosphere(vec3 raydir, vec3 sundir) {
   return bluesky2 * (1.0 + 1.0 * pow(1.0 - raydir.y, 3.0));
 }
 
-// Sun direction slowly arcs across the sky over time so reflection
-// glints drift. Same constants as the original — produces an
-// approximately east-to-west motion.
+// Sun direction — locked to a fixed midday angle. afl_ext's original
+// arced the sun across the sky over ~31 seconds via `sin(time * 0.2)`;
+// that was a nice flourish for a static demo but in a battlemap
+// context it makes the ocean appear to cycle through rough / calm
+// phases as the lighting changes. Locking the sun keeps the ambience
+// constant — wave roughness now comes from uWaveHeight alone, fully
+// under GM control.
 vec3 getSunDirection() {
-  return normalize(vec3(-0.0773502691896258, 0.5 + sin(time * 0.2 + 2.6) * 0.45, 0.5773502691896258));
+  return normalize(vec3(-0.08, 0.62, 0.58));
 }
 
 vec3 getAtmosphere(vec3 dir) {
@@ -154,7 +165,12 @@ void main() {
   //     proper deep-ocean on a small or medium polygon).
   vec2 pos = (vUv - 0.5) * (8.0 / max(uScale, 0.01));
 
-  vec3 N = normal(pos, 0.01, WATER_DEPTH);
+  // Wave height multiplies the depth-scale used inside the normal
+  // calculation — uWaveHeight = 0 yields a perfectly flat surface
+  // (mirror reflection), 1 is the default look, 2 exaggerates wave
+  // peaks for a stormy sea. Independent of uScale so the GM can keep
+  // wave size fixed while changing how rough the ocean feels.
+  vec3 N = normal(pos, 0.01, WATER_DEPTH * uWaveHeight);
 
   // Top-down view with a slight tilt so sun glints actually catch on
   // wave crests. A perfectly straight-down ray would give a fixed

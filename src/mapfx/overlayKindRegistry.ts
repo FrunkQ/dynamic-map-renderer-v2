@@ -205,6 +205,11 @@ const OCEAN_SHADER_PARAMS: ShaderParamDef[] = [
   // gives lazy-rollers on small polygons.
   { id: 'scale',     label: 'Scale',     min: 0.02, max: 4.0, step: 0.01, default: 1.0 },
   { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0, step: 0.05, default: 1.0 },
+  // uWaveHeight scales the surface displacement directly. Lets the GM
+  // pick "mirror calm" (0) through "stormy" (2) without the
+  // shader's old time-cycled sun making the surface appear to swell
+  // on its own.
+  { id: 'waveHeight', label: 'Wave Height', min: 0.0, max: 2.0, step: 0.05, default: 1.0 },
 ];
 
 const RIVER_SHADER_PARAMS: ShaderParamDef[] = [
