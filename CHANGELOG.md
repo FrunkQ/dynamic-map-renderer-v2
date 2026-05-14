@@ -1,5 +1,132 @@
 # Changelog
 
+## v2.12.0 — 2026-05-14
+
+### Immersion: unified overlay system + nine MapFX shaders
+
+v2.12 collapses Fog of War and the MapFX painting tools into one
+unified polygon system, then layers eight shader-driven effects on
+top of it. Every shape the GM paints is a polygon with a `kind` —
+fog and MapFX are interchangeable, so the GM can use flame as fog,
+swirl mist over a battlefield, drop a starfield over a sci-fi map,
+or open a magic portal mid-encounter. Paint with click-polygon or
+brush; commit with single-shot Paint / Erase actions.
+
+#### Nine overlay kinds
+
+All shader-driven kinds are GM-tintable, animated where appropriate,
+and self-contained except where noted:
+
+- **Fog of War** — the original, kept as just another kind in the
+  registry. Same polygon list, same draw tools, click priority
+  guaranteed (always wins overlap selection).
+- **Coloured Flames** — Promethean by nimitz, CC-BY-NC-SA. Per-poly
+  intensity + scale; GM tints the flames any colour from natural
+  orange to soulfire blue, green wisp, purple eldritch.
+- **River** — Pierco's "A river" fork, CC-BY-NC-SA. Per-poly
+  intensity, scale, speed, **direction** (compass radians, every
+  river bends differently). Refracted bed texture under the
+  shimmering surface.
+- **Ocean** — afl_ext, MIT. Procedural waves with per-poly
+  intensity, scale, speed, wave-height. Sun locked for stable
+  ambience; tint via uColor for blood seas / void oceans.
+- **Magical Light** — in-house. Soft radial glow + animated swirls
+  + twinkling particles, additive blend. Per-poly intensity, scale,
+  speed, swirls, particles. Tint chooses the light hue.
+- **Starfield** — Deadtotem's "StarField practice", CC-BY-NC-SA.
+  Eight parallax layers, per-poly intensity, scale, speed (up to
+  warp), **direction** (head-on approach → sideways → receding).
+- **Magic Portal** — Delincoter's "Magic Portal", CC-BY-NC-SA.
+  Continuous-open energy disc with event-horizon centre; per-poly
+  intensity, scale, speed; tint for any portal colour.
+- **Thundercloud** — mahalis's "thundercloud", CC BY-NC. Cool slate
+  body with random lightning flashes; per-poly intensity, scale,
+  speed, **lightning** (flash brightness; tint controls flash hue,
+  not body — keeps the storm-cloud look consistent).
+- **Smoke / Mist** — deusnovus's Smooth Fog Shader, CC-BY-NC-SA.
+  Two-FBM domain-warp drifting wisps; per-poly intensity, scale,
+  speed, **direction**.
+
+#### Per-polygon everything
+
+Every overlay property is per-polygon and persists through reloads:
+
+- **Colour** — selecting a polygon snaps the swatch to its colour;
+  edits update that polygon immediately. With no selection, the
+  swatch drives the "next new polygon" draft. The GM's last-tuned
+  values carry forward.
+- **Shader params** — same pattern. Selected polygon's sliders show
+  its values; tweaking updates that polygon; new polygons inherit
+  the kind's draft. River direction, ocean wave-height, light
+  swirls all behave the same way.
+- **Paint-another-like-this** — if Paint is clicked with a polygon
+  selected, the new polygon inherits the exemplar's colour and
+  shader params. Rows of identical campfires, a consistent river
+  flow, evenly-tuned fog patches — no re-tuning per shape.
+- **Morph kind via dropdown** — change the dropdown while a polygon
+  is selected and that polygon's kind morphs in place. "This FoW
+  patch is actually flames"; "this fire pool should be cool mist".
+  The shader plane recreates with the new kind's GLSL.
+
+#### Edge Fade — universal soft edges
+
+A single Edge Fade slider in the panel softens any polygon's outline
+organically, baked into the alpha mask at rasterise time. Slider
+range 0..0.20 with 0.10 default at the midpoint — the calibrated
+sweet spot that removes pixelation cleanly on every kind. Works for
+fog and every shader kind uniformly; zero per-frame cost.
+
+#### Click priority by dropdown order
+
+When polygons overlap, clicking selects by kind priority (fog first,
+then MapFX kinds in dropdown order, then most-recently created as
+tiebreaker). A fog patch under a fire pool can always be reached.
+The dropdown order doubles as the priority order — natural mental
+model.
+
+#### Editor UX
+
+- **Drawing Mode toggle** — Polygon or Brush, sticky across reloads
+  via localStorage (not bundle state).
+- **Brush size** in CSS pixels so zooming in gives finer detail
+  painting for free.
+- **Selection-only handles** — trashcan glyph at bottom-left of any
+  selected polygon (FogEditor + future polish sweep across editors).
+- **No more centre-of-poly selector icons** — interior clicks select
+  any kind, panel auto-opens to the picked polygon's kind, swatch
+  + sliders snap to its values.
+- **Hint as tooltip** — panel header carries the workflow hint on
+  hover; no permanent panel space taken.
+
+#### Generic self-sample infrastructure
+
+Any shader that declares `uniform sampler2D uMap` automatically
+receives the map texture + a per-plane `uMapUv` (the polygon's
+bbox in map-UV) so the shader can sample the rendered map
+underneath the polygon. Used as opt-in refraction-bed for future
+"river over the GM's painted river" mode (toggle ships in v2.12;
+default off).
+
+#### Persistence
+
+The migration in `storage/migrations.ts` preserves `holes`,
+`shaderParams`, and `edgeFade` through map reloads + bundle export
+/ import. Pre-v2.12 polygons gain `kind: 'fog'` automatically;
+polygons with removed kinds (dev placeholders) coerce to fog so
+existing shapes survive.
+
+#### Acknowledgements
+
+`ACKNOWLEDGEMENTS.md` now credits the Shadertoy creators behind
+every adapted shader (nimitz, Pierco, afl_ext, Deadtotem, Delincoter,
+deusnovus, mahalis) with their original Shadertoy URLs, licences,
+and sub-attributions for the noise / hash primitives they relied on
+(iq, David Hoskins). Each shader file's header also carries an
+"Adaptation notes" block describing what was changed for top-down
+battlemap use.
+
+---
+
 ## v2.11.0 — 2026-05-13
 
 ### Workspace pan/zoom, a rebuilt direct-manipulation UX, and tablet-as-screen
