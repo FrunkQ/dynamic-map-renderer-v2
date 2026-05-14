@@ -425,22 +425,25 @@ export class Renderer {
     this._pushShaderParamsToPlanes();
   }
 
-  /** Push per-kind shader-param values from the current fog state into
-   *  each active shader plane's uniforms. Each polygon's plane gets its
-   *  kind's current param set (one slider value applies to all polygons
-   *  of that kind, as designed). */
+  /** Push shader-param values from the current fog state into each
+   *  active shader plane's uniforms. Every param is per-polygon:
+   *  read poly.shaderParams[id], fall back to the param's registry
+   *  default. Kind-level FogState.shaderParams is the "draft" used by
+   *  the GM panel for new polygons; it doesn't reach the renderer. */
   private _pushShaderParamsToPlanes(): void {
-    const stateParams = this.lastFogState.shaderParams ?? {};
-    for (const entry of this.shaderPlanes.values()) {
+    const polyById = new Map<string, import('../types.ts').FogPolygon>();
+    for (const p of this.lastFogState.polygons) polyById.set(p.id, p);
+    for (const [polyId, entry] of this.shaderPlanes) {
       const k = overlayKind(entry.kind);
       const defs = k.shaderParams ?? [];
-      const values = stateParams[entry.kind] ?? {};
+      const poly = polyById.get(polyId);
+      const polyValues = poly?.shaderParams ?? {};
       for (const p of defs) {
         const uName = `u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`;
         const u = entry.material.uniforms[uName];
         if (!u) continue;
-        const v = values[p.id];
-        u.value = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
+        const raw = polyValues[p.id];
+        u.value = typeof raw === 'number' && Number.isFinite(raw) ? raw : p.default;
       }
     }
   }

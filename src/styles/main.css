@@ -1569,6 +1569,13 @@ option.select-option--add {
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
 }
+.fog-shader-params-header {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
 
 /* v2.12/M3 — Paint vs Erase buttons sit side-by-side for the brush mode.
    Green = paint (additive); red = erase (subtractive). Active button gets

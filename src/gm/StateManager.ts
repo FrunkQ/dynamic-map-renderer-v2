@@ -123,6 +123,22 @@ export class StateManager {
     this.setFog(next);
   }
 
+  /** v2.12 — patch shader-param values on a single polygon (for
+   *  polygon-scoped params like river direction). No-op if the polygon
+   *  id isn't found. Other polygons untouched. Goes through setFog so
+   *  the change broadcasts on the same fog_update path. */
+  setPolygonShaderParams(polyId: string, patch: Record<string, number>): void {
+    const fog = this.state.fog;
+    let touched = false;
+    const polygons = fog.polygons.map((p) => {
+      if (p.id !== polyId) return p;
+      touched = true;
+      return { ...p, shaderParams: { ...(p.shaderParams ?? {}), ...patch } };
+    });
+    if (!touched) return;
+    this.setFog({ ...fog, polygons });
+  }
+
   setMarkers(markers: Marker[]): void {
     this.state = { ...this.state, markers };
     this._notify(['markers'], undefined, true);

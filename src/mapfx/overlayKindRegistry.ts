@@ -31,6 +31,15 @@ export type BlendMode =
  * `SliderParam` shape so the GM-panel renderer can build identical sliders
  * for both. Each param becomes a `u<PascalCase>` uniform in the kind's
  * fragment shader (e.g. id 'intensity' → uniform float uIntensity).
+ *
+ * Every param is per-polygon — stored on FogPolygon.shaderParams. The
+ * matching kind-level entry on FogState.shaderParams[kind] holds the
+ * "draft" / last-used values which new polygons inherit at paint time
+ * and which the panel sliders fall back to when no polygon is selected.
+ * This gives the GM:
+ *   • Sliders that always edit the currently-selected polygon.
+ *   • New polygons that inherit the previously-tuned look.
+ *   • Reselecting a polygon snaps the sliders back to its own values.
  */
 export interface ShaderParamDef {
   id:      string;

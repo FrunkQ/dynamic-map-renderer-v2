@@ -2514,16 +2514,23 @@ export class GMApp {
       // manually (shader-params panel, colour swatch enable/disable, etc.).
       // On deselection (selected → none, not mid-draw), revert the panel
       // to fog — the default kind — so the GM isn't stuck on a previous
-      // pick after stepping away from the last polygon.
+      // pick after stepping away from the last polygon. Every selection
+      // change also rebuilds the shader-params panel so its sliders
+      // snap to the picked polygon's stored values (or to the
+      // "next new polygon" draft when nothing is selected).
       if (selectedId && selectedId !== this._lastSelectedSyncedId) {
         const poly = this.state.getState().fog.polygons.find((p) => p.id === selectedId);
         if (poly && poly.kind !== this.activeOverlayKind) {
           this._syncPanelToKind(poly.kind);
+        } else {
+          this._rebuildShaderParamsPanel();
         }
         this._lastSelectedSyncedId = selectedId;
       } else if (!selectedId && this._lastSelectedSyncedId !== null) {
         if (!drawing && this.activeOverlayKind !== 'fog') {
           this._syncPanelToKind('fog');
+        } else {
+          this._rebuildShaderParamsPanel();
         }
         this._lastSelectedSyncedId = null;
       }
@@ -2650,11 +2657,13 @@ export class GMApp {
       const k = overlayKind(this.activeOverlayKind);
       const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
       const color = (k.allowColor && swatch?.value) ? swatch.value : k.defaultColor;
+      const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
       const poly: FogPolygon = {
         id:        generateId(),
         kind:      this.activeOverlayKind,
         vertices,
         color,
+        ...(Object.keys(draft).length > 0 ? { shaderParams: { ...draft } } : {}),
         createdAt: Date.now(),
       };
       this.state.setFog({ polygons: [...fog.polygons, poly] });
@@ -2685,12 +2694,12 @@ export class GMApp {
     this.fogEditor.setBrushSettings({ color: k.defaultColor, radius: k.defaultRadius });
   }
 
-  /** v2.12 — rebuild the per-kind shader-params slider panel. Reads the
-   *  active kind's `shaderParams` from the registry; for each, builds a
-   *  slider hydrated from FogState.shaderParams[kind] (or the param
-   *  default if no value persisted yet). Edits go through
-   *  state.setShaderParams so they fan out to renderer + P2P. Hidden
-   *  entirely when the kind declares no shader params. */
+  /** v2.12 — rebuild the shader-params slider panel for the active kind.
+   *  Every param is per-polygon: the sliders always edit the currently
+   *  selected polygon's values, falling back to the kind's "draft" /
+   *  last-used buffer when nothing is selected. New polygons inherit
+   *  the draft at paint time so the GM's tuning carries forward. On
+   *  reselect, sliders snap to the picked polygon's stored values. */
   private _rebuildShaderParamsPanel(): void {
     const container = document.getElementById('fog-shader-params');
     if (!container) return;
@@ -2702,30 +2711,64 @@ export class GMApp {
       return;
     }
     container.hidden = false;
+
     const fog = this.state.getState().fog;
-    const stored = fog.shaderParams?.[this.activeOverlayKind] ?? {};
+    const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
+    const selectedId = this.fogEditor.getSelectedId();
+    const selectedPoly = selectedId ? fog.polygons.find((p) => p.id === selectedId) ?? null : null;
+    const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
+
+    const polyValues = editingPoly?.shaderParams ?? {};
+    // Tiny header so the GM knows whether they're editing the selected
+    // polygon or just the draft for the next-new polygon.
+    const hdr = document.createElement('div');
+    hdr.className = 'fog-shader-params-header';
+    hdr.textContent = editingPoly ? 'Selected polygon' : `${k.label} — next new polygon`;
+    container.appendChild(hdr);
+
     for (const p of defs) {
-      const current = typeof stored[p.id] === 'number' ? stored[p.id]! : p.default;
-      const row = document.createElement('label');
-      row.className = 'fog-brush-row';
-      const labelEl = document.createElement('span');
-      labelEl.textContent = p.label;
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = String(p.min);
-      slider.max = String(p.max);
-      slider.step = String(p.step);
-      slider.value = String(current);
-      slider.title = `${p.label} — ${k.label}`;
-      slider.addEventListener('input', () => {
-        const v = parseFloat(slider.value);
-        if (!Number.isFinite(v)) return;
+      const fromPoly = editingPoly && typeof polyValues[p.id] === 'number' ? polyValues[p.id]! : undefined;
+      const fromDraft = typeof draft[p.id] === 'number' ? draft[p.id]! : undefined;
+      const current = fromPoly ?? fromDraft ?? p.default;
+      container.appendChild(this._buildShaderSliderRow(p, k.label, current, (v) => {
+        // Always update the kind draft so subsequent new polygons
+        // inherit the latest value. When a polygon is selected, ALSO
+        // patch that polygon's own shaderParams in a single state
+        // commit per slider tick.
         this.state.setShaderParams(this.activeOverlayKind, { [p.id]: v });
-      });
-      row.appendChild(labelEl);
-      row.appendChild(slider);
-      container.appendChild(row);
+        if (editingPoly) this.state.setPolygonShaderParams(editingPoly.id, { [p.id]: v });
+      }));
     }
+  }
+
+  /** Helper: build one labelled slider row for a shader param. The
+   *  onChange handler is fired on every input event with the parsed
+   *  numeric value. */
+  private _buildShaderSliderRow(
+    p: import('../mapfx/overlayKindRegistry.ts').ShaderParamDef,
+    kindLabel: string,
+    initial: number,
+    onChange: (v: number) => void,
+  ): HTMLElement {
+    const row = document.createElement('label');
+    row.className = 'fog-brush-row';
+    const labelEl = document.createElement('span');
+    labelEl.textContent = p.label;
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(p.min);
+    slider.max = String(p.max);
+    slider.step = String(p.step);
+    slider.value = String(initial);
+    slider.title = `${p.label} — ${kindLabel}`;
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      if (!Number.isFinite(v)) return;
+      onChange(v);
+    });
+    row.appendChild(labelEl);
+    row.appendChild(slider);
+    return row;
   }
 
   /** Reflect the active kind in the colour swatch — set the swatch value
@@ -2805,14 +2848,18 @@ export class GMApp {
     }
     // Paint — one new polygon per blob, holes preserved (a donut scribble
     // keeps its hole). Erase carving still preserves target-polygon holes
-    // separately via subtractFromAll.
+    // separately via subtractFromAll. New polys inherit the kind's
+    // current shader-params draft so the last GM tuning carries forward.
     const k = overlayKind(this.activeOverlayKind);
     const now = Date.now();
+    const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
+    const draftCopy = Object.keys(draft).length > 0 ? { shaderParams: { ...draft } } : {};
     const newPolys: FogPolygon[] = blobs.map((blob) => ({
       id:        generateId(),
       kind:      this.activeOverlayKind,
       vertices:  blob.outer,
       ...(blob.holes.length > 0 ? { holes: blob.holes } : {}),
+      ...draftCopy,
       color:     settings.color || k.defaultColor,
       createdAt: now,
     }));

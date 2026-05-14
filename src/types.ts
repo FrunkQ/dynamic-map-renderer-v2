@@ -78,6 +78,14 @@ export interface FogPolygon {
   color?:    string;
   /** Optional GM-set label for the selector icon hover text. */
   label?:    string;
+  /**
+   * v2.12 — per-polygon shader-param values (e.g. river flow direction).
+   * Only values for polygon-scoped params live here; kind-scoped params
+   * (intensity, scale, …) stay on FogState.shaderParams[kind]. Renderer
+   * resolves a uniform by reading poly.shaderParams[id] first, then
+   * fog.shaderParams[kind][id], then the param's registry default.
+   */
+  shaderParams?: Record<string, number>;
   /** Creation timestamp (ms epoch) — stable sort + z-order key. */
   createdAt: number;
 }
