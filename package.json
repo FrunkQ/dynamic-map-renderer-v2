@@ -33,6 +33,7 @@
     "@vercel/analytics": "^1.6.1",
     "idb": "^8.0.3",
     "peerjs": "^1.5.5",
+    "polygon-clipping": "^0.15.7",
     "qrcode": "^1.5.4",
     "three": "^0.183.2"
   }
