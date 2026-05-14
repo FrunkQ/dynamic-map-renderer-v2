@@ -46,7 +46,9 @@ export type OverlayKind =
   | 'ocean'
   | 'light'
   | 'starfield'
-  | 'portal';
+  | 'portal'
+  | 'thundercloud'
+  | 'mist';
 
 /**
  * The unified polygon used by the overlay system. Every shape that renders

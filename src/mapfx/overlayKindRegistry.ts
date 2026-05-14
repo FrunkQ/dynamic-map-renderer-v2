@@ -128,6 +128,18 @@ const SVG_PORTAL =
   '<circle cx="12" cy="12" r="5"/>' +
   '<circle cx="12" cy="12" r="1.5"/>';
 
+// Cloud body + lightning bolt cutting through it.
+const SVG_THUNDERCLOUD =
+  '<path d="M4 14h13a3 3 0 0 0 0-6 5 5 0 0 0-9.78-1A4 4 0 0 0 4 14Z"/>' +
+  '<polyline points="11 15 8 20 12 20 9 23"/>';
+
+// Three drifting horizontal wisps for the misty atmosphere.
+const SVG_MIST =
+  '<path d="M3 7h11"/>' +
+  '<path d="M9 12h12"/>' +
+  '<path d="M2 17h9"/>' +
+  '<path d="M14 17h7"/>';
+
 // defaultRadius is now in CSS pixels — see the type doc above. Brush stays
 // visually the same size as you zoom in / out; the resulting map polygon
 // shrinks at higher zoom which gives fine-detail painting for free.
@@ -238,14 +250,43 @@ const PORTAL_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0, step: 0.05, default: 1.0 },
 ];
 
+// Thundercloud shader params:
+//   • intensity — output multiplier (universal).
+//   • scale     — cloud feature size (bigger = lazier wisps).
+//   • speed     — noise drift + flash cadence rate. 0 = static cloud
+//     with no lightning; default 1 ≈ original mahalis rate.
+//   • lightning — flash brightness multiplier. 0 disables lightning
+//     entirely (just the moody cloud), 1 is the natural rate, 1.5+
+//     reads as a magical lightning-storm.
+const THUNDERCLOUD_SHADER_PARAMS: ShaderParamDef[] = [
+  { id: 'intensity', label: 'Intensity', min: 0.05, max: 2.0, step: 0.05, default: 1.0 },
+  { id: 'scale',     label: 'Scale',     min: 0.1,  max: 4.0, step: 0.05, default: 1.0 },
+  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0, step: 0.05, default: 1.0 },
+  { id: 'lightning', label: 'Lightning', min: 0.0,  max: 2.0, step: 0.05, default: 1.0 },
+];
+
+// Mist shader params:
+//   • intensity — output multiplier (universal). Doubles for the
+//     original INTENSITY constant absorbed from deusnovus's shader.
+//   • scale     — wisp feature size; original ZOOM=3 baked in.
+//   • speed     — drift rate. 0 = motionless mist; 4 = wind-driven
+//     storm front.
+const MIST_SHADER_PARAMS: ShaderParamDef[] = [
+  { id: 'intensity', label: 'Intensity', min: 0.05, max: 2.0, step: 0.05, default: 1.0 },
+  { id: 'scale',     label: 'Scale',     min: 0.2,  max: 4.0, step: 0.05, default: 1.0 },
+  { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0, step: 0.05, default: 1.0 },
+];
+
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
-  fog:       { id: 'fog',       label: 'Fog of War',      iconSvg: SVG_FOG,    defaultColor: '#000000', defaultRadius: 25, blend: 'normal', animated: false, selectByInterior: true,  allowColor: true,  z: 100 },
-  fire:      { id: 'fire',      label: 'Coloured Flames', iconSvg: SVG_FLAME,  defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire',      shaderParams: FIRE_SHADER_PARAMS      },
-  river:     { id: 'river',     label: 'River',           iconSvg: SVG_WATER,  defaultColor: '#5aa9d6', defaultRadius: 35, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'river',     shaderParams: RIVER_SHADER_PARAMS     },
-  ocean:     { id: 'ocean',     label: 'Ocean',           iconSvg: SVG_WATER,  defaultColor: '#5fa9d6', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'ocean',     shaderParams: OCEAN_SHADER_PARAMS     },
-  light:     { id: 'light',     label: 'Magical Light',   iconSvg: SVG_LIGHT,  defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'light',     shaderParams: LIGHT_SHADER_PARAMS     },
-  starfield: { id: 'starfield', label: 'Starfield',       iconSvg: SVG_STAR,   defaultColor: '#b07fd6', defaultRadius: 80, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 3,  shader: 'starfield', shaderParams: STARFIELD_SHADER_PARAMS },
-  portal:    { id: 'portal',    label: 'Magic Portal',    iconSvg: SVG_PORTAL, defaultColor: '#1a80ff', defaultRadius: 40, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'portal',    shaderParams: PORTAL_SHADER_PARAMS    },
+  fog:          { id: 'fog',          label: 'Fog of War',      iconSvg: SVG_FOG,          defaultColor: '#000000', defaultRadius: 25, blend: 'normal', animated: false, selectByInterior: true,  allowColor: true,  z: 100 },
+  fire:         { id: 'fire',         label: 'Coloured Flames', iconSvg: SVG_FLAME,        defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire',         shaderParams: FIRE_SHADER_PARAMS         },
+  river:        { id: 'river',        label: 'River',           iconSvg: SVG_WATER,        defaultColor: '#5aa9d6', defaultRadius: 35, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'river',        shaderParams: RIVER_SHADER_PARAMS        },
+  ocean:        { id: 'ocean',        label: 'Ocean',           iconSvg: SVG_WATER,        defaultColor: '#5fa9d6', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'ocean',        shaderParams: OCEAN_SHADER_PARAMS        },
+  light:        { id: 'light',        label: 'Magical Light',   iconSvg: SVG_LIGHT,        defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'light',        shaderParams: LIGHT_SHADER_PARAMS        },
+  starfield:    { id: 'starfield',    label: 'Starfield',       iconSvg: SVG_STAR,         defaultColor: '#b07fd6', defaultRadius: 80, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 3,  shader: 'starfield',    shaderParams: STARFIELD_SHADER_PARAMS    },
+  portal:       { id: 'portal',       label: 'Magic Portal',    iconSvg: SVG_PORTAL,       defaultColor: '#1a80ff', defaultRadius: 40, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'portal',       shaderParams: PORTAL_SHADER_PARAMS       },
+  thundercloud: { id: 'thundercloud', label: 'Thundercloud',    iconSvg: SVG_THUNDERCLOUD, defaultColor: '#5a6884', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 25, shader: 'thundercloud', shaderParams: THUNDERCLOUD_SHADER_PARAMS },
+  mist:         { id: 'mist',         label: 'Mist',            iconSvg: SVG_MIST,         defaultColor: '#9aa3b5', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 22, shader: 'mist',         shaderParams: MIST_SHADER_PARAMS         },
 };
 
 /** Order for the kind dropdown — fog first (most-used + click-priority),
@@ -254,7 +295,9 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
  *  polygons overlap, the kind earlier in this list wins the click. */
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   'fog',
-  'fire', 'river', 'ocean', 'light', 'portal', 'starfield',
+  'fire', 'river', 'ocean', 'light',
+  'mist', 'thundercloud',
+  'portal', 'starfield',
 ];
 
 /** Quick lookup with a fall-back. Unknown kinds fall through to fog so

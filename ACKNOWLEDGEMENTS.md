@@ -94,6 +94,8 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 | River | A river (MsSGWK, Pierco fork) | https://www.shadertoy.com/view/MsSGWK |
 | Starfield | StarField practice (tllfRX) by Deadtotem (2020) | https://www.shadertoy.com/view/tllfRX |
 | Magic Portal | Magic Portal (NtBXWV) by Delincoter (2021) — noise primitive [hash33 + simplex noise](https://www.shadertoy.com/view/4sc3z2) | https://www.shadertoy.com/view/NtBXWV |
+| Mist | Smooth Fog Shader (7ldGWf) by deusnovus (2021) — remix of [pontino's Fog Shader](https://www.shadertoy.com/view/tst3zr) | https://www.shadertoy.com/view/7ldGWf |
+| Thundercloud | thundercloud (3dcXWS) by mahalis (2019), used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — 3D noise by [Inigo Quilez (MIT)](https://www.shadertoy.com/view/Xsl3Dl), hash helpers by [David Hoskins (CC BY-SA 4.0)](https://www.shadertoy.com/view/4djSRW) | https://www.shadertoy.com/view/3dcXWS |
 
 ### MIT-licensed shaders
 
