@@ -29,13 +29,16 @@
 uniform sampler2D uMask;      // per-polygon alpha mask, plane-local
 uniform sampler2D uNoise;     // wave surface noise (organic, see file note above)
 uniform sampler2D uBed;       // refraction "bed" — original Pierco gem-pebble texture
+uniform sampler2D uMap;       // the rendered map texture (for refractBackground mode)
+uniform vec4      uMapUv;     // map-UV bbox: xy = offset, zw = scale (this plane's region of the map)
 uniform float     time;
 uniform float     uAspect;
 uniform vec3      uColor;
-uniform float     uIntensity; // 0.05..1.5
-uniform float     uScale;     // 0.25..4   — wave feature scale
-uniform float     uSpeed;     // 0..2      — flow rate
-uniform float     uDirection; // radians (0 = compass north → up the map)
+uniform float     uIntensity;         // 0.05..1.5
+uniform float     uScale;             // 0.25..4   — wave feature scale
+uniform float     uSpeed;             // 0..2      — flow rate
+uniform float     uDirection;         // radians (0 = compass north → up the map)
+uniform float     uRefractBackground; // 0 = use uBed (default), 1 = sample the map under the polygon
 
 varying vec2 vUv;
 
@@ -101,17 +104,34 @@ void main() {
   // Top-down view direction (camera looking straight down at the map).
   vec3 viewDir = vec3(0.0, -1.0, 0.0);
 
-  // Refraction: tilt the downward view by Snell, then offset the bed
-  // sample by the refracted ray's xz. Same shape as Pierco's original
-  // but sampling our preloaded gem-pebble texture in plane-local
-  // wave-scale coords so the bed pattern tiles at the same density
-  // as the surface waves.
+  // Refraction: tilt the downward view by Snell, then offset the
+  // bed sample by the refracted ray's xz. Two modes:
+  //   • uRefractBackground = 0 (default): sample the preloaded
+  //     gem-pebble texture (uBed) in plane-local wave-scale coords.
+  //     Bed pattern tiles at the same density as surface waves —
+  //     reads as a generic stylised riverbed.
+  //   • uRefractBackground = 1: sample the actual map texture
+  //     (uMap) underneath the polygon at its bbox region (uMapUv).
+  //     The GM's painted river bed appears to shimmer under the
+  //     wave surface — perfect when the artist has already drawn a
+  //     river / stream into the map and you just want it to look
+  //     alive. Refraction offset is much smaller here so we don't
+  //     sample far outside the polygon's bbox area.
   float eta = 1.003 / 1.3; // air → water
   vec3 rfd = refract(viewDir, n, eta);
-  // Plane-local UV at wave scale + refraction offset. The 0.4 factor
-  // is a strong distortion — visible wobble in the bed pattern.
-  vec2 bedUv = wuv * 0.2 + rfd.xz * 0.4;
-  vec3 bed = texture2D(uBed, bedUv).rgb;
+  vec3 bed;
+  if (uRefractBackground > 0.5) {
+    // Map-sample mode. Plane-local UV + small refraction offset,
+    // then projected into the map's UV space via uMapUv.
+    vec2 mapLocalUv = vUv + rfd.xz * 0.04;
+    vec2 mapSampleUv = uMapUv.xy + mapLocalUv * uMapUv.zw;
+    bed = texture2D(uMap, mapSampleUv).rgb;
+  } else {
+    // Texture-bed mode. Plane-local UV at wave scale + larger
+    // refraction offset for visible wobble in the bed pattern.
+    vec2 bedUv = wuv * 0.2 + rfd.xz * 0.4;
+    bed = texture2D(uBed, bedUv).rgb;
+  }
 
   // Tint the refracted bed sample by uColor as a gentle hue shift.
   // Original Pierco shader does no tinting; we mix in only a small

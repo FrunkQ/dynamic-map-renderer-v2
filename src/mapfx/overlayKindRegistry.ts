@@ -216,6 +216,13 @@ const RIVER_SHADER_PARAMS: ShaderParamDef[] = [
   // both ends of the spectrum.
   { id: 'speed',     label: 'Speed',     min: 0.0,  max: 4.0,            step: 0.05, default: 1.0 },
   { id: 'direction', label: 'Direction', min: 0.0,  max: 6.2831853,      step: 0.087266, default: 0.0 },
+  // Slider-as-toggle (step 1, range 0..1). 0 = generic gem-pebble
+  // bed (loaded from bed.jpg); 1 = sample the actual map texture
+  // under the polygon, so the GM's painted river bed shimmers
+  // beneath the surface. Default off — most maps don't have a
+  // painted bed to show off, and the texture-bed look is the
+  // tested default.
+  { id: 'refractBackground', label: 'Refract Background', min: 0.0, max: 1.0, step: 1.0, default: 0.0 },
 ];
 
 // Light shader params (in-house Mappadux shader).
