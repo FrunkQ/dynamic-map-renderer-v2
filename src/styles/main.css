@@ -1550,9 +1550,13 @@ option.select-option--add {
   gap: 8px;
   font-size: 0.8rem;
 }
-.fog-brush-row > span { flex: 0 0 auto; color: var(--text-dim); }
+/* Reserve a consistent label slot so every slider in the panel starts
+   and ends at the same horizontal position regardless of label length
+   ("Size" vs "Intensity" vs "Direction" used to land sliders at three
+   different widths). */
+.fog-brush-row > span { flex: 0 0 5.5em; color: var(--text-dim); }
 .fog-brush-row > select,
-.fog-brush-row > input { flex: 1 1 auto; }
+.fog-brush-row > input { flex: 1 1 auto; min-width: 0; }
 
 /* Crosshair cursor while brush mode is active. */
 #fog-canvas.fog-brush { pointer-events: auto; cursor: crosshair; }
