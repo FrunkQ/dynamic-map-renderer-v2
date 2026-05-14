@@ -285,7 +285,11 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   light:        { id: 'light',        label: 'Magical Light',   iconSvg: SVG_LIGHT,        defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'light',        shaderParams: LIGHT_SHADER_PARAMS        },
   starfield:    { id: 'starfield',    label: 'Starfield',       iconSvg: SVG_STAR,         defaultColor: '#b07fd6', defaultRadius: 80, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 3,  shader: 'starfield',    shaderParams: STARFIELD_SHADER_PARAMS    },
   portal:       { id: 'portal',       label: 'Magic Portal',    iconSvg: SVG_PORTAL,       defaultColor: '#1a80ff', defaultRadius: 40, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'portal',       shaderParams: PORTAL_SHADER_PARAMS       },
-  thundercloud: { id: 'thundercloud', label: 'Thundercloud',    iconSvg: SVG_THUNDERCLOUD, defaultColor: '#5a6884', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 25, shader: 'thundercloud', shaderParams: THUNDERCLOUD_SHADER_PARAMS },
+  // Thundercloud's defaultColor drives the LIGHTNING colour (cloud
+  // body is hard-coded slate grey in the shader). Default is a
+  // near-white blue tint matching real lightning; GM picks violet
+  // for magical, green for eldritch, etc.
+  thundercloud: { id: 'thundercloud', label: 'Thundercloud',    iconSvg: SVG_THUNDERCLOUD, defaultColor: '#dde4ff', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 25, shader: 'thundercloud', shaderParams: THUNDERCLOUD_SHADER_PARAMS },
   mist:         { id: 'mist',         label: 'Mist',            iconSvg: SVG_MIST,         defaultColor: '#9aa3b5', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 22, shader: 'mist',         shaderParams: MIST_SHADER_PARAMS         },
 };
 

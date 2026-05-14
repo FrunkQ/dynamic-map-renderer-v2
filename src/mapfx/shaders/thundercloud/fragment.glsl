@@ -30,10 +30,12 @@
 //     brightness; the cloud density at the pixel further attenuates
 //     the flash, so lightning lights the cloud particles in its
 //     neighbourhood rather than the empty air around them.
-//   • Tint by uColor: cloud body + flash both multiplied. Default
-//     stormy blue-grey in the registry; white swatch gives near-
-//     original moody look. Magical-green / blood-red / sci-fi-amber
-//     all work by changing the swatch.
+//   • The cloud BODY is a fixed cool slate grey — matches the moody
+//     look the original ray-march produced and reads consistently
+//     across all polygons. uColor is repurposed as the LIGHTNING
+//     COLOUR: white for natural storm lightning, violet for magical
+//     storm, sickly green for eldritch dread, blood-red for cursed
+//     skies, etc. Lit-from-within rather than tinted-all-over.
 //   • Output uses normal alpha blending — a real thundercloud
 //     obscures what's beneath, modulated by per-pixel density.
 //
@@ -151,10 +153,14 @@ void main() {
   // -0.2..0.5 range was tuned by eye against the noise output.
   float dens = smoothstep(-0.2, 0.5, n);
 
-  // Cloud body colour — tinted by uColor. The 0.45 multiplier keeps
-  // it darker than the flash so lightning is visibly brighter when
-  // it strikes.
-  vec3 bodyColor = uColor * 0.45 * dens;
+  // Cloud body — fixed cool slate grey, constant across all
+  // polygons. The original mahalis ray-march output a slate-blue
+  // moody cloud; we hard-code an equivalent here so every
+  // thundercloud reads the same regardless of the GM's colour
+  // pick. dens (density) attenuates the body so wisps fade out at
+  // edges.
+  const vec3 CLOUD_BODY = vec3(0.40, 0.42, 0.48);
+  vec3 bodyColor = CLOUD_BODY * dens;
 
   // Lightning. The flash has a 3D position; we compute a 2D distance
   // (ignoring the flash's z) plus a depth penalty so deeper flashes
@@ -168,10 +174,12 @@ void main() {
     flashAmt = flash.w * depthPenalty / (distPlane * distPlane * 1.8 + 0.04);
     flashAmt *= dens * uLightning;
   }
-  // Flash colour: brighter, slightly cooled toward white so the
-  // contrast against the (potentially saturated) body colour reads
-  // as "intense light through cloud".
-  vec3 flashColor = mix(vec3(1.0), uColor, 0.6) * flashAmt;
+  // Flash colour: GM's uColor pick drives the lightning hue, with a
+  // small white mix so the brightest bits read as "overexposed"
+  // (which lightning reliably does in real photography). Default
+  // near-white uColor → bright natural lightning; saturated colours
+  // pick up a clear magical-storm hue.
+  vec3 flashColor = mix(uColor, vec3(1.0), 0.25) * flashAmt;
 
   vec3 col = (bodyColor + flashColor) * uIntensity;
 
