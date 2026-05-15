@@ -257,6 +257,9 @@ export class GMApp {
   private filterSelect!:            HTMLSelectElement;
   private filterParamsContainer!:   HTMLElement;
   private viewBgColour!:           HTMLInputElement;
+  private viewBgFxBtn!:            HTMLButtonElement;
+  /** Live popover element (open state) — null when nothing is shown. */
+  private _bgFxPopover: HTMLElement | null = null;
   private roomCodeEl!:             HTMLElement;
   private qrContainer!:            HTMLElement;
   private playerCountEl!:          HTMLElement;
@@ -1072,7 +1075,7 @@ export class GMApp {
     // Apply any persisted theme so the GM lands on the customised look from
     // the moment the UI is interactive.
     const initialSession = await loadSession();
-    applyTheme(initialSession?.theme, this.renderer);
+    applyTheme(initialSession?.theme);
 
     this.renderer.start();
     this.setStatus('Ready', 'ok');
@@ -1549,6 +1552,8 @@ export class GMApp {
 
     if (changed.includes('view')) {
       this.renderer.setBackgroundColour(state.view.backgroundColor);
+      this.renderer.setBackdrop(state.view.backdrop ?? null);
+      this._refreshBgFxButtonState();
       // During a map switch, view travels inside map_change — same reasoning as
       // filter above.  Live viewport-editor drags only have 'view' in changed.
       if (!changed.includes('map')) {
@@ -2049,6 +2054,7 @@ export class GMApp {
     this.filterSelect               = q<HTMLSelectElement>('#filter-select');
     this.filterParamsContainer = q('#filter-params');
     this.viewBgColour          = q<HTMLInputElement>('#view-bg-colour');
+    this.viewBgFxBtn           = q<HTMLButtonElement>('#view-bg-fx-btn');
     this.roomCodeEl            = q('#room-code');
     this.qrContainer           = q('#qr-container');
     this.playerCountEl         = q('#player-count');
@@ -3544,6 +3550,16 @@ export class GMApp {
       this.state.setView({ ...v, backgroundColor: this.viewBgColour.value });
     });
 
+    // FX button — opens a small popover of animated-backdrop options. Lives
+    // here next to the colour picker because backdrop is the same kind of
+    // decision ("what do my dead bars look like?") but for the animated
+    // case rather than the solid one.
+    this.viewBgFxBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this._bgFxPopover) this._closeBgFxPopover();
+      else this._openBgFxPopover();
+    });
+
     // Open local player window as a real popup
     document.querySelector('#open-player-btn')?.addEventListener('click', () => {
       const code = this.roomCodeEl.textContent?.trim() ?? '';
@@ -3669,9 +3685,101 @@ export class GMApp {
     return '#' + [d[0]!, d[1]!, d[2]!].map((v) => v.toString(16).padStart(2, '0')).join('');
   }
 
+  /** v2.12 — refresh the FX button's "active" dot so the GM can tell at
+   *  a glance whether an animated backdrop is currently in play for
+   *  the active map. Called whenever view state changes. */
+  private _refreshBgFxButtonState(): void {
+    const kind = this.state.getState().view.backdrop?.kind ?? 'none';
+    this.viewBgFxBtn.classList.toggle('bg-fx-btn--active', kind !== 'none');
+  }
+
+  /** Open the backdrop FX popover anchored under the FX button. */
+  private _openBgFxPopover(): void {
+    // Lazy import to avoid pulling the whole renderer registry into the
+    // GMApp critical bundle.
+    void import('../rendering/backdrops/backdropRegistry.ts').then(({ BACKDROPS }) => {
+      if (this._bgFxPopover) return; // race: another click closed it
+      const pop = document.createElement('div');
+      pop.className = 'fx-popover';
+      pop.setAttribute('role', 'menu');
+
+      const currentKind = this.state.getState().view.backdrop?.kind ?? 'none';
+      for (const b of BACKDROPS) {
+        const opt = document.createElement('button');
+        opt.type = 'button';
+        opt.className = 'fx-popover-option';
+        if (b.id === currentKind) opt.classList.add('fx-popover-option--selected');
+        opt.textContent = b.label;
+        opt.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._applyBackdrop(b.id);
+          this._closeBgFxPopover();
+        });
+        pop.appendChild(opt);
+      }
+
+      // Position under the FX button, in document coords so panel scroll
+      // doesn't peel the popover away.
+      document.body.appendChild(pop);
+      const rect = this.viewBgFxBtn.getBoundingClientRect();
+      const left = Math.min(window.innerWidth - pop.offsetWidth - 8, rect.left);
+      pop.style.left = `${Math.max(8, left)}px`;
+      pop.style.top  = `${rect.bottom + 4}px`;
+
+      this._bgFxPopover = pop;
+      this.viewBgFxBtn.setAttribute('aria-expanded', 'true');
+
+      // Dismiss handlers — click anywhere off the popover, Escape, or
+      // scroll closes it.
+      const onDocClick = (ev: MouseEvent) => {
+        if (!this._bgFxPopover) return;
+        if (this._bgFxPopover.contains(ev.target as Node)) return;
+        if (this.viewBgFxBtn.contains(ev.target as Node)) return;
+        this._closeBgFxPopover();
+      };
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key === 'Escape') this._closeBgFxPopover();
+      };
+      // Defer to next tick so the same click that opened the popover
+      // doesn't immediately close it.
+      setTimeout(() => {
+        document.addEventListener('mousedown', onDocClick);
+        document.addEventListener('keydown', onKey);
+      }, 0);
+      (pop as HTMLElement & { _cleanup?: () => void })._cleanup = () => {
+        document.removeEventListener('mousedown', onDocClick);
+        document.removeEventListener('keydown', onKey);
+      };
+    });
+  }
+
+  private _closeBgFxPopover(): void {
+    if (!this._bgFxPopover) return;
+    const cleanup = (this._bgFxPopover as HTMLElement & { _cleanup?: () => void })._cleanup;
+    cleanup?.();
+    this._bgFxPopover.remove();
+    this._bgFxPopover = null;
+    this.viewBgFxBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  /** Commit a backdrop choice into the active map's ViewState. The
+   *  state change ripples through onStateChange → setBackdrop on the
+   *  renderer and a view_update broadcast. */
+  private _applyBackdrop(kind: string): void {
+    const v = this.state.getState().view;
+    const next = { ...v };
+    if (kind === 'none') {
+      delete next.backdrop;
+    } else {
+      next.backdrop = { kind };
+    }
+    this.state.setView(next);
+  }
+
   private syncView(state: SessionState): void {
     this.viewportEditor.setView(state.view);
     this.viewBgColour.value = state.view.backgroundColor;
+    this._refreshBgFxButtonState();
     if (state.projectorViewport) this.projectorEditor.setViewport(state.projectorViewport);
     this._refreshRectOverlays();
     this.refreshRotationButtons();
@@ -4448,7 +4556,7 @@ export class GMApp {
       await this._reloadLibIcons();
       await this.populateMapList();
       void this._refreshPackNameInput();
-      applyTheme(undefined, this.renderer); // back to default theme
+      applyTheme(undefined); // back to default theme
       this.setStatus('New pack ready — empty workspace', 'ok');
     } catch (err) {
       this.setStatus(`New pack failed: ${(err as Error).message}`, 'error');
@@ -4516,16 +4624,15 @@ export class GMApp {
       packName:    session?.packName ?? '',
       splash:      session?.splash,
       theme:       session?.theme,
-      renderer:    this.renderer,
       ...(opts.startInEdit ? { startInEdit: true } : {}),
     });
     if (!result || !session) return;
-    const hasTheme = !!result.theme.mode || !!result.theme.accent || !!result.theme.backdrop;
+    const hasTheme = !!result.theme.mode || !!result.theme.accent;
     const next = { ...session, splash: result.splash };
     if (hasTheme) next.theme = result.theme;
     else delete next.theme;
     await saveSession(next);
-    applyTheme(hasTheme ? result.theme : undefined, this.renderer);
+    applyTheme(hasTheme ? result.theme : undefined);
   }
 
   /** Save the current workspace as a plain (unencrypted) `.mappadux` pack.
@@ -4656,7 +4763,7 @@ export class GMApp {
       void this._refreshPackNameInput();
       // Re-apply theme so any creator-supplied look from the bundle takes effect.
       const importedSession = await loadSession();
-      applyTheme(importedSession?.theme, this.renderer);
+      applyTheme(importedSession?.theme);
 
       // Retrofit pass — auto-detect grid scale on any map in the loaded pack
       // that doesn't already carry one. Manually-calibrated maps and no-grid

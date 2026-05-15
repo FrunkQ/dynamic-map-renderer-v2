@@ -91,9 +91,16 @@
           <div id="reveal-progress-bar" class="reveal-progress-bar"></div>
         </div>
         <button id="fix-missing-map-btn" class="btn btn--danger btn--sm btn--full" hidden>⚠ Fix Missing Map</button>
-        <div class="param-row">
-          <label for="view-bg-colour">Background Colour</label>
-          <input type="color" id="view-bg-colour" value="#000000" title="Background colour behind the map (letterbox fill)" />
+        <div class="param-row param-row--bg">
+          <label for="view-bg-colour">Backdrop</label>
+          <div class="bg-controls">
+            <input type="color" id="view-bg-colour" value="#000000" title="Backdrop colour behind the map (letterbox fill)" />
+            <button type="button" id="view-bg-fx-btn" class="icon-btn bg-fx-btn" title="Animated backdrop effect" aria-label="Backdrop effect" aria-haspopup="true" aria-expanded="false">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3 L13.5 10.5 L21 12 L13.5 13.5 L12 21 L10.5 13.5 L3 12 L10.5 10.5 Z" />
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="btn-row">
           <button id="clone-map-btn"  class="btn btn--ghost   btn--sm">Clone Map</button>

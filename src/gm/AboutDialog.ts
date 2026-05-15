@@ -1,7 +1,5 @@
 import type { SplashConfig, SplashLink, ThemeConfig } from '../types.ts';
-import type { Renderer } from '../rendering/Renderer.ts';
 import { applyTheme } from '../utils/applyTheme.ts';
-import { BACKDROPS } from '../rendering/backdrops/backdropRegistry.ts';
 import { sanitizeSplashHtml, escapeHtml } from '../utils/sanitizeHtml.ts';
 
 /**
@@ -30,11 +28,6 @@ export interface AboutDialogOptions {
   packName: string;
   splash:   SplashConfig | undefined;
   theme:    ThemeConfig  | undefined;
-  /** Optional Renderer reference — when provided, theme edits live-preview
-   *  through to the GM canvas backdrop too (mode/accent already
-   *  live-update via CSS variables; backdrop needs to go via the
-   *  renderer). */
-  renderer?: Renderer;
   /** Open straight in edit mode (e.g. when triggered from "Customise pack…"). */
   startInEdit?: boolean;
 }
@@ -59,8 +52,6 @@ export class AboutDialog {
   private themeDraft: ThemeConfig = {};
   /** Snapshot of theme at open-time so Cancel can revert live previews. */
   private themeOriginal: ThemeConfig = {};
-  /** Optional renderer for live backdrop preview. */
-  private renderer: Renderer | undefined;
   private editing = false;
   private packName = '';
 
@@ -69,7 +60,6 @@ export class AboutDialog {
     this.draft = { ...(opts.splash ?? {}) };
     this.themeDraft    = { ...(opts.theme ?? {}) };
     this.themeOriginal = { ...(opts.theme ?? {}) };
-    this.renderer = opts.renderer;
     this.editing = !!opts.startInEdit;
 
     this.overlay = this._build();
@@ -82,7 +72,7 @@ export class AboutDialog {
     // Any cancel path while editing must revert live theme previews back to
     // whatever was active when the dialog opened.
     if (value === null && this.editing) {
-      applyTheme(this.themeOriginal, this.renderer);
+      applyTheme(this.themeOriginal);
     }
     if (this.overlay) this.overlay.remove();
     this.overlay = null;
@@ -281,7 +271,7 @@ export class AboutDialog {
       b.addEventListener('click', () => {
         if (value === 'dark') delete this.themeDraft.mode;
         else this.themeDraft.mode = 'light';
-        applyTheme(this.themeDraft, this.renderer);
+        applyTheme(this.themeDraft);
         refreshSeg();
       });
       return b;
@@ -340,38 +330,6 @@ export class AboutDialog {
     accentControls.append(colorInput, hex, resetBtn);
     accentRow.appendChild(accentControls);
     wrap.appendChild(accentRow);
-
-    // ── Backdrop row: animated bars-area effect (starfield etc.).
-    // Lives in theme so per-pack creators ship a vibe with their bundle.
-    const backdropRow = document.createElement('div');
-    backdropRow.className = 'about-theme-row';
-    const backdropLabel = document.createElement('span');
-    backdropLabel.className = 'about-theme-row-label';
-    backdropLabel.textContent = 'Backdrop';
-    backdropRow.appendChild(backdropLabel);
-
-    const backdropSel = document.createElement('select');
-    backdropSel.className = 'select-full';
-    backdropSel.title = 'Animated effect rendered in the letterbox / pillarbox area around the map';
-    for (const b of BACKDROPS) {
-      const o = document.createElement('option');
-      o.value = b.id;
-      o.textContent = b.label;
-      if ((this.themeDraft.backdrop?.kind ?? 'none') === b.id) o.selected = true;
-      backdropSel.appendChild(o);
-    }
-    backdropSel.addEventListener('change', () => {
-      const kind = backdropSel.value;
-      if (kind === 'none') {
-        delete this.themeDraft.backdrop;
-      } else {
-        const speed = this.themeDraft.backdrop?.speed ?? 1.0;
-        this.themeDraft.backdrop = { kind, speed };
-      }
-      applyTheme(this.themeDraft, this.renderer);
-    });
-    backdropRow.appendChild(backdropSel);
-    wrap.appendChild(backdropRow);
 
     return wrap;
   }
@@ -926,13 +884,6 @@ export class AboutDialog {
     if (this.themeDraft.mode === 'light') out.mode = 'light';
     if (this.themeDraft.accent && this.themeDraft.accent !== '#0d9adb') {
       out.accent = this.themeDraft.accent;
-    }
-    if (this.themeDraft.backdrop && this.themeDraft.backdrop.kind !== 'none') {
-      out.backdrop = { kind: this.themeDraft.backdrop.kind };
-      if (this.themeDraft.backdrop.speed !== undefined &&
-          this.themeDraft.backdrop.speed !== 1.0) {
-        out.backdrop.speed = this.themeDraft.backdrop.speed;
-      }
     }
     return out;
   }

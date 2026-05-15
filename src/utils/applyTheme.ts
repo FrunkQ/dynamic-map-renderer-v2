@@ -1,5 +1,4 @@
 import type { ThemeConfig } from '../types.ts';
-import type { Renderer } from '../rendering/Renderer.ts';
 
 /**
  * Apply a ThemeConfig to the document. Theme persists by toggling
@@ -7,11 +6,9 @@ import type { Renderer } from '../rendering/Renderer.ts';
  * `--accent` CSS custom property on the same element for any custom accent
  * the creator picked. Empty / null config restores defaults.
  *
- * The map render area is intentionally unaffected by chrome theming —
- * but the per-pack animated backdrop (v2.12) DOES live on ThemeConfig,
- * and is pushed into the supplied Renderer when one is provided.
+ * The map render area is intentionally unaffected — chrome only.
  */
-export function applyTheme(theme: ThemeConfig | undefined, renderer?: Renderer): void {
+export function applyTheme(theme: ThemeConfig | undefined): void {
   const root = document.documentElement;
 
   // Mode (dark is the default; only light requires the data-attribute).
@@ -27,13 +24,5 @@ export function applyTheme(theme: ThemeConfig | undefined, renderer?: Renderer):
     root.style.setProperty('--accent', hex);
   } else {
     root.style.removeProperty('--accent');
-  }
-
-  // Backdrop — propagated into the renderer when one is supplied so the
-  // GM canvas re-skins the bars area. AboutDialog's live-preview path
-  // doesn't have direct renderer access, so it relies on the GMApp to
-  // pipe its renderer through here on save.
-  if (renderer) {
-    renderer.setBackdrop(theme?.backdrop ?? null);
   }
 }

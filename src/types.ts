@@ -24,6 +24,13 @@ export interface ViewState {
   viewNH: number;
   /** CSS hex colour rendered behind the map image — default #000000 */
   backgroundColor: string;
+  /**
+   * v2.12 — per-map animated effect rendered in the letterbox /
+   * pillarbox area around the map. Sits next to backgroundColor in
+   * the Map panel so the GM picks both at the same moment. Unset =
+   * solid backgroundColor (default).
+   */
+  backdrop?: BackdropConfig;
 }
 
 // ─── Fog of War / Overlay (v2.12 unified system) ─────────────────────────────
@@ -1082,21 +1089,12 @@ export interface StoredSession {
   theme?: ThemeConfig;
 }
 
-/** Per-pack UI theme. All fields optional — unset = Mappadux defaults
- *  (dark mode, cyan accent, no backdrop). */
+/** Per-pack UI theme. Both fields optional — unset = Mappadux defaults
+ *  (dark mode, cyan accent). */
 export interface ThemeConfig {
   mode?:   'dark' | 'light';
   /** CSS color string (`#rrggbb` or named). Used as `--accent`. */
   accent?: string;
-  /**
-   * v2.12 — animated backdrop rendered in the letterbox / pillarbox
-   * area surrounding the map. Lets the GM dress dead bars in something
-   * thematic (drifting stars for sci-fi, ember haze for fire scenes…).
-   * Per-pack so creators can ship a branded vibe; unset = solid bg
-   * colour as before. The backdrop never overlays the map itself —
-   * only the bars — so calibrated tabletop projection stays clean.
-   */
-  backdrop?: BackdropConfig;
 }
 
 /** A choice of animated backdrop + tuning knobs. */

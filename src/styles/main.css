@@ -1210,6 +1210,97 @@ option.select-option--add {
   cursor: pointer;
 }
 
+/* Map-panel Background row — colour picker + animated-backdrop FX button.
+ * The label is the row's only grid column-1 child; the two controls share
+ * the auto column on the right via .bg-controls flex container. */
+.bg-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* FX icon button — flat, monochrome, stroked. Sparkle glyph signposts
+ * "this opens visual effects" without leaning on emoji. Matches the
+ * trashcan delete-handle treatment elsewhere. */
+.bg-fx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.bg-fx-btn:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Active = popover is open. Stronger accent tint so the trigger reads
+ * as "currently driving the menu shown nearby". */
+.bg-fx-btn[aria-expanded="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+/* Selected = a non-none backdrop is in play. Subtle dot at the
+ * bottom-right so the user can tell at a glance an effect is live
+ * without opening the popover. */
+.bg-fx-btn--active::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin-top: 18px;
+  margin-left: 16px;
+  box-shadow: 0 0 0 1.5px var(--bg-card, #1a1f2e);
+}
+.bg-fx-btn { position: relative; }
+
+/* Backdrop FX popover — small menu that floats below the FX button.
+ * Anchored to the .param-row--bg via JS (computed offset from the
+ * button's bounding rect; resilient to side-panel scroll). */
+.fx-popover {
+  position: absolute;
+  z-index: 200;
+  background: var(--bg-card, #1a1f2e);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fx-popover-option {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.fx-popover-option:hover {
+  background: var(--accent-dim);
+}
+.fx-popover-option--selected {
+  background: var(--accent);
+  color: #fff;
+}
+.fx-popover-option--selected:hover {
+  background: var(--accent-hover);
+}
+
 .marker-badge-tooltip {
   position: fixed;
   background: rgba(0, 0, 0, 0.82);
