@@ -609,7 +609,22 @@ export class PlayerApp {
   }
 
   private _stopAllSoundboard(): void {
-    for (const el of this.sbAudioEls.values()) { el.pause(); el.currentTime = 0; }
+    // v2.12.1 bug fix — must fully tear down, not just pause. Pausing
+    // alone leaves the elements in `sbAudioEls`, and the unmute path
+    // (and `_scheduleAudioResume`) iterate every entry and resume any
+    // that are paused — which would replay every slot ever heard on
+    // every prior map in one go after a few map swaps while muted.
+    // Clearing the maps matches the symmetric behaviour of
+    // `_stopAllPositional` and ensures `_applySoundboardActive` for
+    // the new map starts from a clean slate.
+    for (const el of this.sbAudioEls.values()) {
+      el.pause();
+      el.currentTime = 0;
+      el.removeAttribute('src');
+      try { el.load(); } catch { /* harmless on browsers without media reset */ }
+    }
+    this.sbAudioEls.clear();
+    this._sbPausedByMute.clear();
   }
 
   private _cacheSoundboardAssets(assets: { assetId: string; dataUrl?: string }[]): void {
