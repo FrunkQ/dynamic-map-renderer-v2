@@ -497,6 +497,11 @@ export interface MsgMapChange {
   projectorViewport?: ProjectorViewport;
   mapBlob: ArrayBuffer;
   transition?: TransitionConfig;
+  /** v2.12.x — set when the mapBlob is a first-frame snapshot of a
+   *  video map and the GM is about to follow up with a MsgVideoBundle
+   *  carrying the full video bytes. Receivers use this as a cue to
+   *  show a "loading animated map…" faff overlay while they wait. */
+  expectsVideoBundle?: boolean;
 }
 
 export interface MarkerIconData {
@@ -756,12 +761,40 @@ export interface MsgHandoutReveal {
   mapBlob: ArrayBuffer;
 }
 
+/**
+ * v2.12.x — two-phase animated-map delivery follow-up.
+ *
+ * For video MapAssets (webm / mp4) the GM sends the first-frame
+ * snapshot in the regular map_change message so receivers get a
+ * usable static map within seconds. The full video bytes follow as
+ * this MsgVideoBundle on the same channel — once it lands the
+ * receiver swaps its renderer texture from static to VideoTexture
+ * and the map starts animating.
+ *
+ * Receivers ignore the bundle if mapId !== currentMapId (the GM
+ * already switched away).
+ */
+export interface MsgVideoBundle {
+  type: 'video_bundle';
+  /** Map this video is for — receiver guards against late delivery
+   *  after the GM has moved on to another map. */
+  mapId: string;
+  /** Source MIME of the original blob (video/webm or video/mp4) so
+   *  the receiver can wrap it back into a Blob with the right type
+   *  before handing it to the renderer. */
+  mimeType: string;
+  /** The full video bytes — travels via the chunked binary path
+   *  the same way map_change's mapBlob does. */
+  mapBlob: ArrayBuffer;
+}
+
 export type GMMessage =
   | MsgFullState
   | MsgViewUpdate
   | MsgFogUpdate
   | MsgFilterUpdate
   | MsgMapChange
+  | MsgVideoBundle
   | MsgHandoutReveal
   | MsgMarkerUpdate
   | MsgAudioUpdate

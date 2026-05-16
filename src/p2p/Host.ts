@@ -35,6 +35,12 @@ export class Host {
   private events: HostEvents;
   private lastState:            SessionState | null = null;
   private lastMapBlob:          ArrayBuffer | null = null;
+  /** v2.12.x — cached video-bundle for the currently active map, so a
+   *  player or projector that connects AFTER the GM broadcast can
+   *  still receive the full video bytes (lastMapBlob stays the
+   *  lightweight snapshot for instant first-paint). Cleared on the
+   *  next map_change since each map's bundle is independent. */
+  private lastVideoBundle: { mapId: string; mimeType: string; buffer: ArrayBuffer } | null = null;
   /** Cached map-asset metadata so full_state messages can size projector views. */
   private lastMapPps:           number | undefined = undefined;
   private lastMapImgW:          number | undefined = undefined;
@@ -183,8 +189,19 @@ export class Host {
     }
     if (msg.type === 'map_change') {
       this.lastMapBlob = msg.mapBlob;
+      // Each map starts with no video bundle yet — the GM may or may
+      // not follow up with one for animated maps.
+      this.lastVideoBundle = null;
       this.lastSoundboardActive = [];
       this.lastPositionalActive.clear();
+    }
+    if (msg.type === 'video_bundle') {
+      // Cache so new joiners after this point also get the animation,
+      // not just the static snapshot. We DON'T overwrite lastMapBlob
+      // here — keeping it as the snapshot means full_state delivers
+      // a lightweight blob and the video follows separately, same
+      // two-phase rhythm a live connection sees.
+      this.lastVideoBundle = { mapId: msg.mapId, mimeType: msg.mimeType, buffer: msg.mapBlob };
     }
     if (msg.type === 'handout_reveal') {
       // Update the cached blob to the FINAL frame so a late-joining
@@ -299,6 +316,18 @@ export class Host {
           ...(this.lastMapImgH !== undefined           ? { mapImageHeight:     this.lastMapImgH         } : {}),
         };
         this.sendTo(conn, msg);
+        // Late-joiner video catchup — if the active map is animated,
+        // deliver the cached full video bytes so the new peer can
+        // swap from snapshot to VideoTexture, same as live peers did
+        // when the bundle was first broadcast.
+        if (this.lastVideoBundle) {
+          this.sendTo(conn, {
+            type:     'video_bundle',
+            mapId:    this.lastVideoBundle.mapId,
+            mimeType: this.lastVideoBundle.mimeType,
+            mapBlob:  this.lastVideoBundle.buffer,
+          });
+        }
         // Deliver active positional plays as chunked binary messages
         for (const p of this.lastPositionalActive.values()) {
           this.sendTo(conn, { type: 'positional_play', markerId: p.markerId, assetId: p.assetId, loop: p.loop, volume: p.volume, dataUrl: p.dataUrl });

@@ -12,6 +12,7 @@ import { ViewportEditor } from './ViewportEditor.ts';
 import { MarkerEditor } from './MarkerEditor.ts';
 import { MapAssetModal } from './MapAssetModal.ts';
 import { MapAssetStore } from '../maps/MapAssetStore.ts';
+import { extractFirstFrameSnapshot } from '../maps/videoSnapshot.ts';
 import { TextMapEditor } from './TextMapEditor.ts';
 import { MapCalibrationModal } from './MapCalibrationModal.ts';
 import { ProjectorViewportEditor } from './ProjectorViewportEditor.ts';
@@ -319,6 +320,11 @@ export class GMApp {
   private viewBgFxBtn!:            HTMLButtonElement;
   /** Live popover element (open state) — null when nothing is shown. */
   private _bgFxPopover: HTMLElement | null = null;
+  /** v2.12.x — full video bytes waiting to be broadcast as a
+   *  MsgVideoBundle follow-up after the map_change that carried the
+   *  snapshot. Set in loadMap when the new map is a video asset;
+   *  cleared once the bundle has been sent or the GM swaps away. */
+  private _pendingVideoBundle: { mapId: string; buffer: ArrayBuffer; mimeType: string } | null = null;
   private roomCodeEl!:             HTMLElement;
   private qrContainer!:            HTMLElement;
   private playerCountEl!:          HTMLElement;
@@ -1956,8 +1962,52 @@ export class GMApp {
       this._setAnimationButtonState('idle');
     }
     if (this.revealProgressEl) this.revealProgressEl.hidden = true;
-    const finalBlob = await this.maps.getBlob(map.id);
+    let finalBlob = await this.maps.getBlob(map.id);
     if (!finalBlob) { this.setStatus('Map blob not found', 'error'); return; }
+
+    // v2.12.x two-phase animated-map delivery —
+    // For video map assets we don't actually want to load the 57 MB
+    // (often more) video into the GM canvas, nor blast it over WebRTC
+    // up front. Instead:
+    //   1. Extract the first frame as a PNG snapshot here.
+    //   2. Use that snapshot for BOTH the GM's local renderer.loadMap
+    //      and the broadcast map_change mapBlob. Receivers see a
+    //      usable static map within a second or two.
+    //   3. Stash the full video bytes in _pendingVideoBundle; after
+    //      the map_change broadcast settles we send them along in a
+    //      separate MsgVideoBundle. Player + projector swap their
+    //      renderer texture to a VideoTexture once the bundle lands.
+    // GM canvas stays static throughout — keeps GPU + decode load
+    // down on the GM machine, which is usually also running the
+    // projector window locally.
+    this._pendingVideoBundle = null;
+    if (_sniffIsVideo(finalBlob)) {
+      try {
+        // EBML magic byte → webm, otherwise treat as mp4 (matches
+        // _sniffMediaKind's logic; this branch already proved it's
+        // one of the two).
+        const isWebm = new Uint8Array(finalBlob.slice(0, 1))[0] === 0x1a;
+        const videoMime = isWebm ? 'video/webm' : 'video/mp4';
+        const snapBlob  = await extractFirstFrameSnapshot(new Blob([finalBlob], { type: videoMime }));
+        const snapBuf   = await snapBlob.arrayBuffer();
+        // Hold onto the full video for the follow-up bundle broadcast.
+        this._pendingVideoBundle = {
+          mapId:    map.id,
+          buffer:   finalBlob,
+          mimeType: videoMime,
+        };
+        // Swap finalBlob for the snapshot — every downstream path
+        // (local renderer, broadcast, top-left auto-bg sampler) now
+        // operates on a regular still image.
+        finalBlob = snapBuf;
+      } catch (err) {
+        // Snapshot extraction failed — fall through to broadcasting
+        // the full video as before. Worst case is the original
+        // behaviour (connect/disconnect on big transfers).
+        console.warn('[GMApp] video snapshot failed; falling back to full broadcast', err);
+      }
+    }
+
     // For animated handouts the player + projector receive the STARTING
     // frame initially (background + noAnimate elements). They wait at
     // that state until the GM clicks Start Animation, at which point
@@ -2102,7 +2152,25 @@ export class GMApp {
       // or the final frame (everything else).
       mapBlob:    broadcastBlob,
       transition: this.buildTransitionConfig(),
+      ...(this._pendingVideoBundle ? { expectsVideoBundle: true } : {}),
     });
+
+    // v2.12.x — if this map is a video asset and we have its full
+    // bytes queued, send the bundle as a separate follow-up so
+    // receivers can swap their static snapshot for the animated
+    // VideoTexture once it lands. Pushed to the same broadcast
+    // channel so PeerJS / BroadcastChannel deliver it after the
+    // map_change has been processed.
+    if (this._pendingVideoBundle && this._pendingVideoBundle.mapId === map.id) {
+      const pending = this._pendingVideoBundle;
+      this._pendingVideoBundle = null;
+      this.host.broadcast({
+        type:     'video_bundle',
+        mapId:    pending.mapId,
+        mimeType: pending.mimeType,
+        mapBlob:  pending.buffer,
+      });
+    }
 
     // Run each interaction's onMapLoaded hook (preload positional audio buffers, etc.)
     void this.interactions.notifyMapLoaded(this._interactionCtx());

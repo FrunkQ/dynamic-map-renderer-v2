@@ -10,6 +10,7 @@ import { getMarkerAspect } from '../rendering/MarkerLayer.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
 import { TransitionEngine } from '../transitions/TransitionEngine.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
+import { randomFaffMessage } from '../utils/faffMessages.ts';
 import type { GMMessage, TransitionConfig, Marker, MarkerIconData, SoundboardAudioData, SoundboardSlot, FogState, FilterState, ViewState } from '../types.ts';
 import type { MotionOverlay, MotionOverlayScan, MotionOverlayBlob } from '../rendering/MarkerLayer.ts';
 
@@ -288,6 +289,15 @@ export class PlayerApp {
         // Drop any in-flight tracker visuals from the previous map
         this._trackerScans = [];
         this._trackerBlobs = [];
+        // v2.12.x — animated map two-phase delivery. If the GM is
+        // about to follow up with the full video bytes, drop a
+        // faff overlay onto the player view so the wait reads as
+        // intentional rather than as a stall.
+        if (msg.expectsVideoBundle) {
+          this._showFaffOverlay(true, randomFaffMessage());
+        } else {
+          this._showFaffOverlay(false, '');
+        }
         if (mapBlob) {
           const fog    = msg.fog    ?? { polygons: [] };
           const filter = msg.filter;
@@ -357,6 +367,28 @@ export class PlayerApp {
             this.renderer.endRevealOverlay();
           }
         })();
+        break;
+      }
+
+      case 'video_bundle': {
+        // v2.12.x animated-map phase 2 — we already have a static
+        // snapshot from the preceding map_change; this message
+        // carries the full video bytes. Swap the renderer texture
+        // from still image to VideoTexture by re-loading via
+        // renderer.loadMap with the video buffer. Skip if the GM
+        // has already moved on to a different map.
+        if (!mapBlob) break;
+        if (msg.mapId !== this.currentMapId) break;
+        const videoBuf = mapBlob;
+        this.lastMapBlob = videoBuf;
+        void this.renderer.loadMap(videoBuf, this.lastFog).then(() => {
+          if (this.lastFilter) this.renderer.setFilter(this.lastFilter);
+          if (this.lastView)   this.renderer.setView(this.lastView);
+          // Phase-1 faff overlay (shown on map_change with
+          // expectsVideoBundle) comes down now that the animation
+          // is live.
+          this._showFaffOverlay(false, '');
+        });
         break;
       }
 

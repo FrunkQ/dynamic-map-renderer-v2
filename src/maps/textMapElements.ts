@@ -37,13 +37,18 @@ export function ensureTextMapElements(cfg: TextMapConfig): TextMapElement[] {
 }
 
 /** Default element factories used by the editor's "+ Text" / "+ Image"
- *  buttons. New elements land roughly centred at a reasonable size. */
+ *  buttons. New elements land roughly centred at a reasonable size.
+ *  Default html is empty so the editor's :empty::before placeholder
+ *  (which pulls a random hint from the TEXTBOX_EMPTY_POOL) actually
+ *  shows. A hardcoded "Click to edit…" body used to live here, which
+ *  filled the element with real text and made it never match :empty —
+ *  the GM never saw a joke even though the placeholder code was right. */
 export function newTextElement(opts: { html?: string } = {}): TextMapTextElement {
   return {
     id:   'text-' + generateId(),
     type: 'text',
     x: 20, y: 30, w: 60, h: 40,
-    html: opts.html ?? '<p>Click to edit…</p>',
+    html: opts.html ?? '',
   };
 }
 

@@ -77,6 +77,10 @@ export class ProjectorApp {
 
   // Cached pieces of state needed to compute our viewport.
   private mapBlob:           ArrayBuffer | null = null;
+  /** v2.12.x — current map id, tracked off map_change so the two-phase
+   *  video_bundle follow-up can guard against stale deliveries after
+   *  the GM has swapped to a different map mid-transfer. */
+  private currentMapId: string | null = null;
   private mapPixelsPerSquare: number | null     = null;
   private mapImageWidth:     number             = 0;
   private mapImageHeight:    number             = 0;
@@ -336,6 +340,7 @@ export class ProjectorApp {
         break;
       }
       case 'map_change': {
+        this.currentMapId   = msg.payload.id;
         this.currentMarkers = msg.markers ?? [];
         this.currentFog     = msg.fog ?? { polygons: [] };
         // Filter belongs to the incoming map — update so we don't keep the
@@ -379,6 +384,18 @@ export class ProjectorApp {
           this.mapBlob = blob;
           void this.renderer.loadMap(blob, this.currentFog);
         }
+        break;
+      }
+      case 'video_bundle': {
+        // v2.12.x — phase 2 of animated-map delivery. Snapshot
+        // arrived earlier via map_change; this carries the full
+        // video bytes. Swap renderer texture from still image to
+        // VideoTexture by re-loading. Guard against stale bundles
+        // when the GM has moved on already.
+        if (!blob) break;
+        if (msg.mapId !== this.currentMapId) break;
+        this.mapBlob = blob;
+        void this.renderer.loadMap(blob, this.currentFog);
         break;
       }
       case 'fog_update': {

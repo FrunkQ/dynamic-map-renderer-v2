@@ -14,6 +14,7 @@ import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { ensureFontsLoaded, registerLocalFontsFromAssets } from '../images/fontCatalog.ts';
 import { generateId } from '../utils/id.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
+import { pickTextboxEmptyHint } from '../utils/emptyHints.ts';
 import { wireSliderTooltip } from '../utils/sliderReadout.ts';
 import { renderAssetToInlineHtml } from '../utils/resolveAssetImages.ts';
 
@@ -875,11 +876,13 @@ export class TextMapEditor {
       // Empty-state placeholder. The CSS rule
       //   .txt-map-el-body--text:empty::before { content: attr(data-placeholder); ... }
       // shows this hint while the element is empty and hides it as
-      // soon as the GM types. Functional affordance — picks "Click
-      // to edit…" rather than a random quip from the empty-hint pool
-      // (which is reserved for empty-state panels like Markers).
+      // soon as the GM types. One pick per element so the same text
+      // box doesn't rotate the joke on every keystroke. The earlier
+      // "Click to edit…" hardcode was a misread of the original
+      // feedback — the GM wanted personality here, not a generic
+      // affordance.
       body.classList.add('txt-map-el-body--text');
-      body.dataset['placeholder'] = 'Click to edit…';
+      body.dataset['placeholder'] = pickTextboxEmptyHint();
       body.addEventListener('input', () => this._onTextInput(el.id, body));
       body.addEventListener('paste', (e) => {
         e.preventDefault();

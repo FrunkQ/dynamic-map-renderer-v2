@@ -43,7 +43,7 @@ export class Guest {
     this.local.onMessage((msg) => {
       // BroadcastChannel uses structured cloning — mapBlob arrives inside the msg object.
       // Extract it so PlayerApp receives it via the standard (msg, mapBlob) signature.
-      if (msg.type === 'full_state' || msg.type === 'map_change' || msg.type === 'handout_reveal') {
+      if (msg.type === 'full_state' || msg.type === 'map_change' || msg.type === 'handout_reveal' || msg.type === 'video_bundle') {
         const blob = (msg as { mapBlob?: ArrayBuffer }).mapBlob;
         const { mapBlob: _stripped, ...cleanMsg } = msg as typeof msg & { mapBlob?: ArrayBuffer };
         void _stripped;
@@ -209,12 +209,13 @@ export class Guest {
     const msg = parsed as unknown as GMMessage;
 
     // If a blob follows, hold until assembled.
-    // map blobs: full_state / map_change / handout_reveal
+    // map blobs: full_state / map_change / handout_reveal / video_bundle
     // audio blobs: soundboard_play / soundboard_asset / positional_play
     if (
       (msg.type === 'full_state'
        || msg.type === 'map_change'
        || msg.type === 'handout_reveal'
+       || msg.type === 'video_bundle'
        || msg.type === 'soundboard_play'
        || msg.type === 'soundboard_asset'
        || msg.type === 'positional_play')
