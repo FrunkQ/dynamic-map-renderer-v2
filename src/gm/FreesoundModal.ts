@@ -285,10 +285,12 @@ export class FreesoundModal {
 
   private _libraryRow(asset: AudioAsset, usedIds: Set<string> = new Set()): HTMLElement {
     const isUnused = !usedIds.has(asset.id);
-    const unusedChip = isUnused
-      ? `<span class="sound-unused" title="Not referenced by any map — safe to delete">[!]</span>`
-      : '';
     const tags: string[] = [];
+    // Unused is just another tag now — sits at the front of the row's
+    // tag line so it's the first thing the GM sees on rows safe to
+    // delete. (Was a tiny `[!]` chip inline with the name; promoted to
+    // a real tag for legibility.)
+    if (isUnused) tags.push('<span class="sound-tag sound-tag--unused" title="Not referenced by any map — safe to delete">Unused</span>');
     if (asset.source === 'freesound') tags.push('<span class="sound-tag sound-tag--freesound">Freesound</span>');
     if (asset.source === 'web-link')  tags.push('<span class="sound-tag sound-tag--url">URL</span>');
     // 'Stored' = "this asset travels in bundle exports". Shown on any
@@ -321,7 +323,8 @@ export class FreesoundModal {
     row.innerHTML = `
       <div class="sound-row">
         <div class="sound-row-info">
-          <span class="sound-name">${tagsHtml}${unusedChip}${this._esc(asset.name)}</span>
+          <span class="sound-name">${this._esc(asset.name)}</span>
+          ${tagsHtml ? `<span class="sound-tags-row">${tagsHtml}</span>` : ''}
           <span class="sound-meta-row">
             <span class="sound-meta">${this._esc(asset.license ?? asset.source)}</span>
             ${editIconHtml}

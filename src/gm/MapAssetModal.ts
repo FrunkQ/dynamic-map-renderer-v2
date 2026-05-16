@@ -296,13 +296,14 @@ export class MapAssetModal {
 
   private _libraryRow(asset: MapAsset, usedIds: Set<string> = new Set()): HTMLElement {
     const isUnused = !usedIds.has(asset.id);
-    const unusedChip = isUnused
-      ? `<span class="sound-unused" title="Not referenced by any map — safe to delete">[!]</span>`
-      : '';
 
     const isTextMap = asset.source === 'text-map';
 
     const tags: string[] = [];
+    // Unused first so it's the most prominent tag — promoted from the
+    // tiny `[!]` chip to a real "Unused" tag for legibility, matching
+    // the sound library's treatment.
+    if (isUnused)                    tags.push('<span class="sound-tag sound-tag--unused" title="Not referenced by any map — safe to delete">Unused</span>');
     if (isTextMap)                   tags.push('<span class="sound-tag sound-tag--textmap" title="Text-based handout — not an image">Text</span>');
     if (asset.source === 'web-link') tags.push('<span class="sound-tag sound-tag--url">URL</span>');
     if (asset.locallyStored)         tags.push('<span class="sound-tag sound-tag--local">Stored</span>');
@@ -355,7 +356,8 @@ export class MapAssetModal {
     row.innerHTML = `
       <div class="sound-row">
         <div class="sound-row-info">
-          <span class="sound-name">${tagsHtml}${unusedChip}${this._esc(asset.filename)}</span>
+          <span class="sound-name">${this._esc(asset.filename)}</span>
+          ${tagsHtml ? `<span class="sound-tags-row">${tagsHtml}</span>` : ''}
           <span class="sound-meta-row">
             <span class="sound-meta">${this._esc(dimText)} · ${this._esc(licenceText)}</span>
             <button class="sound-edit-btn" title="Edit licence + attribution">✎</button>

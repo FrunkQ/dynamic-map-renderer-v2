@@ -4404,7 +4404,27 @@ option.select-option--add {
 .map-nogrid-pill            { cursor: pointer; transition: background 0.15s; }
 .map-nogrid-pill:hover      { background: rgba(148, 163, 184, 0.15); }
 
-/* Unused-asset chip — shown next to library rows / icons that aren't referenced anywhere. */
+/* Unused asset tag — sits in the library row's tags line so the GM
+   can spot rows safe to delete at a glance. Promoted from the legacy
+   tiny `[!]` chip (.sound-unused, retained below for any callers
+   outside the library rows). Orange/amber matches the prior chip
+   colour so muscle memory carries over. */
+.sound-tag--unused { color: #f59e0b; border-color: rgba(245, 158, 11, 0.4); }
+
+/* Dedicated row for tag pills underneath the asset name. Sits
+   between .sound-name and .sound-meta-row so the visual rhythm is
+   name → tags → meta. Wrap so long tag sets don't push the row
+   horizontally; tight gap keeps things compact. */
+.sound-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Legacy `[!]` chip — no longer used by the library rows but kept
+   in case anywhere outside still references it. Safe to remove
+   once no usages remain. */
 .sound-unused {
   display: inline-block;
   font-size: 0.65rem;
