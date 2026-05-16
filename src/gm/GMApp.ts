@@ -3538,10 +3538,7 @@ export class GMApp {
         await this.state.flushSave(); // ensure the source map's latest state is on disk
         const newMap = await this.maps.cloneMap(id);
         if (!newMap) return;
-        const opt = document.createElement('option');
-        opt.value = newMap.id;
-        opt.textContent = newMap.name;
-        this.mapSelect.appendChild(opt);
+        this._insertMapOptionSorted(newMap.id, newMap.name);
         this.mapSelect.value = newMap.id;
         this.mapEditableSelect.refresh();
         await this.loadMap(newMap);
@@ -4406,25 +4403,48 @@ export class GMApp {
   }
 
   /** Open the Add Map dialog (Library / Web Links / Upload). On a successful
-   *  pick the new map is inserted into #map-select before the trailing
-   *  separator / "+ Add New Map" so the action stays at the bottom. */
+   *  pick the new map is inserted into #map-select at its alphabetical
+   *  position — matching the by_name IDB index that drives the dropdown
+   *  on reload. Previously the new option went to the bottom and only
+   *  resorted into place after a page reload. */
   private openAddMapDialog(): void {
     this.mapAssetModal.open((map) => {
-      const opt = document.createElement('option');
-      opt.value = map.id;
-      opt.textContent = map.name;
-      const addSentinel = this.mapSelect.querySelector<HTMLOptionElement>(
-        `option[value="${SELECT_ADD_SENTINEL}"]`,
-      );
-      // The disabled separator sits immediately before the add sentinel — anchor
-      // the insert against the separator so the new option lands above both.
-      const insertBefore = addSentinel?.previousElementSibling ?? addSentinel ?? null;
-      this.mapSelect.insertBefore(opt, insertBefore);
+      this._insertMapOptionSorted(map.id, map.name);
       this.mapSelect.value = map.id;
       this.mapEditableSelect.refresh();
       this._lastMapSelectValue = map.id;
       void this.loadMap(map);
     });
+  }
+
+  /** Insert a new map option into the dropdown at its alphabetical
+   *  position by name — matches the by_name IDB index that
+   *  populateMapList iterates on reload, so adding / cloning a map no
+   *  longer shows it at the bottom until the GM refreshes the page.
+   *  Skips the disabled separator and the "+ Add New Map" sentinel so
+   *  they always anchor at the end. Strips trailing " [T]" from
+   *  existing labels (text-map marker) so the comparison is against
+   *  the raw display name. */
+  private _insertMapOptionSorted(id: string, name: string): void {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = name;
+    const addSentinel = this.mapSelect.querySelector<HTMLOptionElement>(
+      `option[value="${SELECT_ADD_SENTINEL}"]`,
+    );
+    const separator = addSentinel?.previousElementSibling ?? null;
+    const stripTextMapSuffix = (s: string): string => s.replace(/ \[T\]$/, '');
+    let insertBefore: Element | null = separator ?? addSentinel ?? null;
+    for (const existing of Array.from(this.mapSelect.options)) {
+      if (!existing.value || existing.disabled) continue;
+      if (existing.value === SELECT_ADD_SENTINEL) continue;
+      const existingName = stripTextMapSuffix(existing.textContent ?? '');
+      if (existingName.localeCompare(name, undefined, { sensitivity: 'base' }) > 0) {
+        insertBefore = existing;
+        break;
+      }
+    }
+    this.mapSelect.insertBefore(opt, insertBefore);
   }
 
   /** Persist a rename of the active map, triggered from the EditableSelect.
