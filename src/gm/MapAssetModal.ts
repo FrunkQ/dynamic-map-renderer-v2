@@ -325,13 +325,17 @@ export class MapAssetModal {
     const downloadBtnHtml = (asset.locallyStored && !isTextMap)
       ? `<button class="btn btn--ghost btn--xs map-download-btn" title="Download this map image">⬇</button>`
       : '';
-    // Text maps get an Edit button; image maps get the Scale button (when
-    // not yet calibrated and not opted out of grids).
+    // Text maps get an Edit button + a Copy button (use one as a
+    // template); image maps get the Scale button (when not yet
+    // calibrated and not opted out of grids).
     const scaleOrEditBtnHtml = isTextMap
       ? `<button class="btn btn--ghost btn--xs map-edit-textmap-btn" title="Edit this handout's body, font, and layout">Edit</button>`
       : (asset.pixelsPerSquare || asset.noGrid)
         ? ''
         : `<button class="btn btn--ghost btn--xs map-scale-btn" title="Calibrate map scale (pixels per 5' square)">Scale</button>`;
+    const copyTextMapBtnHtml = isTextMap
+      ? `<button class="btn btn--ghost btn--xs map-copy-textmap-btn" title="Duplicate this handout — use one as a template for new ones">Copy</button>`
+      : '';
 
     // For handouts: show the aspect ratio rather than the rasterised
     // pixel dimensions. The pixel size is an implementation detail
@@ -359,6 +363,7 @@ export class MapAssetModal {
         </div>
         <div class="sound-row-actions">
           ${scaleOrEditBtnHtml}
+          ${copyTextMapBtnHtml}
           ${storeBtnHtml}
           ${downloadBtnHtml}
           <button class="btn btn--primary btn--xs map-use-btn">Use</button>
@@ -455,6 +460,26 @@ export class MapAssetModal {
     };
     row.querySelector<HTMLButtonElement>('.map-scale-btn')?.addEventListener('click', openCalibration);
     row.querySelector<HTMLButtonElement>('.map-edit-calibrate')?.addEventListener('click', openCalibration);
+    // Text-map Copy — duplicate the asset under a fresh id so the GM
+    // can use an existing handout as a template. Deep-clones the
+    // textMap payload (JSON parse/stringify is safe — TextMapConfig
+    // is plain-data: strings, numbers, nested element arrays). Name
+    // gets a " - copy" suffix unless it already has one.
+    row.querySelector<HTMLButtonElement>('.map-copy-textmap-btn')?.addEventListener('click', async () => {
+      if (!asset.textMap) return;
+      const baseName = asset.filename.endsWith(' - copy')
+        ? asset.filename
+        : `${asset.filename} - copy`;
+      const copy: MapAsset = {
+        ...asset,
+        id:        'textmap-' + generateId(),
+        filename:  baseName,
+        textMap:   JSON.parse(JSON.stringify(asset.textMap)),
+        addedAt:   Date.now(),
+      };
+      await MapAssetStore.save(copy);
+      await this._renderLibrary();
+    });
     // Text-map Edit button — opens the TextMapEditor with the existing
     // asset. On save the asset record updates in place; library re-renders.
     row.querySelector<HTMLButtonElement>('.map-edit-textmap-btn')?.addEventListener('click', async () => {
