@@ -497,11 +497,6 @@ export interface MsgMapChange {
   projectorViewport?: ProjectorViewport;
   mapBlob: ArrayBuffer;
   transition?: TransitionConfig;
-  /** v2.12.x — set when the mapBlob is a first-frame snapshot of a
-   *  video map and the GM is about to follow up with a MsgVideoBundle
-   *  carrying the full video bytes. Receivers use this as a cue to
-   *  show a "loading animated map…" faff overlay while they wait. */
-  expectsVideoBundle?: boolean;
 }
 
 export interface MarkerIconData {

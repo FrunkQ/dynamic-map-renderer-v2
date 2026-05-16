@@ -191,6 +191,9 @@ export class Renderer {
       if (stashedUrl) URL.revokeObjectURL(stashedUrl);
       this.mapVideo.removeAttribute('src');
       try { this.mapVideo.load(); } catch { /* OK if it errors */ }
+      // _loadVideoMap appends to document.body so detached-element
+      // throttling doesn't stall playback; tear that link down too.
+      if (this.mapVideo.parentElement) this.mapVideo.parentElement.removeChild(this.mapVideo);
       this.mapVideo = null;
     }
     this.hasVideoMap = false;
@@ -210,6 +213,20 @@ export class Renderer {
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
+      // Attach to DOM (hidden) — detached / offscreen video elements
+      // get aggressively throttled by browsers (especially when the
+      // owning window isn't focused), which manifests as the
+      // animation "stalling" once the player window isn't full-size.
+      // Three.js VideoTexture docs explicitly recommend DOM-attaching
+      // for the same reason.
+      video.style.position = 'fixed';
+      video.style.left = '-9999px';
+      video.style.top  = '-9999px';
+      video.style.width = '1px';
+      video.style.height = '1px';
+      video.style.opacity = '0';
+      video.style.pointerEvents = 'none';
+      document.body.appendChild(video);
       // Stash the blob URL on the element so _disposeMapTexture can
       // revoke it at the right moment — i.e. when the video really is
       // done, NOT after the first metadata load (which would break
@@ -222,6 +239,7 @@ export class Renderer {
           video.pause();
           video.removeAttribute('src');
           try { video.load(); } catch { /* OK */ }
+          if (video.parentElement) video.parentElement.removeChild(video);
           URL.revokeObjectURL(url);
           resolve();
           return;
@@ -269,9 +287,26 @@ export class Renderer {
         resolve();
       };
 
-      video.addEventListener('loadedmetadata', finish, { once: true });
+      // Wait for canplaythrough — the browser thinks it can play the
+      // whole thing without rebuffering. The bytes are already 100%
+      // local (blob URL), so this typically fires within a second or
+      // two. Means we don't swap the player's static snapshot for
+      // the video texture until the video is genuinely ready to
+      // play smoothly — no stutter on swap.
+      //
+      // Fallback: some browsers fire canplaythrough inconsistently
+      // for blob URLs. After 4 s, fall back to canplay (sufficient
+      // data to start). After 8 s, force-fire on whatever state we
+      // have so the GM isn't stuck on the snapshot indefinitely.
+      let settled = false;
+      const fire = () => { if (!settled) { settled = true; finish(); } };
+      video.addEventListener('canplaythrough', fire, { once: true });
+      setTimeout(() => { if (!settled && video.readyState >= 3) fire(); }, 4000);
+      setTimeout(() => { fire(); }, 8000);
       video.addEventListener('error', () => {
         URL.revokeObjectURL(url);
+        if (video.parentElement) video.parentElement.removeChild(video);
+        settled = true;
         resolve(); // failed — don't block any awaiting transition
       }, { once: true });
     });

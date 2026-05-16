@@ -2152,7 +2152,6 @@ export class GMApp {
       // or the final frame (everything else).
       mapBlob:    broadcastBlob,
       transition: this.buildTransitionConfig(),
-      ...(this._pendingVideoBundle ? { expectsVideoBundle: true } : {}),
     });
 
     // v2.12.x — if this map is a video asset and we have its full
