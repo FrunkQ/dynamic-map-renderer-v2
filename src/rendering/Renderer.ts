@@ -77,6 +77,13 @@ export class Renderer {
    *  throttling that surfaced when a player window wasn't full size
    *  (Chromium / Firefox throttle "less visible" videos otherwise). */
   private _videoFrameCbId: number | null = null;
+  /** Timestamp of the last requestVideoFrameCallback fire, used by
+   *  the stall watchdog. */
+  private _videoLastFrameAt = 0;
+  /** Watchdog interval that re-kicks play() if the rVFC pump has
+   *  gone silent while the video is supposed to be playing. Cleared
+   *  on dispose. */
+  private _videoWatchdogId: ReturnType<typeof setInterval> | null = null;
   /** Lazily-built ImageData cache for the loaded map's pixels. Used
    *  by the Magic Wand fill (src/mapfx/floodFill.ts) which needs to
    *  read the map's raw pixels to flood-fill from a click point.
@@ -192,13 +199,34 @@ export class Renderer {
       requestVideoFrameCallback?: (cb: () => void) => number;
     };
     const vid = video as WithRvfc;
+    this._videoLastFrameAt = performance.now();
     if (typeof vid.requestVideoFrameCallback !== 'function') return;
     const cb = () => {
       if (this.mapVideo !== video) return; // superseded by a newer load
       this.needsRender = true;
+      this._videoLastFrameAt = performance.now();
       this._videoFrameCbId = (this.mapVideo as WithRvfc).requestVideoFrameCallback!(cb);
     };
     this._videoFrameCbId = vid.requestVideoFrameCallback(cb);
+
+    // Stall watchdog — if the rVFC pump goes silent for more than
+    // 1.5 s while the video isn't paused / ended, the browser has
+    // throttled or stalled the decoder. Re-kick play() to wake it
+    // back up. Fires at 2 Hz; cheap. Cleared in _stopVideoFramePump.
+    if (this._videoWatchdogId !== null) clearInterval(this._videoWatchdogId);
+    this._videoWatchdogId = setInterval(() => {
+      const v = this.mapVideo;
+      if (!v || v !== video) return;
+      if (v.paused || v.ended) return;
+      const elapsed = performance.now() - this._videoLastFrameAt;
+      if (elapsed > 1500) {
+        // Nudge — the browser sometimes wakes the decoder back up
+        // when play() is called fresh. Don't fight it if play
+        // returns a rejection (autoplay policy etc.).
+        void v.play().catch(() => {});
+        this._videoLastFrameAt = performance.now();
+      }
+    }, 500);
   }
 
   private _stopVideoFramePump(): void {
@@ -209,6 +237,10 @@ export class Renderer {
       vid.cancelVideoFrameCallback?.(this._videoFrameCbId);
     }
     this._videoFrameCbId = null;
+    if (this._videoWatchdogId !== null) {
+      clearInterval(this._videoWatchdogId);
+      this._videoWatchdogId = null;
+    }
   }
 
   /** Tear down whichever map texture is live (image Texture or
@@ -251,8 +283,20 @@ export class Renderer {
       video.loop = true;
       video.muted = true;
       video.playsInline = true;
-      video.crossOrigin = 'anonymous';
+      // No crossOrigin attribute — blob URLs are same-origin to the
+      // page that created them; setting it to 'anonymous' has been
+      // known to confuse some browsers' resource fetch path for
+      // blob:// schemes.
       video.preload = 'auto';
+      // Belt-and-braces loop fallback. Some browsers (and some
+      // codec / container combos) don't reliably honour
+      // video.loop = true on blob URLs — the video plays once and
+      // then sits at duration. Manually rewind + replay on ended
+      // so playback is robust regardless.
+      video.addEventListener('ended', () => {
+        try { video.currentTime = 0; } catch { /* benign */ }
+        void video.play().catch(() => {});
+      });
       // Attach to DOM — detached video elements get throttled by
       // browsers. Keep it in normal layout flow at a non-zero size
       // (off-screen positioning trips browser intersection-observer
