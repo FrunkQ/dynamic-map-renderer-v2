@@ -67,6 +67,13 @@ export class Renderer {
    *  can play / pause / dispose the underlying element separately
    *  from the THREE.VideoTexture, which only owns the GPU side. */
   private mapVideo:     HTMLVideoElement | null = null;
+  /** v2.12.x — downscale canvas + 2D context for video maps whose
+   *  natural resolution exceeds the GPU upload budget (4K video at
+   *  60 Hz = ~2 GB/s of texImage2D). We blit the video into this
+   *  canvas at a sensible max size, then upload the canvas. The
+   *  CanvasTexture wrapping it sits on this.mapTexture. */
+  private mapVideoScaleCanvas: HTMLCanvasElement | null = null;
+  private mapVideoScaleCtx:    CanvasRenderingContext2D | null = null;
   /** v2.12 — true while a VideoTexture is the active map texture.
    *  Drives the renderFrame keep-alive (animated maps must redraw
    *  every frame so the texture's auto-update has a tick to land on). */
@@ -185,6 +192,50 @@ export class Renderer {
     return 'image';
   }
 
+  /** v2.12.x — pick the right scale-canvas size for a video texture
+   *  given the source's natural dimensions. Targets the WebGL canvas's
+   *  physical-pixel size (so the texture matches what we're rendering
+   *  at), capped at a hard 1920 max side as belt-and-braces against
+   *  enormous canvases on 4K monitors, and bounded above by the
+   *  source's native resolution (no point upscaling a 720p video). */
+  private _computeVideoTexSize(vw: number, vh: number): { w: number; h: number; scale: number } {
+    const dpr = window.devicePixelRatio || 1;
+    const canvas = this.renderer.domElement;
+    const canvasW = (canvas.clientWidth  || canvas.width  || 1) * dpr;
+    const canvasH = (canvas.clientHeight || canvas.height || 1) * dpr;
+    const canvasMax = Math.max(canvasW, canvasH, 1);
+    const HARD_CAP = 1920;
+    const target = Math.min(canvasMax, HARD_CAP);
+    const sourceMax = Math.max(vw, vh, 1);
+    const scale = sourceMax > target ? target / sourceMax : 1;
+    return {
+      w: Math.max(1, Math.round(vw * scale)),
+      h: Math.max(1, Math.round(vh * scale)),
+      scale,
+    };
+  }
+
+  /** v2.12.x — re-size the video scale canvas when the WebGL canvas
+   *  changes size. Called from handleResize. No-op when there's no
+   *  video map active or the new target matches the current size. */
+  private _refreshVideoTexSize(): void {
+    if (!this.mapVideo || !this.mapVideoScaleCanvas || !this.mapVideoScaleCtx) return;
+    const { w, h } = this._computeVideoTexSize(
+      this.mapVideo.videoWidth  || 1,
+      this.mapVideo.videoHeight || 1,
+    );
+    if (this.mapVideoScaleCanvas.width === w && this.mapVideoScaleCanvas.height === h) return;
+    this.mapVideoScaleCanvas.width  = w;
+    this.mapVideoScaleCanvas.height = h;
+    // Resizing a canvas clears it; redraw the current video frame so
+    // the next render has valid pixels instead of a black gap until
+    // rVFC fires again.
+    try {
+      this.mapVideoScaleCtx.drawImage(this.mapVideo, 0, 0, w, h);
+    } catch { /* element may not be ready */ }
+    if (this.mapTexture) this.mapTexture.needsUpdate = true;
+  }
+
   /** v2.12.x — start a requestVideoFrameCallback pump. Re-arms itself
    *  on every callback so the browser sees a continuous active
    *  consumer of decoded frames, which prevents the throttling that
@@ -215,6 +266,22 @@ export class Renderer {
     }
     const cb = () => {
       if (this.mapVideo !== video) return; // superseded by a newer load
+      // Downscale path: blit the latest video frame into the scale
+      // canvas at the capped texture size, then mark the CanvasTexture
+      // dirty. The expensive texImage2D happens at this smaller size,
+      // not the source's native 4K — that's what unsticks the player
+      // on 4K maps. CanvasTexture.needsUpdate triggers re-upload on
+      // the next render.
+      if (this.mapVideoScaleCtx && this.mapVideoScaleCanvas) {
+        try {
+          this.mapVideoScaleCtx.drawImage(
+            video, 0, 0,
+            this.mapVideoScaleCanvas.width,
+            this.mapVideoScaleCanvas.height,
+          );
+        } catch { /* element may have torn down between callback dispatch and this line */ }
+        if (this.mapTexture) this.mapTexture.needsUpdate = true;
+      }
       this.needsRender = true;
       this._videoLastFrameAt = performance.now();
       frameCount++;
@@ -306,6 +373,11 @@ export class Renderer {
       if (this.mapVideo.parentElement) this.mapVideo.parentElement.removeChild(this.mapVideo);
       this.mapVideo = null;
     }
+    // v2.12.x — release the scale canvas + context too; they belong to
+    // the video pipeline and would just sit holding RAM on a map
+    // switch to a still image otherwise.
+    this.mapVideoScaleCanvas = null;
+    this.mapVideoScaleCtx    = null;
     this.hasVideoMap = false;
   }
 
@@ -396,20 +468,62 @@ export class Renderer {
 
         this._disposeMapTexture();
 
-        const tex = new THREE.VideoTexture(video);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-
-        this.mapTexture = tex;
+        const vw = video.videoWidth || 1;
+        const vh = video.videoHeight || 1;
+        // Pick a texture size that respects GPU upload cost. A 4K
+        // source uploaded directly to the GPU per frame (~33 MB at
+        // 8MP × RGBA) saturates texImage2D — Chrome reports 200-400 ms
+        // rAF handler times for it, the player stalls almost
+        // immediately.
+        //
+        // Target the actual rendering surface (canvas physical pixels)
+        // capped at a hard ceiling of 1920 max side. A player on a
+        // small window doesn't need a big texture; the source's
+        // natural resolution is also an upper bound. The result is
+        // proportional GPU work — full quality when the canvas is
+        // large, cheap when it's small. handleResize re-runs this
+        // calculation so the texture matches when the window grows.
+        const { w: targetW, h: targetH, scale } = this._computeVideoTexSize(vw, vh);
+        const scaleCanvas = document.createElement('canvas');
+        scaleCanvas.width  = targetW;
+        scaleCanvas.height = targetH;
+        const scaleCtx = scaleCanvas.getContext('2d');
+        if (!scaleCtx) {
+          // Falling back to a direct VideoTexture is better than failing the
+          // load — still might stall on 4K but at least the user sees
+          // something.
+          const tex = new THREE.VideoTexture(video);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.minFilter = THREE.LinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.generateMipmaps = false;
+          this.mapTexture = tex;
+        } else {
+          // Paint frame 0 immediately so the texture has content before
+          // the first rVFC fires. Without this the first render is
+          // garbage (uninitialised canvas) for a frame or two.
+          try { scaleCtx.drawImage(video, 0, 0, targetW, targetH); } catch { /* ignore */ }
+          const tex = new THREE.CanvasTexture(scaleCanvas);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.minFilter = THREE.LinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.generateMipmaps = false;
+          this.mapTexture = tex;
+          this.mapVideoScaleCanvas = scaleCanvas;
+          this.mapVideoScaleCtx    = scaleCtx;
+        }
         this.mapVideo = video;
         this.hasVideoMap = true;
         this._mapImageDataCache = null;
 
-        const vw = video.videoWidth || 1;
-        const vh = video.videoHeight || 1;
         this.aspectRatio = vw / vh;
+
+        // eslint-disable-next-line no-console
+        console.info(
+          `[video-map] loaded — source ${vw}×${vh}, texture ${targetW}×${targetH}` +
+          (scale < 1 ? ` (downscaled ${(scale * 100).toFixed(0)}%)` : ' (no downscale)') +
+          '. Enable per-frame logging: localStorage.mappadux_debug_video = "1"',
+        );
 
         // Same fog / shader-plane reset path as the image branch.
         this.fogCompositor.dispose();
@@ -1557,6 +1671,10 @@ export class Renderer {
     // are authoritative physical-pixel values we can rely on below.
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
+    // Video maps re-size their downscale canvas to match the new
+    // rendering surface — keeps the texture proportional to what's
+    // actually being painted.
+    this._refreshVideoTexSize();
 
     // resolution must be in *physical* pixels to match gl_FragCoord.xy.
     // clientWidth/clientHeight are CSS pixels; canvas.width/height are the
