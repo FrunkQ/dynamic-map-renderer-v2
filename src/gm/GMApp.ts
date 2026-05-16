@@ -114,6 +114,22 @@ function _cleanMapDisplayName(name: string): string {
     .trim();
 }
 
+/** Cheap magic-byte sniff — true when the buffer is webm or mp4.
+ *  Matches the Renderer's loadMap sniff so GMApp paths that branch on
+ *  media kind (auto-bg sampler etc.) agree with the renderer about
+ *  which assets are video. Conservative: anything that doesn't match
+ *  either signature is treated as not-video (i.e. image), matching
+ *  the renderer's image-fallback default. */
+function _sniffIsVideo(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 12) return false;
+  const a = new Uint8Array(buffer, 0, 12);
+  // WebM (EBML magic 1A 45 DF A3)
+  if (a[0] === 0x1a && a[1] === 0x45 && a[2] === 0xdf && a[3] === 0xa3) return true;
+  // MP4 / MOV — ftyp atom at offset 4
+  if (a[4] === 0x66 && a[5] === 0x74 && a[6] === 0x79 && a[7] === 0x70) return true;
+  return false;
+}
+
 /** Map ASCII letters to their Mathematical Sans-Serif Bold Unicode
  *  equivalents. Used for the dropdown's "Fog of War" entry so it
  *  visually stands out from the MapFX kinds without needing CSS
@@ -3740,9 +3756,23 @@ export class GMApp {
     });
   }
 
-  /** Sample the top-left pixel of a map image blob and return a CSS hex colour. */
+  /** Sample the top-left pixel of a map asset and return a CSS hex colour.
+   *  Works for still images (createImageBitmap path) AND video maps
+   *  (webm / mp4 — decode the first frame via a hidden <video>). Returns
+   *  '#000000' when the asset can't be decoded as either, so the caller
+   *  just falls through to the default background. Errors are swallowed
+   *  — auto-bg is a nicety, not worth surfacing decode failures. */
   private async sampleTopLeftPixel(blob: ArrayBuffer): Promise<string> {
-    const bmp = await createImageBitmap(new Blob([blob]));
+    try {
+      if (_sniffIsVideo(blob)) return await this._sampleVideoTopLeft(blob);
+      return await this._sampleImageTopLeft(blob);
+    } catch {
+      return '#000000';
+    }
+  }
+
+  private async _sampleImageTopLeft(buffer: ArrayBuffer): Promise<string> {
+    const bmp = await createImageBitmap(new Blob([buffer]));
     const cv  = document.createElement('canvas');
     cv.width  = 1;
     cv.height = 1;
@@ -3750,6 +3780,44 @@ export class GMApp {
     bmp.close();
     const d = cv.getContext('2d')!.getImageData(0, 0, 1, 1).data;
     return '#' + [d[0]!, d[1]!, d[2]!].map((v) => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  private _sampleVideoTopLeft(buffer: ArrayBuffer): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      // Build a Blob with a video MIME so the element actually decodes
+      // it — magic-byte sniff already picked the right path; we just
+      // need to give the browser a hint.
+      const mime = new Uint8Array(buffer.slice(0, 4))[0] === 0x1a ? 'video/webm' : 'video/mp4';
+      const url  = URL.createObjectURL(new Blob([buffer], { type: mime }));
+      const v    = document.createElement('video');
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.src = url;
+      const teardown = () => {
+        URL.revokeObjectURL(url);
+        v.removeAttribute('src');
+        try { v.load(); } catch { /* benign */ }
+      };
+      // We need a paintable first frame, not just metadata — wait for
+      // canplay (Chrome) / loadeddata (Safari) before drawing.
+      const onReady = () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = 1; cv.height = 1;
+          cv.getContext('2d')!.drawImage(v, 0, 0, 1, 1);
+          const d = cv.getContext('2d')!.getImageData(0, 0, 1, 1).data;
+          const hex = '#' + [d[0]!, d[1]!, d[2]!].map((n) => n.toString(16).padStart(2, '0')).join('');
+          teardown();
+          resolve(hex);
+        } catch (err) {
+          teardown();
+          reject(err as Error);
+        }
+      };
+      v.addEventListener('loadeddata', onReady, { once: true });
+      v.addEventListener('error', () => { teardown(); reject(new Error('video decode failed')); }, { once: true });
+    });
   }
 
   /** v2.12 — refresh the FX button's "active" dot so the GM can tell at
