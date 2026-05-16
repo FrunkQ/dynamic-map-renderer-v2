@@ -1648,19 +1648,16 @@ export class GMApp {
     for (const m of maps) {
       const opt = document.createElement('option');
       opt.value = m.id;
-      // Tag text-map (handout) entries with a trailing [T] so they
-      // stand out from regular image maps in the dropdown — matches
-      // the My Library row's marker. Trailing (not leading) so an
-      // alphabetical sort by name still works the way the GM expects;
-      // a leading "[T]" would cluster every handout under '['.
-      // Strip any trailing " [T]" from the stored name before re-adding
-      // it — defensive against legacy data that got " [T]" baked into
-      // m.name by an earlier rename bug. The cleaned form is what
-      // localCompare sees in _insertMapOptionSorted, so sort order is
-      // also consistent.
+      // Text-map (handout) rows render in italic to set them apart
+      // from regular image maps. Previously this used a trailing
+      // " [T]" decoration which caused naming bugs on rename; italic
+      // styling keeps the name untouched. Strip any legacy " [T]"
+      // baked into m.name by the old code so existing libraries
+      // display cleanly without forcing a manual re-edit.
       const isTextMap = sourceByAssetId.get(m.mapAssetId) === 'text-map';
       const cleanName = m.name.replace(/(?: \[T\])+$/, '').trim();
-      opt.textContent = isTextMap ? `${cleanName} [T]` : cleanName;
+      opt.textContent = cleanName;
+      if (isTextMap) opt.style.fontStyle = 'italic';
       this.mapSelect.appendChild(opt);
     }
 
@@ -3544,7 +3541,12 @@ export class GMApp {
         await this.state.flushSave(); // ensure the source map's latest state is on disk
         const newMap = await this.maps.cloneMap(id);
         if (!newMap) return;
-        this._insertMapOptionSorted(newMap.id, newMap.name);
+        // Cloned map shares its source's asset id, so the italic
+        // styling carries over — look it up the same way the Add flow
+        // and populateMapList do.
+        const asset = await MapAssetStore.get(newMap.mapAssetId);
+        const isTextMap = asset?.source === 'text-map';
+        this._insertMapOptionSorted(newMap.id, newMap.name, isTextMap);
         this.mapSelect.value = newMap.id;
         this.mapEditableSelect.refresh();
         await this.loadMap(newMap);
@@ -4414,8 +4416,12 @@ export class GMApp {
    *  on reload. Previously the new option went to the bottom and only
    *  resorted into place after a page reload. */
   private openAddMapDialog(): void {
-    this.mapAssetModal.open((map) => {
-      this._insertMapOptionSorted(map.id, map.name);
+    this.mapAssetModal.open(async (map) => {
+      // Look up the asset so handouts come into the dropdown in italic
+      // — same treatment as populateMapList applies on reload.
+      const asset = await MapAssetStore.get(map.mapAssetId);
+      const isTextMap = asset?.source === 'text-map';
+      this._insertMapOptionSorted(map.id, map.name, isTextMap);
       this.mapSelect.value = map.id;
       this.mapEditableSelect.refresh();
       this._lastMapSelectValue = map.id;
@@ -4428,23 +4434,22 @@ export class GMApp {
    *  populateMapList iterates on reload, so adding / cloning a map no
    *  longer shows it at the bottom until the GM refreshes the page.
    *  Skips the disabled separator and the "+ Add New Map" sentinel so
-   *  they always anchor at the end. Strips trailing " [T]" from
-   *  existing labels (text-map marker) so the comparison is against
-   *  the raw display name. */
-  private _insertMapOptionSorted(id: string, name: string): void {
+   *  they always anchor at the end. Pass `italic` to mark text-map
+   *  (handout) rows visually without touching the name. */
+  private _insertMapOptionSorted(id: string, name: string, italic = false): void {
     const opt = document.createElement('option');
     opt.value = id;
     opt.textContent = name;
+    if (italic) opt.style.fontStyle = 'italic';
     const addSentinel = this.mapSelect.querySelector<HTMLOptionElement>(
       `option[value="${SELECT_ADD_SENTINEL}"]`,
     );
     const separator = addSentinel?.previousElementSibling ?? null;
-    const stripTextMapSuffix = (s: string): string => s.replace(/ \[T\]$/, '');
     let insertBefore: Element | null = separator ?? addSentinel ?? null;
     for (const existing of Array.from(this.mapSelect.options)) {
       if (!existing.value || existing.disabled) continue;
       if (existing.value === SELECT_ADD_SENTINEL) continue;
-      const existingName = stripTextMapSuffix(existing.textContent ?? '');
+      const existingName = existing.textContent ?? '';
       if (existingName.localeCompare(name, undefined, { sensitivity: 'base' }) > 0) {
         insertBefore = existing;
         break;
@@ -4461,19 +4466,15 @@ export class GMApp {
    *  after rename. */
   private async _renameMap(id: string, name: string): Promise<void> {
     if (!id) return;
-    // EditableSelect passes the option's full textContent through —
-    // which for text-map rows includes the trailing " [T]" decoration
-    // added by populateMapList. Persisting that raw string into
-    // StoredMap.name and then having populateMapList re-append " [T]"
-    // on the next render is how rows ended up as "Foo [T] [T] [T]".
-    // Strip every trailing " [T]" (handles already-damaged names from
-    // previous renames too) before storage and re-render.
+    // Defensive: legacy data may have " [T]" baked into the stored
+    // name from the old decoration scheme. Strip on the way in so a
+    // round-trip via EditableSelect doesn't re-persist the marker.
     const cleanName = name.replace(/(?: \[T\])+$/, '').trim();
     await this.maps.rename(id, cleanName);
     const oldOpt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
     if (!oldOpt) { this.mapEditableSelect.refresh(); return; }
-    // Look up the underlying asset to know whether this is a text-map
-    // (so the dropdown label keeps its " [T]" marker after rename).
+    // Look up the underlying asset so the re-inserted option keeps
+    // its italic styling if this is a text-map handout.
     const map = await getMap(id);
     let isTextMap = false;
     if (map) {
@@ -4481,9 +4482,8 @@ export class GMApp {
       isTextMap = asset?.source === 'text-map';
     }
     const displayName = cleanName || '(unnamed)';
-    const label = isTextMap ? `${displayName} [T]` : displayName;
     oldOpt.remove();
-    this._insertMapOptionSorted(id, label);
+    this._insertMapOptionSorted(id, displayName, isTextMap);
     this.mapSelect.value = id;
     this._lastMapSelectValue = id;
     this.mapEditableSelect.refresh();
