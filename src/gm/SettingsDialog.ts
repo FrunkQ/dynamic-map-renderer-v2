@@ -1,6 +1,8 @@
 import {
   getStoredApiKeys,
   deleteAllApiKeys,
+  isVideoCap1080Enabled,
+  setVideoCap1080Enabled,
   type StoredApiKey,
 } from '../storage/localSettings.ts';
 
@@ -71,6 +73,8 @@ export class SettingsDialog {
 
     // ── Storage section ──────────────────────────────────────────────────
     body.appendChild(this._buildStorageSection());
+    // ── Performance section ──────────────────────────────────────────────
+    body.appendChild(this._buildPerformanceSection());
     // ── API Keys section ─────────────────────────────────────────────────
     body.appendChild(this._buildApiKeysSection());
     // ── Danger Zone ──────────────────────────────────────────────────────
@@ -214,6 +218,40 @@ export class SettingsDialog {
       sec.appendChild(btnRow);
     }
 
+    return sec;
+  }
+
+  // ─── Performance ────────────────────────────────────────────────────────
+
+  private _buildPerformanceSection(): HTMLElement {
+    const sec = mkSection(
+      'Performance',
+      'Settings that trade visual fidelity for smoother playback. Useful on lower-end GPUs or when running many windows at once.',
+    );
+
+    const row = document.createElement('div');
+    row.className = 'settings-danger-row';
+
+    const label = document.createElement('div');
+    label.innerHTML =
+      '<strong>Cap animated maps at 1080p</strong><br>' +
+      '<span class="settings-stat-sub">Animated map textures render at the size of the player / projector window by default — so a 4K source on a 4K display uploads 4K every frame. ' +
+      'On lower-end GPUs that can saturate the upload budget and the playback stalls. Tick this to cap the texture at 1920 px on the longest side regardless of window size — looks slightly softer when zoomed in, plays smoothly everywhere.</span>';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'toggle-switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = isVideoCap1080Enabled();
+    input.addEventListener('change', () => {
+      setVideoCap1080Enabled(input.checked);
+    });
+    const slider = document.createElement('span');
+    slider.className = 'toggle-slider';
+    toggle.append(input, slider);
+
+    row.append(label, toggle);
+    sec.appendChild(row);
     return sec;
   }
 

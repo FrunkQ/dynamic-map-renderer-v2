@@ -18,6 +18,25 @@
  *  startup code that honours it. */
 export const SUPPRESS_DEFAULT_SEED_KEY = 'dmr_suppress_default_seed';
 
+/** Animated map performance cap (v2.12.x). When set, the renderer caps
+ *  video-map texture uploads at 1920 px on the longest side regardless
+ *  of canvas size — useful on lower-end GPUs where a 4K canvas + 4K
+ *  source causes texImage2D to saturate the rAF budget. Default off
+ *  (no cap) — canvas size drives the texture. */
+export const VIDEO_CAP_1080_KEY = 'dmr_video_cap_1080';
+
+export function isVideoCap1080Enabled(): boolean {
+  try { return localStorage.getItem(VIDEO_CAP_1080_KEY) === '1'; }
+  catch { return false; }
+}
+
+export function setVideoCap1080Enabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(VIDEO_CAP_1080_KEY, '1');
+    else         localStorage.removeItem(VIDEO_CAP_1080_KEY);
+  } catch { /* private mode etc. — no-op */ }
+}
+
 /** Known API key entries kept in localStorage. Used by Settings to list +
  *  delete credentials separately from other local state. */
 export const API_KEY_ENTRIES: Array<{ key: string; label: string }> = [

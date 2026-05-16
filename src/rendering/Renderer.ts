@@ -7,6 +7,7 @@ import { FogCompositor } from './FogCompositor.ts';
 import { KindMaskCompositor } from './KindMaskCompositor.ts';
 import { buildShaderObject, updateUniforms } from './ShaderMaterial.ts';
 import { backdropById } from './backdrops/backdropRegistry.ts';
+import { isVideoCap1080Enabled } from '../storage/localSettings.ts';
 import { filterRegistry } from '../filters/FilterRegistry.ts';
 import { overlayKind } from '../mapfx/overlayKindRegistry.ts';
 import { loadKindShader } from '../mapfx/shaders/shaderRegistry.ts';
@@ -194,18 +195,22 @@ export class Renderer {
 
   /** v2.12.x — pick the right scale-canvas size for a video texture
    *  given the source's natural dimensions. Targets the WebGL canvas's
-   *  physical-pixel size (so the texture matches what we're rendering
-   *  at), capped at a hard 1920 max side as belt-and-braces against
-   *  enormous canvases on 4K monitors, and bounded above by the
-   *  source's native resolution (no point upscaling a 720p video). */
+   *  physical-pixel size so the texture matches what's actually being
+   *  rendered. Bounded above by the source's native resolution (no
+   *  point upscaling a 720p video).
+   *
+   *  When the user has enabled the "Cap animated maps at 1080p"
+   *  performance toggle (Settings → Performance), an additional 1920-
+   *  max-side cap kicks in. Default is no cap — a fullscreen player
+   *  on a 4K monitor with a 4K source gets a 4K texture, matching
+   *  what works smoothly when fullscreened. */
   private _computeVideoTexSize(vw: number, vh: number): { w: number; h: number; scale: number } {
     const dpr = window.devicePixelRatio || 1;
     const canvas = this.renderer.domElement;
     const canvasW = (canvas.clientWidth  || canvas.width  || 1) * dpr;
     const canvasH = (canvas.clientHeight || canvas.height || 1) * dpr;
-    const canvasMax = Math.max(canvasW, canvasH, 1);
-    const HARD_CAP = 1920;
-    const target = Math.min(canvasMax, HARD_CAP);
+    let target = Math.max(canvasW, canvasH, 1);
+    if (isVideoCap1080Enabled()) target = Math.min(target, 1920);
     const sourceMax = Math.max(vw, vh, 1);
     const scale = sourceMax > target ? target / sourceMax : 1;
     return {
