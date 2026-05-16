@@ -71,6 +71,12 @@ export class Renderer {
    *  Drives the renderFrame keep-alive (animated maps must redraw
    *  every frame so the texture's auto-update has a tick to land on). */
   private hasVideoMap = false;
+  /** v2.12.x — handle for the active requestVideoFrameCallback so we
+   *  can cancel on dispose. Tells the browser we're actively
+   *  consuming every decoded frame, which prevents the decode
+   *  throttling that surfaced when a player window wasn't full size
+   *  (Chromium / Firefox throttle "less visible" videos otherwise). */
+  private _videoFrameCbId: number | null = null;
   /** Lazily-built ImageData cache for the loaded map's pixels. Used
    *  by the Magic Wand fill (src/mapfx/floodFill.ts) which needs to
    *  read the map's raw pixels to flood-fill from a click point.
@@ -172,6 +178,39 @@ export class Renderer {
     return 'image';
   }
 
+  /** v2.12.x — start a requestVideoFrameCallback pump. Re-arms itself
+   *  on every callback so the browser sees a continuous active
+   *  consumer of decoded frames, which prevents the throttling that
+   *  surfaces when the player window isn't fully visible / not
+   *  focused. Each callback also flags the renderer dirty so the
+   *  next rAF tick uploads the freshly-decoded frame to the GPU
+   *  texture. No-op on browsers that don't expose rVFC — animation
+   *  still works via the existing renderFrame keep-alive there,
+   *  just without the throttle resistance. */
+  private _startVideoFramePump(video: HTMLVideoElement): void {
+    type WithRvfc = HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: () => void) => number;
+    };
+    const vid = video as WithRvfc;
+    if (typeof vid.requestVideoFrameCallback !== 'function') return;
+    const cb = () => {
+      if (this.mapVideo !== video) return; // superseded by a newer load
+      this.needsRender = true;
+      this._videoFrameCbId = (this.mapVideo as WithRvfc).requestVideoFrameCallback!(cb);
+    };
+    this._videoFrameCbId = vid.requestVideoFrameCallback(cb);
+  }
+
+  private _stopVideoFramePump(): void {
+    if (this.mapVideo && this._videoFrameCbId !== null) {
+      const vid = this.mapVideo as HTMLVideoElement & {
+        cancelVideoFrameCallback?: (id: number) => void;
+      };
+      vid.cancelVideoFrameCallback?.(this._videoFrameCbId);
+    }
+    this._videoFrameCbId = null;
+  }
+
   /** Tear down whichever map texture is live (image Texture or
    *  VideoTexture + underlying video element). Centralised so the
    *  loadMap branches can both dispose the previous map uniformly. */
@@ -180,6 +219,7 @@ export class Renderer {
       this.mapTexture.dispose();
       this.mapTexture = null;
     }
+    this._stopVideoFramePump();
     if (this.mapVideo) {
       this.mapVideo.pause();
       // Revoke the blob URL stashed on the element by _loadVideoMap.
@@ -213,18 +253,16 @@ export class Renderer {
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
-      // Attach to DOM (hidden) — detached / offscreen video elements
-      // get aggressively throttled by browsers (especially when the
-      // owning window isn't focused), which manifests as the
-      // animation "stalling" once the player window isn't full-size.
-      // Three.js VideoTexture docs explicitly recommend DOM-attaching
-      // for the same reason.
-      video.style.position = 'fixed';
-      video.style.left = '-9999px';
-      video.style.top  = '-9999px';
-      video.style.width = '1px';
-      video.style.height = '1px';
-      video.style.opacity = '0';
+      // Attach to DOM — detached video elements get throttled by
+      // browsers. Keep it in normal layout flow at a non-zero size
+      // (off-screen positioning trips browser intersection-observer
+      // heuristics that throttle "invisible" videos and was making
+      // the stall WORSE rather than better). Visibility: hidden
+      // leaves the layout box in place but doesn't paint.
+      video.style.position = 'absolute';
+      video.style.width = '2px';
+      video.style.height = '2px';
+      video.style.visibility = 'hidden';
       video.style.pointerEvents = 'none';
       document.body.appendChild(video);
       // Stash the blob URL on the element so _disposeMapTexture can
@@ -283,6 +321,13 @@ export class Renderer {
         // in all current browsers — but we still .catch() so a
         // sandbox / policy block doesn't reject the whole load.
         void video.play().catch(() => { /* will show paused first frame */ });
+
+        // Start the rVFC pump so the browser keeps decoding even
+        // when the player window isn't full-display. Without this
+        // hint the decode pipeline throttles whenever the video
+        // element's intersection-observer visibility drops, which
+        // surfaces as the animation stalling.
+        this._startVideoFramePump(video);
 
         resolve();
       };
