@@ -4448,13 +4448,30 @@ export class GMApp {
   }
 
   /** Persist a rename of the active map, triggered from the EditableSelect.
-   *  Updates the native option text in place (so refresh picks it up) and
-   *  writes through to MapManager. */
+   *  Writes through to MapManager, then re-inserts the option at its new
+   *  alphabetical position so the rename behaves the same as a reload
+   *  would (matches the by_name IDB index that populateMapList iterates).
+   *  Preserves the " [T]" text-map marker so handouts keep their tag
+   *  after rename. */
   private async _renameMap(id: string, name: string): Promise<void> {
     if (!id) return;
     await this.maps.rename(id, name);
-    const opt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
-    if (opt) opt.textContent = name || '(unnamed)';
+    const oldOpt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
+    if (!oldOpt) { this.mapEditableSelect.refresh(); return; }
+    // Look up the underlying asset to know whether this is a text-map
+    // (so the dropdown label keeps its " [T]" marker after rename).
+    const map = await getMap(id);
+    let isTextMap = false;
+    if (map) {
+      const asset = await MapAssetStore.get(map.mapAssetId);
+      isTextMap = asset?.source === 'text-map';
+    }
+    const displayName = name || '(unnamed)';
+    const label = isTextMap ? `${displayName} [T]` : displayName;
+    oldOpt.remove();
+    this._insertMapOptionSorted(id, label);
+    this.mapSelect.value = id;
+    this._lastMapSelectValue = id;
     this.mapEditableSelect.refresh();
   }
 
