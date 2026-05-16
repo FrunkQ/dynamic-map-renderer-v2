@@ -220,27 +220,6 @@ export class Renderer {
     };
   }
 
-  /** v2.12.x — re-size the video scale canvas when the WebGL canvas
-   *  changes size. Called from handleResize. No-op when there's no
-   *  video map active or the new target matches the current size. */
-  private _refreshVideoTexSize(): void {
-    if (!this.mapVideo || !this.mapVideoScaleCanvas || !this.mapVideoScaleCtx) return;
-    const { w, h } = this._computeVideoTexSize(
-      this.mapVideo.videoWidth  || 1,
-      this.mapVideo.videoHeight || 1,
-    );
-    if (this.mapVideoScaleCanvas.width === w && this.mapVideoScaleCanvas.height === h) return;
-    this.mapVideoScaleCanvas.width  = w;
-    this.mapVideoScaleCanvas.height = h;
-    // Resizing a canvas clears it; redraw the current video frame so
-    // the next render has valid pixels instead of a black gap until
-    // rVFC fires again.
-    try {
-      this.mapVideoScaleCtx.drawImage(this.mapVideo, 0, 0, w, h);
-    } catch { /* element may not be ready */ }
-    if (this.mapTexture) this.mapTexture.needsUpdate = true;
-  }
-
   /** v2.12.x — start a requestVideoFrameCallback pump. Re-arms itself
    *  on every callback so the browser sees a continuous active
    *  consumer of decoded frames, which prevents the throttling that
