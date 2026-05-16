@@ -1653,8 +1653,14 @@ export class GMApp {
       // the My Library row's marker. Trailing (not leading) so an
       // alphabetical sort by name still works the way the GM expects;
       // a leading "[T]" would cluster every handout under '['.
+      // Strip any trailing " [T]" from the stored name before re-adding
+      // it — defensive against legacy data that got " [T]" baked into
+      // m.name by an earlier rename bug. The cleaned form is what
+      // localCompare sees in _insertMapOptionSorted, so sort order is
+      // also consistent.
       const isTextMap = sourceByAssetId.get(m.mapAssetId) === 'text-map';
-      opt.textContent = isTextMap ? `${m.name} [T]` : m.name;
+      const cleanName = m.name.replace(/(?: \[T\])+$/, '').trim();
+      opt.textContent = isTextMap ? `${cleanName} [T]` : cleanName;
       this.mapSelect.appendChild(opt);
     }
 
@@ -4455,7 +4461,15 @@ export class GMApp {
    *  after rename. */
   private async _renameMap(id: string, name: string): Promise<void> {
     if (!id) return;
-    await this.maps.rename(id, name);
+    // EditableSelect passes the option's full textContent through —
+    // which for text-map rows includes the trailing " [T]" decoration
+    // added by populateMapList. Persisting that raw string into
+    // StoredMap.name and then having populateMapList re-append " [T]"
+    // on the next render is how rows ended up as "Foo [T] [T] [T]".
+    // Strip every trailing " [T]" (handles already-damaged names from
+    // previous renames too) before storage and re-render.
+    const cleanName = name.replace(/(?: \[T\])+$/, '').trim();
+    await this.maps.rename(id, cleanName);
     const oldOpt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
     if (!oldOpt) { this.mapEditableSelect.refresh(); return; }
     // Look up the underlying asset to know whether this is a text-map
@@ -4466,7 +4480,7 @@ export class GMApp {
       const asset = await MapAssetStore.get(map.mapAssetId);
       isTextMap = asset?.source === 'text-map';
     }
-    const displayName = name || '(unnamed)';
+    const displayName = cleanName || '(unnamed)';
     const label = isTextMap ? `${displayName} [T]` : displayName;
     oldOpt.remove();
     this._insertMapOptionSorted(id, label);
