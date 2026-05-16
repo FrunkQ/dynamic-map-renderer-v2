@@ -87,31 +87,47 @@ function rangeToSlider(r: number): number {
  */
 const DRAWING_MODE_LS_KEY = 'mappadux:drawingMode';
 
-/** Leading markers for map rows in the dropdown selector. Both kinds
- *  carry a single monochrome glyph from the Geometric Shapes Unicode
- *  block (U+25A0–25AF) so names align in the same column and the
- *  visual width is identical regardless of font. Survives the closed
- *  <select> view where browsers strip option styling.
+/** Leading markers for map rows in the dropdown selector. Each kind
+ *  carries a single monochrome glyph so names align in the same
+ *  column and the visual width is roughly identical regardless of
+ *  font. Survives the closed <select> view where browsers strip
+ *  option styling.
  *
- *    ▣  image-based maps (square with inner square = framed image)
- *    ▤  text-map handouts  (square with horizontal lines = text on page)
+ *    ▣  still-image maps  (square with inner square = framed image)
+ *    ▶  animated maps     (play triangle = "this thing plays")
+ *    ▤  text-map handouts (square with horizontal lines = text on page)
  *
  *  Glyphs are never persisted to StoredMap.name — populateMapList +
  *  _insertMapOptionSorted prepend on render; _cleanMapDisplayName
  *  strips on read so legacy data with old decorations baked into
  *  storage still displays cleanly. */
-const IMAGE_MAP_PREFIX = '▣ ';
-const TEXT_MAP_PREFIX  = '▤ ';
+const IMAGE_MAP_PREFIX    = '▣ ';
+const ANIMATED_MAP_PREFIX = '▶ ';
+const TEXT_MAP_PREFIX     = '▤ ';
 
 /** Strip every decoration that has ever been put on a map's display
- *  name — current "▣ " / "▤ " prefixes, the brief "≡ " trial run, and
- *  the legacy " [T]" suffix — so localeCompare, EditableSelect, and
- *  storage all see the raw name. */
+ *  name — current "▣ " / "▶ " / "▤ " prefixes, the brief "≡ " trial
+ *  run, and the legacy " [T]" suffix — so localeCompare,
+ *  EditableSelect, and storage all see the raw name. */
 function _cleanMapDisplayName(name: string): string {
   return name
-    .replace(/^[▣▤≡]\s+/, '')
+    .replace(/^[▣▶▤≡]\s+/, '')
     .replace(/(?: \[T\])+$/, '')
     .trim();
+}
+
+/** Resolve a MapAsset (or undefined) to the dropdown's kind enum.
+ *  Single source of truth for how the map selector glyph is picked —
+ *  populateMapList builds its own map of these eagerly; the Add /
+ *  Clone / Rename paths use this helper on a single asset. Order of
+ *  checks matches populateMapList: text-map wins over animated wins
+ *  over image, so a hypothetical "video text-map" still reads as
+ *  text. */
+function _dropdownKindForAsset(asset: import('../types.ts').MapAsset | undefined): 'image' | 'animated' | 'text' {
+  if (!asset) return 'image';
+  if (asset.source === 'text-map') return 'text';
+  if ((asset.blob?.type ?? '').startsWith('video/')) return 'animated';
+  return 'image';
 }
 
 /** Cheap magic-byte sniff — true when the buffer is webm or mp4.
@@ -1677,10 +1693,16 @@ export class GMApp {
       loadSession(),
       MapAssetStore.getAll(),
     ]);
-    // Build assetId → source lookup so we can flag text-map entries in
-    // the dropdown. Cheap (small N) and saves a round-trip per option.
-    const sourceByAssetId = new Map<string, string>();
-    for (const a of mapAssets) sourceByAssetId.set(a.id, a.source);
+    // Per-asset kind lookup so we can flag text-map and animated
+    // entries in the dropdown with the right leading glyph. Cheap
+    // (small N) and saves a round-trip per option.
+    type DropdownKind = 'text' | 'animated' | 'image';
+    const kindByAssetId = new Map<string, DropdownKind>();
+    for (const a of mapAssets) {
+      const isAnimated = (a.blob?.type ?? '').startsWith('video/');
+      const kind: DropdownKind = a.source === 'text-map' ? 'text' : isAnimated ? 'animated' : 'image';
+      kindByAssetId.set(a.id, kind);
+    }
     this.mapSelect.innerHTML = '';
     if (maps.length === 0) {
       const placeholder = document.createElement('option');
@@ -1702,9 +1724,12 @@ export class GMApp {
       // leading "≡ " from m.name before re-adding — defensive against
       // any path that might have round-tripped the marker into
       // storage. Keeps the visual layer the only source of truth.
-      const isTextMap = sourceByAssetId.get(m.mapAssetId) === 'text-map';
+      const kind = kindByAssetId.get(m.mapAssetId) ?? 'image';
       const cleanName = _cleanMapDisplayName(m.name);
-      const prefix = isTextMap ? TEXT_MAP_PREFIX : IMAGE_MAP_PREFIX;
+      const prefix =
+        kind === 'text'     ? TEXT_MAP_PREFIX     :
+        kind === 'animated' ? ANIMATED_MAP_PREFIX :
+                              IMAGE_MAP_PREFIX;
       opt.textContent = `${prefix}${cleanName}`;
       this.mapSelect.appendChild(opt);
     }
@@ -3589,12 +3614,12 @@ export class GMApp {
         await this.state.flushSave(); // ensure the source map's latest state is on disk
         const newMap = await this.maps.cloneMap(id);
         if (!newMap) return;
-        // Cloned map shares its source's asset id, so the italic
-        // styling carries over — look it up the same way the Add flow
-        // and populateMapList do.
+        // Cloned map shares its source asset, so the dropdown glyph
+        // (image / animated / text) carries over — look it up the
+        // same way the Add flow and populateMapList do.
         const asset = await MapAssetStore.get(newMap.mapAssetId);
-        const isTextMap = asset?.source === 'text-map';
-        this._insertMapOptionSorted(newMap.id, newMap.name, isTextMap);
+        const kind = _dropdownKindForAsset(asset);
+        this._insertMapOptionSorted(newMap.id, newMap.name, kind);
         this.mapSelect.value = newMap.id;
         this.mapEditableSelect.refresh();
         await this.loadMap(newMap);
@@ -4517,11 +4542,12 @@ export class GMApp {
    *  resorted into place after a page reload. */
   private openAddMapDialog(): void {
     this.mapAssetModal.open(async (map) => {
-      // Look up the asset so handouts come into the dropdown in italic
-      // — same treatment as populateMapList applies on reload.
+      // Look up the asset so the dropdown row gets the right leading
+      // glyph (image / animated / text) — same treatment as
+      // populateMapList applies on reload.
       const asset = await MapAssetStore.get(map.mapAssetId);
-      const isTextMap = asset?.source === 'text-map';
-      this._insertMapOptionSorted(map.id, map.name, isTextMap);
+      const kind = _dropdownKindForAsset(asset);
+      this._insertMapOptionSorted(map.id, map.name, kind);
       this.mapSelect.value = map.id;
       this.mapEditableSelect.refresh();
       this._lastMapSelectValue = map.id;
@@ -4534,13 +4560,20 @@ export class GMApp {
    *  populateMapList iterates on reload, so adding / cloning a map no
    *  longer shows it at the bottom until the GM refreshes the page.
    *  Skips the disabled separator and the "+ Add New Map" sentinel so
-   *  they always anchor at the end. Pass `isTextMap` to prepend the
-   *  ≡ handout marker. */
-  private _insertMapOptionSorted(id: string, name: string, isTextMap = false): void {
+   *  they always anchor at the end. The `kind` arg picks the right
+   *  leading glyph: image (▣), animated video (▶), or text handout (▤). */
+  private _insertMapOptionSorted(
+    id: string,
+    name: string,
+    kind: 'image' | 'animated' | 'text' = 'image',
+  ): void {
     const opt = document.createElement('option');
     opt.value = id;
     const cleanName = _cleanMapDisplayName(name);
-    const prefix = isTextMap ? TEXT_MAP_PREFIX : IMAGE_MAP_PREFIX;
+    const prefix =
+      kind === 'text'     ? TEXT_MAP_PREFIX     :
+      kind === 'animated' ? ANIMATED_MAP_PREFIX :
+                            IMAGE_MAP_PREFIX;
     opt.textContent = `${prefix}${cleanName}`;
     const addSentinel = this.mapSelect.querySelector<HTMLOptionElement>(
       `option[value="${SELECT_ADD_SENTINEL}"]`,
@@ -4581,17 +4614,17 @@ export class GMApp {
     await this.maps.rename(id, cleanName);
     const oldOpt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
     if (!oldOpt) { this.mapEditableSelect.refresh(); return; }
-    // Look up the underlying asset so the re-inserted option keeps
-    // its italic styling if this is a text-map handout.
+    // Look up the underlying asset so the re-inserted option gets
+    // the right leading glyph for its kind.
     const map = await getMap(id);
-    let isTextMap = false;
+    let kind: 'image' | 'animated' | 'text' = 'image';
     if (map) {
       const asset = await MapAssetStore.get(map.mapAssetId);
-      isTextMap = asset?.source === 'text-map';
+      kind = _dropdownKindForAsset(asset);
     }
     const displayName = cleanName || '(unnamed)';
     oldOpt.remove();
-    this._insertMapOptionSorted(id, displayName, isTextMap);
+    this._insertMapOptionSorted(id, displayName, kind);
     this.mapSelect.value = id;
     this._lastMapSelectValue = id;
     this.mapEditableSelect.refresh();
