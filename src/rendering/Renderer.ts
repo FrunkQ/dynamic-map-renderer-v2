@@ -271,12 +271,10 @@ export class Renderer {
     }
     const cb = () => {
       if (this.mapVideo !== video) return; // superseded by a newer load
-      // Downscale path: blit the latest video frame into the scale
-      // canvas at the capped texture size, then mark the CanvasTexture
-      // dirty. The expensive texImage2D happens at this smaller size,
-      // not the source's native 4K — that's what unsticks the player
-      // on 4K maps. CanvasTexture.needsUpdate triggers re-upload on
-      // the next render.
+      // Scale-canvas path (1080p cap toggle on): blit the latest video
+      // frame into the scale canvas and mark the CanvasTexture dirty.
+      // VideoTexture path (default): no drawImage — Three.js handles
+      // the video → GPU upload directly via its zero-copy fast path.
       if (this.mapVideoScaleCtx && this.mapVideoScaleCanvas) {
         try {
           this.mapVideoScaleCtx.drawImage(
@@ -475,47 +473,58 @@ export class Renderer {
 
         const vw = video.videoWidth || 1;
         const vh = video.videoHeight || 1;
-        // Pick a texture size that respects GPU upload cost. A 4K
-        // source uploaded directly to the GPU per frame (~33 MB at
-        // 8MP × RGBA) saturates texImage2D — Chrome reports 200-400 ms
-        // rAF handler times for it, the player stalls almost
-        // immediately.
-        //
-        // Target the actual rendering surface (canvas physical pixels)
-        // capped at a hard ceiling of 1920 max side. A player on a
-        // small window doesn't need a big texture; the source's
-        // natural resolution is also an upper bound. The result is
-        // proportional GPU work — full quality when the canvas is
-        // large, cheap when it's small. handleResize re-runs this
-        // calculation so the texture matches when the window grows.
-        const { w: targetW, h: targetH, scale } = this._computeVideoTexSize(vw, vh);
-        const scaleCanvas = document.createElement('canvas');
-        scaleCanvas.width  = targetW;
-        scaleCanvas.height = targetH;
-        const scaleCtx = scaleCanvas.getContext('2d');
-        if (!scaleCtx) {
-          // Falling back to a direct VideoTexture is better than failing the
-          // load — still might stall on 4K but at least the user sees
-          // something.
+        // Two paths:
+        //   • Default: THREE.VideoTexture(video) — direct video → GPU
+        //     upload. Most browsers have a zero-copy fast path for
+        //     texImage2D(HTMLVideoElement) (shared GPU memory between
+        //     decoder and texture) that the CanvasTexture path loses.
+        //     This is the only path that reliably keeps up with 4K
+        //     sources on a fullscreen player.
+        //   • "Cap at 1080p" toggle on: bounce through a downscale
+        //     canvas first, upload the canvas via CanvasTexture. Trades
+        //     the zero-copy advantage for a smaller texImage2D — only
+        //     win on weak GPUs where the direct 4K upload stalls.
+        const cap1080 = isVideoCap1080Enabled();
+        let targetW = vw;
+        let targetH = vh;
+        let scale = 1;
+        if (cap1080) {
+          const t = this._computeVideoTexSize(vw, vh);
+          targetW = t.w; targetH = t.h; scale = t.scale;
+          const scaleCanvas = document.createElement('canvas');
+          scaleCanvas.width  = targetW;
+          scaleCanvas.height = targetH;
+          const scaleCtx = scaleCanvas.getContext('2d');
+          if (scaleCtx) {
+            try { scaleCtx.drawImage(video, 0, 0, targetW, targetH); } catch { /* ignore */ }
+            const tex = new THREE.CanvasTexture(scaleCanvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            this.mapTexture = tex;
+            this.mapVideoScaleCanvas = scaleCanvas;
+            this.mapVideoScaleCtx    = scaleCtx;
+          } else {
+            // 2D context refused — fall back to VideoTexture so the
+            // load doesn't fail outright.
+            const tex = new THREE.VideoTexture(video);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            this.mapTexture = tex;
+          }
+        } else {
+          // Default path — VideoTexture direct upload, no canvas
+          // intermediate. Keeps the browser's zero-copy fast path
+          // available for the video → GPU transfer.
           const tex = new THREE.VideoTexture(video);
           tex.colorSpace = THREE.SRGBColorSpace;
           tex.minFilter = THREE.LinearFilter;
           tex.magFilter = THREE.LinearFilter;
           tex.generateMipmaps = false;
           this.mapTexture = tex;
-        } else {
-          // Paint frame 0 immediately so the texture has content before
-          // the first rVFC fires. Without this the first render is
-          // garbage (uninitialised canvas) for a frame or two.
-          try { scaleCtx.drawImage(video, 0, 0, targetW, targetH); } catch { /* ignore */ }
-          const tex = new THREE.CanvasTexture(scaleCanvas);
-          tex.colorSpace = THREE.SRGBColorSpace;
-          tex.minFilter = THREE.LinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false;
-          this.mapTexture = tex;
-          this.mapVideoScaleCanvas = scaleCanvas;
-          this.mapVideoScaleCtx    = scaleCtx;
         }
         this.mapVideo = video;
         this.hasVideoMap = true;
@@ -525,9 +534,11 @@ export class Renderer {
 
         // eslint-disable-next-line no-console
         console.info(
-          `[video-map] loaded — source ${vw}×${vh}, texture ${targetW}×${targetH}` +
-          (scale < 1 ? ` (downscaled ${(scale * 100).toFixed(0)}%)` : ' (no downscale)') +
-          '. Enable per-frame logging: localStorage.mappadux_debug_video = "1"',
+          `[video-map] loaded — source ${vw}×${vh}, ` +
+          (cap1080
+            ? `texture ${targetW}×${targetH}` + (scale < 1 ? ` (downscaled ${(scale * 100).toFixed(0)}%)` : ' (no downscale)')
+            : 'VideoTexture direct upload') +
+          '. Verbose per-frame logging: localStorage.mappadux_debug_video = "1"',
         );
 
         // Same fog / shader-plane reset path as the image branch.
@@ -1676,10 +1687,12 @@ export class Renderer {
     // are authoritative physical-pixel values we can rely on below.
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
-    // Video maps re-size their downscale canvas to match the new
-    // rendering surface — keeps the texture proportional to what's
-    // actually being painted.
-    this._refreshVideoTexSize();
+    // NOTE: the downscale canvas does NOT resize on window changes.
+    // Resizing a CanvasTexture's source canvas confuses Three.js into
+    // calling glCopySubTextureCHROMIUM against the old GPU texture
+    // dimensions and flooding the console with GL_INVALID_VALUE
+    // errors every frame. The 1080p-cap path computes its target
+    // size once at load time and sticks with it.
 
     // resolution must be in *physical* pixels to match gl_FragCoord.xy.
     // clientWidth/clientHeight are CSS pixels; canvas.width/height are the
