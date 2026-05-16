@@ -305,6 +305,11 @@ export class MapAssetModal {
     const isUnused = !usedIds.has(asset.id);
 
     const isTextMap = asset.source === 'text-map';
+    // v2.12 — animated maps (webm / mp4) ride the same MapAsset shape
+    // as still images; the blob's MIME tells them apart. Falls back
+    // to false for web-link assets that haven't been stored yet (no
+    // blob to inspect) — they'll re-evaluate after Store.
+    const isAnimated = (asset.blob?.type ?? '').startsWith('video/');
 
     const tags: string[] = [];
     // Every tag carries an explanatory title — the GM picks up what
@@ -313,6 +318,7 @@ export class MapAssetModal {
     // implementation. (e.g. Stored → "travels with your save file"
     // rather than "locallyStored=true".)
     if (isUnused)                    tags.push('<span class="sound-tag sound-tag--unused" title="No map currently uses this asset — safe to delete without breaking anything.">Unused</span>');
+    if (isAnimated)                  tags.push('<span class="sound-tag sound-tag--animated" title="A video map (webm or mp4). Plays looped on the GM canvas; fog, markers, and magic-wand fill all work against the currently visible frame.">Animated</span>');
     if (isTextMap)                   tags.push('<span class="sound-tag sound-tag--textmap" title="A text-based handout, not an image. Edit its body, font and layout via the Edit button.">Text</span>');
     if (asset.source === 'web-link') tags.push('<span class="sound-tag sound-tag--url" title="Fetched from a web URL on demand. The image bytes live remotely; click Store to keep a local copy.">URL</span>');
     if (asset.locallyStored)         tags.push('<span class="sound-tag sound-tag--local" title="The image bytes are saved locally in your browser\'s database. Travels with bundle exports (.mappadux save files) so other GMs / other devices get the actual asset, not just a link.">Stored</span>');

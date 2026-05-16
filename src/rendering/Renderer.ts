@@ -182,6 +182,13 @@ export class Renderer {
     }
     if (this.mapVideo) {
       this.mapVideo.pause();
+      // Revoke the blob URL stashed on the element by _loadVideoMap.
+      // Releasing it earlier (e.g. after loadedmetadata) breaks looped
+      // playback: the video element re-fetches from the URL on every
+      // loop seek, and a revoked URL surfaces as ERR_FILE_NOT_FOUND
+      // spam in the console after the first cycle.
+      const stashedUrl = (this.mapVideo as HTMLVideoElement & { _blobUrl?: string })._blobUrl;
+      if (stashedUrl) URL.revokeObjectURL(stashedUrl);
       this.mapVideo.removeAttribute('src');
       try { this.mapVideo.load(); } catch { /* OK if it errors */ }
       this.mapVideo = null;
@@ -203,14 +210,19 @@ export class Renderer {
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
+      // Stash the blob URL on the element so _disposeMapTexture can
+      // revoke it at the right moment — i.e. when the video really is
+      // done, NOT after the first metadata load (which would break
+      // looped playback the moment the video tries to seek back to 0).
+      (video as HTMLVideoElement & { _blobUrl?: string })._blobUrl = url;
 
       const finish = () => {
-        URL.revokeObjectURL(url);
         if (gen !== this.loadGen) {
           // Superseded — discard.
           video.pause();
           video.removeAttribute('src');
           try { video.load(); } catch { /* OK */ }
+          URL.revokeObjectURL(url);
           resolve();
           return;
         }

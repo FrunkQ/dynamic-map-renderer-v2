@@ -4397,6 +4397,9 @@ option.select-option--add {
 .sound-tag--auto-scaled  { color: #f97316; border-color: rgba(249, 115, 22, 0.4); }
 .sound-tag--no-grid      { color: #94a3b8; border-color: rgba(148, 163, 184, 0.4); }
 .sound-tag--textmap      { color: #a78bfa; border-color: rgba(167, 139, 250, 0.4); }
+/* Animated map tag — teal/cyan; distinct from purple Text and amber
+   Unused / AutoScaled so a row's badge cluster reads at a glance. */
+.sound-tag--animated     { color: #2dd4bf; border-color: rgba(45, 212, 191, 0.4); }
 .map-recal-pill         { cursor: pointer; transition: background 0.15s; }
 .map-recal-pill:hover   { background: rgba(251, 191, 36, 0.15); }
 .map-autoscaled-pill        { cursor: pointer; transition: background 0.15s; }
