@@ -87,6 +87,33 @@ function rangeToSlider(r: number): number {
  */
 const DRAWING_MODE_LS_KEY = 'mappadux:drawingMode';
 
+/** Leading markers for map rows in the dropdown selector. Both kinds
+ *  carry a single monochrome glyph from the Geometric Shapes Unicode
+ *  block (U+25A0–25AF) so names align in the same column and the
+ *  visual width is identical regardless of font. Survives the closed
+ *  <select> view where browsers strip option styling.
+ *
+ *    ▣  image-based maps (square with inner square = framed image)
+ *    ▤  text-map handouts  (square with horizontal lines = text on page)
+ *
+ *  Glyphs are never persisted to StoredMap.name — populateMapList +
+ *  _insertMapOptionSorted prepend on render; _cleanMapDisplayName
+ *  strips on read so legacy data with old decorations baked into
+ *  storage still displays cleanly. */
+const IMAGE_MAP_PREFIX = '▣ ';
+const TEXT_MAP_PREFIX  = '▤ ';
+
+/** Strip every decoration that has ever been put on a map's display
+ *  name — current "▣ " / "▤ " prefixes, the brief "≡ " trial run, and
+ *  the legacy " [T]" suffix — so localeCompare, EditableSelect, and
+ *  storage all see the raw name. */
+function _cleanMapDisplayName(name: string): string {
+  return name
+    .replace(/^[▣▤≡]\s+/, '')
+    .replace(/(?: \[T\])+$/, '')
+    .trim();
+}
+
 /** Map ASCII letters to their Mathematical Sans-Serif Bold Unicode
  *  equivalents. Used for the dropdown's "Fog of War" entry so it
  *  visually stands out from the MapFX kinds without needing CSS
@@ -1648,16 +1675,21 @@ export class GMApp {
     for (const m of maps) {
       const opt = document.createElement('option');
       opt.value = m.id;
-      // Text-map (handout) rows render in italic to set them apart
-      // from regular image maps. Previously this used a trailing
-      // " [T]" decoration which caused naming bugs on rename; italic
-      // styling keeps the name untouched. Strip any legacy " [T]"
-      // baked into m.name by the old code so existing libraries
-      // display cleanly without forcing a manual re-edit.
+      // Text-map (handout) rows get a small monochrome "hamburger"
+      // glyph (≡) before the name. The closed <select> view only
+      // ever shows the selected option's plain text, so styling
+      // (italic, colour) gets stripped by every browser; a glyph
+      // inside the textContent survives that. Subtle, single
+      // character, monospace-friendly, sorts neutrally (we strip it
+      // before localeCompare).
+      // Strip both the legacy " [T]" decoration AND any stray
+      // leading "≡ " from m.name before re-adding — defensive against
+      // any path that might have round-tripped the marker into
+      // storage. Keeps the visual layer the only source of truth.
       const isTextMap = sourceByAssetId.get(m.mapAssetId) === 'text-map';
-      const cleanName = m.name.replace(/(?: \[T\])+$/, '').trim();
-      opt.textContent = cleanName;
-      if (isTextMap) opt.style.fontStyle = 'italic';
+      const cleanName = _cleanMapDisplayName(m.name);
+      const prefix = isTextMap ? TEXT_MAP_PREFIX : IMAGE_MAP_PREFIX;
+      opt.textContent = `${prefix}${cleanName}`;
       this.mapSelect.appendChild(opt);
     }
 
@@ -4434,23 +4466,28 @@ export class GMApp {
    *  populateMapList iterates on reload, so adding / cloning a map no
    *  longer shows it at the bottom until the GM refreshes the page.
    *  Skips the disabled separator and the "+ Add New Map" sentinel so
-   *  they always anchor at the end. Pass `italic` to mark text-map
-   *  (handout) rows visually without touching the name. */
-  private _insertMapOptionSorted(id: string, name: string, italic = false): void {
+   *  they always anchor at the end. Pass `isTextMap` to prepend the
+   *  ≡ handout marker. */
+  private _insertMapOptionSorted(id: string, name: string, isTextMap = false): void {
     const opt = document.createElement('option');
     opt.value = id;
-    opt.textContent = name;
-    if (italic) opt.style.fontStyle = 'italic';
+    const cleanName = _cleanMapDisplayName(name);
+    const prefix = isTextMap ? TEXT_MAP_PREFIX : IMAGE_MAP_PREFIX;
+    opt.textContent = `${prefix}${cleanName}`;
     const addSentinel = this.mapSelect.querySelector<HTMLOptionElement>(
       `option[value="${SELECT_ADD_SENTINEL}"]`,
     );
     const separator = addSentinel?.previousElementSibling ?? null;
     let insertBefore: Element | null = separator ?? addSentinel ?? null;
+    // localeCompare sees clean names on both sides so the ≡ prefix
+    // doesn't cluster handouts at the top of the dropdown — they
+    // sort integrated with image maps by their raw name, matching
+    // the by_name IDB index that drives populateMapList on reload.
     for (const existing of Array.from(this.mapSelect.options)) {
       if (!existing.value || existing.disabled) continue;
       if (existing.value === SELECT_ADD_SENTINEL) continue;
-      const existingName = existing.textContent ?? '';
-      if (existingName.localeCompare(name, undefined, { sensitivity: 'base' }) > 0) {
+      const existingClean = _cleanMapDisplayName(existing.textContent ?? '');
+      if (existingClean.localeCompare(cleanName, undefined, { sensitivity: 'base' }) > 0) {
         insertBefore = existing;
         break;
       }
@@ -4466,10 +4503,13 @@ export class GMApp {
    *  after rename. */
   private async _renameMap(id: string, name: string): Promise<void> {
     if (!id) return;
-    // Defensive: legacy data may have " [T]" baked into the stored
-    // name from the old decoration scheme. Strip on the way in so a
-    // round-trip via EditableSelect doesn't re-persist the marker.
-    const cleanName = name.replace(/(?: \[T\])+$/, '').trim();
+    // EditableSelect feeds the option's full textContent back as the
+    // new name — which for text-maps includes the leading "≡ "
+    // marker we render with. Strip everything decorative (current
+    // glyph + legacy " [T]" suffix) so the raw name is what reaches
+    // storage; populateMapList / _insertMapOptionSorted re-apply
+    // the marker on render.
+    const cleanName = _cleanMapDisplayName(name);
     await this.maps.rename(id, cleanName);
     const oldOpt = this.mapSelect.querySelector<HTMLOptionElement>(`option[value="${id}"]`);
     if (!oldOpt) { this.mapEditableSelect.refresh(); return; }

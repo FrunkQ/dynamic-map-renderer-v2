@@ -286,18 +286,17 @@ export class FreesoundModal {
   private _libraryRow(asset: AudioAsset, usedIds: Set<string> = new Set()): HTMLElement {
     const isUnused = !usedIds.has(asset.id);
     const tags: string[] = [];
-    // Unused is just another tag now — sits at the front of the row's
-    // tag line so it's the first thing the GM sees on rows safe to
-    // delete. (Was a tiny `[!]` chip inline with the name; promoted to
-    // a real tag for legibility.)
-    if (isUnused) tags.push('<span class="sound-tag sound-tag--unused" title="Not referenced by any map — safe to delete">Unused</span>');
-    if (asset.source === 'freesound') tags.push('<span class="sound-tag sound-tag--freesound">Freesound</span>');
-    if (asset.source === 'web-link')  tags.push('<span class="sound-tag sound-tag--url">URL</span>');
+    // Educational tooltip on every tag — hover reveals what the pill
+    // actually means and what the GM can do about it. Matches the
+    // map-library treatment.
+    if (isUnused) tags.push('<span class="sound-tag sound-tag--unused" title="No marker or soundboard slot currently uses this asset — safe to delete without breaking any active map.">Unused</span>');
+    if (asset.source === 'freesound') tags.push('<span class="sound-tag sound-tag--freesound" title="Imported from Freesound. Attribution and licence are preserved automatically.">Freesound</span>');
+    if (asset.source === 'web-link')  tags.push('<span class="sound-tag sound-tag--url" title="Streamed from a web URL on demand. Audio bytes live remotely; click Store to keep a local copy that travels in bundle exports.">URL</span>');
     // 'Stored' = "this asset travels in bundle exports". Shown on any
     // locallyStored asset — Uploads (always stored), Freesound/URL items
     // promoted via Store, and the built-in tracker pings.
     if (asset.locallyStored) {
-      tags.push('<span class="sound-tag sound-tag--local">Stored</span>');
+      tags.push('<span class="sound-tag sound-tag--local" title="The audio bytes are saved locally in your browser\'s database. Travels with bundle exports (.mappadux save files) so other GMs / other devices get the actual sound, not just a link.">Stored</span>');
     }
     const tagsHtml = tags.join('');
 

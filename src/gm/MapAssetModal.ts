@@ -300,22 +300,24 @@ export class MapAssetModal {
     const isTextMap = asset.source === 'text-map';
 
     const tags: string[] = [];
-    // Unused first so it's the most prominent tag — promoted from the
-    // tiny `[!]` chip to a real "Unused" tag for legibility, matching
-    // the sound library's treatment.
-    if (isUnused)                    tags.push('<span class="sound-tag sound-tag--unused" title="Not referenced by any map — safe to delete">Unused</span>');
-    if (isTextMap)                   tags.push('<span class="sound-tag sound-tag--textmap" title="Text-based handout — not an image">Text</span>');
-    if (asset.source === 'web-link') tags.push('<span class="sound-tag sound-tag--url">URL</span>');
-    if (asset.locallyStored)         tags.push('<span class="sound-tag sound-tag--local">Stored</span>');
+    // Every tag carries an explanatory title — the GM picks up what
+    // each pill MEANS by hovering instead of reading docs. Same
+    // wording principle: explain the consequence, not the
+    // implementation. (e.g. Stored → "travels with your save file"
+    // rather than "locallyStored=true".)
+    if (isUnused)                    tags.push('<span class="sound-tag sound-tag--unused" title="No map currently uses this asset — safe to delete without breaking anything.">Unused</span>');
+    if (isTextMap)                   tags.push('<span class="sound-tag sound-tag--textmap" title="A text-based handout, not an image. Edit its body, font and layout via the Edit button.">Text</span>');
+    if (asset.source === 'web-link') tags.push('<span class="sound-tag sound-tag--url" title="Fetched from a web URL on demand. The image bytes live remotely; click Store to keep a local copy.">URL</span>');
+    if (asset.locallyStored)         tags.push('<span class="sound-tag sound-tag--local" title="The image bytes are saved locally in your browser\'s database. Travels with bundle exports (.mappadux save files) so other GMs / other devices get the actual asset, not just a link.">Stored</span>');
     // Scale badge — driven by scaleConfidence + noGrid, in priority order.
     // Text maps never have a scale by design, so the scale pills are skipped.
     if (!isTextMap) {
       if (asset.noGrid) {
-        tags.push('<span class="sound-tag sound-tag--no-grid map-nogrid-pill" title="Marked as having no grid — click to clear and calibrate" role="button" tabindex="0">No grid</span>');
+        tags.push('<span class="sound-tag sound-tag--no-grid map-nogrid-pill" title="You\'ve marked this asset as having no grid (a handout, world map, or stat block). The projector won\'t scale it to 1″ squares. Click the pill to clear this and calibrate properly." role="button" tabindex="0">No grid</span>');
       } else if (asset.pixelsPerSquare && asset.scaleConfidence === 'auto-scaled') {
-        tags.push('<span class="sound-tag sound-tag--auto-scaled map-autoscaled-pill" title="Auto-detected best-guess — click to re-calibrate" role="button" tabindex="0">AutoScaled</span>');
+        tags.push('<span class="sound-tag sound-tag--auto-scaled map-autoscaled-pill" title="The auto-detector took a best guess at the grid scale — but wasn\'t fully confident. Click the pill to verify or recalibrate by hand." role="button" tabindex="0">AutoScaled</span>');
       } else if (asset.pixelsPerSquare) {
-        tags.push('<span class="sound-tag sound-tag--scaled map-recal-pill" title="Click to re-calibrate" role="button" tabindex="0">Scaled</span>');
+        tags.push('<span class="sound-tag sound-tag--scaled map-recal-pill" title="The map is calibrated to physical 1″/25 mm squares for true-scale projection. Click to recalibrate if the projection looks off." role="button" tabindex="0">Scaled</span>');
       }
     }
     const tagsHtml = tags.join('');
