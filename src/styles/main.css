@@ -2656,6 +2656,18 @@ option.select-option--add {
   gap: var(--space-sm);
   flex: 0 0 auto;
 }
+/* v2.12.4 — column wrapper for stacked toolbar sections.
+   Name + Layout go in one column, Add Content + Animation in another,
+   so the centre Element Properties slot gets the horizontal room it
+   needs on narrow GM screens. Each section still owns its own
+   label/row vertical rhythm; this wrapper just chains two of them
+   vertically with a small gap. */
+.txt-map-toolbar-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: stretch;
+}
 .txt-map-toolbar-centre {
   display: flex;
   flex-wrap: wrap;

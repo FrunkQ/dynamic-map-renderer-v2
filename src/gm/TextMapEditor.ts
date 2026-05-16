@@ -14,7 +14,6 @@ import { ImageAssetModal } from '../images/ImageAssetModal.ts';
 import { ensureFontsLoaded, registerLocalFontsFromAssets } from '../images/fontCatalog.ts';
 import { generateId } from '../utils/id.ts';
 import { sanitizeSplashHtml } from '../utils/sanitizeHtml.ts';
-import { pickTextboxEmptyHint } from '../utils/emptyHints.ts';
 import { wireSliderTooltip } from '../utils/sliderReadout.ts';
 import { renderAssetToInlineHtml } from '../utils/resolveAssetImages.ts';
 
@@ -231,7 +230,21 @@ export class TextMapEditor {
     // Register any uploaded-font blobs via FontFace first; that filters
     // them out of the Google CDN request so we don't double-fetch.
     await registerLocalFontsFromAssets(fontAssets);
-    ensureFontsLoaded(families);
+    // v2.12.4 — also load fonts referenced by the page itself: the
+    // cfg-level default plus any per-element overrides. Previously only
+    // library fonts were loaded, so a saved handout whose elements
+    // used a font that wasn't in the live library (e.g. Cinzel removed
+    // from the user's assets after a bundle was saved with it) rendered
+    // in system serif on the editor canvas — only the GM main view
+    // looked correct because the rasterizer pulls page + element fonts
+    // separately. Mirror that here so what you see in the editor is
+    // what the GM main view shows.
+    const usedFamilies = new Set<string>(families);
+    if (this.cfg.fontFamily) usedFamilies.add(this.cfg.fontFamily);
+    for (const el of this.cfg.elements ?? []) {
+      if (el.type === 'text' && el.fontFamily) usedFamilies.add(el.fontFamily);
+    }
+    ensureFontsLoaded(Array.from(usedFamilies));
     this.libraryFonts = families.length > 0 ? families : FALLBACK_FONTS.slice();
     this._renderElementToolbar();
   }
@@ -332,12 +345,23 @@ export class TextMapEditor {
     const tb = document.createElement('div');
     tb.className = 'txt-map-toolbar';
 
-    // ── LEFT — Name section | Add Content section | Clipboard section
+    // v2.12.4 — toolbar reorganised to free horizontal room for the
+    // centre Element Properties slot. Sections that were across the
+    // whole row are now stacked into two-row columns:
+    //
+    //   COL 1: Name        COL 2: Add Content    COL 3: Clipboard
+    //          Layout              Animation
+    //
+    //   CENTRE: Element Properties (flexes to fill remaining space)
+    //
+    // The old left/right wrappers are gone — narrow GM screens used
+    // to crush the element controls; now Layout / Animation tuck
+    // underneath their thematic neighbours.
     const left = document.createElement('div');
     left.className = 'txt-map-toolbar-left';
-    left.appendChild(this._buildNameSection());
+    left.appendChild(this._buildToolbarColumn(this._buildNameSection(), this._buildLayoutSection()));
     left.appendChild(this._buildToolbarDivider());
-    left.appendChild(this._buildAddContentSection());
+    left.appendChild(this._buildToolbarColumn(this._buildAddContentSection(), this._buildAnimationSection()));
     left.appendChild(this._buildToolbarDivider());
     left.appendChild(this._buildClipboardSection());
     tb.appendChild(left);
@@ -361,15 +385,19 @@ export class TextMapEditor {
     this.elementToolbarEl = elSlot;
     this.elementSectionEl = centreSection;
 
-    // ── RIGHT — Layout section | Animation section ─────────────────────
-    const right = document.createElement('div');
-    right.className = 'txt-map-toolbar-right';
-    right.appendChild(this._buildLayoutSection());
-    right.appendChild(this._buildToolbarDivider());
-    right.appendChild(this._buildAnimationSection());
-    tb.appendChild(right);
-
     return tb;
+  }
+
+  /** v2.12.4 — wrap two toolbar sections into a vertical column.
+   *  Used to stack Name/Layout and AddContent/Animation so the centre
+   *  Element Properties slot gets meaningfully more horizontal room
+   *  on narrow GM screens. CSS gives the wrapper a small gap and
+   *  flex-direction: column. */
+  private _buildToolbarColumn(top: HTMLElement, bottom: HTMLElement): HTMLElement {
+    const col = document.createElement('div');
+    col.className = 'txt-map-toolbar-col';
+    col.append(top, bottom);
+    return col;
   }
 
   /** Generic "section heading + content row below" wrapper. The
@@ -846,11 +874,12 @@ export class TextMapEditor {
       body.innerHTML = sanitizeSplashHtml(el.html ?? '');
       // Empty-state placeholder. The CSS rule
       //   .txt-map-el-body--text:empty::before { content: attr(data-placeholder); ... }
-      // shows the joke while the element is empty and hides it as
-      // soon as the GM types. One pick per element so the same
-      // text box doesn't rotate the joke on every keystroke.
+      // shows this hint while the element is empty and hides it as
+      // soon as the GM types. Functional affordance — picks "Click
+      // to edit…" rather than a random quip from the empty-hint pool
+      // (which is reserved for empty-state panels like Markers).
       body.classList.add('txt-map-el-body--text');
-      body.dataset['placeholder'] = pickTextboxEmptyHint();
+      body.dataset['placeholder'] = 'Click to edit…';
       body.addEventListener('input', () => this._onTextInput(el.id, body));
       body.addEventListener('paste', (e) => {
         e.preventDefault();
@@ -1108,7 +1137,14 @@ export class TextMapEditor {
     fontSel.className = 'txt-map-input';
     const currentFamily = el.fontFamily ?? this.cfg.fontFamily;
     fontSel.style.fontFamily = `'${currentFamily}', sans-serif`;
-    for (const f of this.libraryFonts.length > 0 ? this.libraryFonts : FALLBACK_FONTS) {
+    // v2.12.4 — guarantee the saved font is one of the dropdown's
+    // options even if it isn't in the library list right now (font
+    // was removed, library not yet seeded, etc.). Without this the
+    // dropdown silently snaps to its first option and the GM loses
+    // track of what font the element is actually using.
+    const fontList = (this.libraryFonts.length > 0 ? this.libraryFonts : FALLBACK_FONTS).slice();
+    if (currentFamily && !fontList.includes(currentFamily)) fontList.unshift(currentFamily);
+    for (const f of fontList) {
       const o = document.createElement('option');
       o.value = f; o.textContent = f;
       o.style.fontFamily = `'${f}', sans-serif`;
