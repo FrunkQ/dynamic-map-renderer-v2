@@ -128,25 +128,22 @@
     <section class="panel" id="fog-panel">
       <button type="button" class="panel-title" aria-expanded="false" title="Pick a Kind, then Drawing Mode (sticky). Click Paint to add one shape or Erase to carve one out. Polygon: click vertices, click near first to close. Brush: drag. Click a polygon to select it; trashcan or Del to remove.">Fog of War &amp; MapFX</button>
       <div class="panel-body" hidden>
-        <!-- Kind picker — fog is first / default. -->
+        <!-- Kind picker + per-poly colour swatch + FX sparkle button.
+             The sparkle opens a popover with Edge Fade + the active
+             kind's shader params — same UI affordance as the Backdrop
+             FX button on the Map panel. -->
         <div class="fog-row fog-row--kind">
           <span class="fog-row-label">Kind</span>
           <select id="mapfx-kind-select" title="What gets painted — fog, fire, water, light, etc.">
             <!-- Filled from OVERLAY_KIND_ORDER in JS. -->
           </select>
           <input  type="color" id="fog-colour" value="#000000" title="Colour (fog only — other kinds use their own colour)" />
+          <button type="button" id="mapfx-fx-btn" class="icon-btn bg-fx-btn" title="Tune this kind: Edge Fade and the shader's own parameters (intensity, scale, speed, colours, etc.). Opens the same popover style as the Backdrop FX button." aria-label="MapFX tuning" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L13.5 10.5 L21 12 L13.5 13.5 L12 21 L10.5 13.5 L3 12 L10.5 10.5 Z" />
+            </svg>
+          </button>
         </div>
-
-        <!-- Edge Fade — universal, applies to fog + every MapFX kind.
-             Per-polygon value baked into the alpha mask so the shape's
-             outline softens organically. Range narrowed to 0..0.20
-             (5 step positions) with default 0.10 at the midpoint --
-             that value removes pixelation across all kinds and is the
-             realistic sweet spot the GM will tune around. -->
-        <label class="fog-brush-row fog-row--edge">
-          <span>Edge Fade</span>
-          <input id="fog-edge-fade" type="range" min="0" max="0.20" step="0.05" value="0.10" title="How soft the polygon edge is. 0 = pixel-sharp boundary; 0.20 = heavily blurred. Default 0.10 removes pixelation cleanly without softening too much. Works the same way for fog and every MapFX shader kind." />
-        </label>
 
         <!-- Drawing Mode — sticky toggle, persists in localStorage. -->
         <div class="fog-row fog-row--mode">
@@ -184,11 +181,10 @@
           <button id="fog-erase-btn" class="btn btn--sm fog-action fog-action--erase" title="Single-shot Erase — carves one shape out of every existing polygon it overlaps, regardless of kind. The carving polygon itself isn't added to the map; it's just used as a cookie-cutter.">Erase</button>
         </div>
 
-        <!-- Per-kind shader tuning — populated by GMApp when the active
-             kind has shader params (e.g. Fire's Intensity + Scale). Hidden
-             for plain kinds. Edits flow into FogState.shaderParams and
-             travel via fog_update like polygon edits. -->
-        <div class="fog-shader-params" id="fog-shader-params" hidden></div>
+        <!-- Per-kind shader tuning + Edge Fade now live in the popover
+             opened by the sparkle button (#mapfx-fx-btn) at the top of
+             the panel. Keeps the panel compact and matches the
+             Backdrop FX pattern. -->
 
         <!-- Clear-this-kind always available. Delete button gone — use the
              trashcan handle on a selected polygon or the Del key instead. -->

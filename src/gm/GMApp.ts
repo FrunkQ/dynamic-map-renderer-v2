@@ -318,8 +318,16 @@ export class GMApp {
   private filterParamsContainer!:   HTMLElement;
   private viewBgColour!:           HTMLInputElement;
   private viewBgFxBtn!:            HTMLButtonElement;
-  /** Live popover element (open state) — null when nothing is shown. */
-  private _bgFxPopover: HTMLElement | null = null;
+  /** Sparkle button on the FoW panel (right of #fog-colour). Opens
+   *  the same FxPopover style as the Backdrop FX button, populated
+   *  with Edge Fade + the active kind's shader params. */
+  private mapFxBtn!:               HTMLButtonElement;
+  /** Live popover handle (open state) — null when nothing is shown.
+   *  See src/gm/FxPopover.ts for the shared component shape. */
+  private _bgFxPopover:    import('./FxPopover.ts').FxPopoverHandle | null = null;
+  /** MapFX sparkle popover handle — opened from the FoW panel's
+   *  sparkle button. Shares the same FxPopover plumbing. */
+  private _mapfxFxPopover: import('./FxPopover.ts').FxPopoverHandle | null = null;
   /** v2.12.x — full video bytes waiting to be broadcast as a
    *  MsgVideoBundle follow-up after the map_change that carried the
    *  snapshot. Set in loadMap when the new map is a video asset;
@@ -2247,6 +2255,7 @@ export class GMApp {
     this.filterParamsContainer = q('#filter-params');
     this.viewBgColour          = q<HTMLInputElement>('#view-bg-colour');
     this.viewBgFxBtn           = q<HTMLButtonElement>('#view-bg-fx-btn');
+    this.mapFxBtn              = q<HTMLButtonElement>('#mapfx-fx-btn');
     this.roomCodeEl            = q('#room-code');
     this.qrContainer           = q('#qr-container');
     this.playerCountEl         = q('#player-count');
@@ -2835,7 +2844,8 @@ export class GMApp {
       if (slider) wireSliderTooltip(slider, label);
     };
     _tip('fog-brush-radius',   'Brush size');
-    _tip('fog-edge-fade',      'Edge Fade');
+    // Edge Fade slider lives in the MapFX FX popover; tooltip is wired
+    // there per-row, not on a fixed inline element.
     _tip('fog-fill-tolerance', 'Tolerance');
     document.querySelector('#fog-brush-clear')?.addEventListener('click', async () => {
       // Clear all polygons of the active kind only. Lets the GM wipe
@@ -2935,18 +2945,9 @@ export class GMApp {
     //     new polygon inherits.
     //   • Mid-paint with inheritance pending: edits also update the
     //     inheritance snapshot.
-    document.querySelector<HTMLInputElement>('#fog-edge-fade')?.addEventListener('input', (e) => {
-      const v = parseFloat((e.target as HTMLInputElement).value);
-      if (!Number.isFinite(v)) return;
-      const selectedId = this.fogEditor.getSelectedId();
-      if (selectedId) {
-        const poly = this.state.getState().fog.polygons.find((p) => p.id === selectedId);
-        if (poly) this.state.setPolygonEdgeFade(selectedId, v);
-      }
-      // Always update the kind draft so the next-new polygon inherits.
-      this.state.setShaderParams(this.activeOverlayKind, { edgeFade: v });
-      if (this._pendingPaintInherit) this._pendingPaintInherit.edgeFade = v;
-    });
+    // v2.12 — Edge Fade input moved into the MapFX FX popover. The
+    // popover's slider row wires its own onChange (see
+    // _populateMapFxPopover), so no inline element / handler here.
 
     // v2.12 unified — brush + polygon commits go through the same paths.
     // Brush stroke end → _commitOverlayBrushStroke. Polygon close →
@@ -3052,67 +3053,92 @@ export class GMApp {
     this.fogEditor.setBrushSettings({ color: k.defaultColor, radius: k.defaultRadius });
   }
 
-  /** v2.12 — rebuild the shader-params slider panel for the active kind.
-   *  Every param is per-polygon: the sliders always edit the currently
-   *  selected polygon's values, falling back to the kind's "draft" /
-   *  last-used buffer when nothing is selected. New polygons inherit
-   *  the draft at paint time so the GM's tuning carries forward. On
-   *  reselect, sliders snap to the picked polygon's stored values. */
+  /** v2.12 — shader-params display moved into the MapFX FX popover
+   *  (sparkle button next to the colour swatch). Legacy callers still
+   *  fire this method when state changes; we now route to a popover
+   *  refresh instead of rebuilding an inline element. No-op when the
+   *  popover isn't open. */
   private _rebuildShaderParamsPanel(): void {
-    const container = document.getElementById('fog-shader-params');
-    if (!container) return;
-    const k = overlayKind(this.activeOverlayKind);
-    const defs = k.shaderParams ?? [];
-    container.innerHTML = '';
-    if (defs.length === 0) {
-      container.hidden = true;
-      return;
-    }
-    container.hidden = false;
+    this._mapfxFxPopover?.refresh();
+  }
 
+  /** Open the MapFX sparkle popover. Content: Edge Fade slider at the
+   *  top + the active kind's shader-param rows below. The kind itself
+   *  is still picked from the inline dropdown in the panel; this
+   *  popover is the focused "tune what's selected" surface. */
+  private _openMapFxPopover(): void {
+    if (this._mapfxFxPopover) return;
+    void import('./FxPopover.ts').then(({ openFxPopover }) => {
+      if (this._mapfxFxPopover) return;
+      this._mapfxFxPopover = openFxPopover({
+        anchor: this.mapFxBtn,
+        populate: (root) => { this._populateMapFxPopover(root); },
+        onClose: () => { this._mapfxFxPopover = null; },
+      });
+    });
+  }
+
+  /** Fill the MapFX popover with Edge Fade + the active kind's
+   *  shader-param controls. Pulled out so populate() and the refresh
+   *  hook both go through one builder.
+   *
+   *  Edit-target resolution (matches the original inline behaviour):
+   *    • Editing a polygon of the active kind  → show poly's stored values.
+   *    • Mid-paint with inheritance snapshot   → show snapshot values.
+   *    • Otherwise                             → show the kind draft. */
+  private _populateMapFxPopover(root: HTMLElement): void {
+    const k = overlayKind(this.activeOverlayKind);
     const fog = this.state.getState().fog;
     const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
     const selectedId = this.fogEditor.getSelectedId();
     const selectedPoly = selectedId ? fog.polygons.find((p) => p.id === selectedId) ?? null : null;
     const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
-
-    const polyValues = editingPoly?.shaderParams ?? {};
-    // While a Paint action is mid-flight with an inheritance snapshot,
-    // surface those values in the panel so the GM sees what the
-    // about-to-be-painted polygon will actually inherit.
     const inherit = !editingPoly ? this._pendingPaintInherit : null;
-    // Tiny header so the GM knows whether they're editing the selected
-    // polygon or just the draft for the next-new polygon.
+
+    // Small header so the GM knows what they're editing.
     const hdr = document.createElement('div');
     hdr.className = 'fog-shader-params-header';
     hdr.textContent = editingPoly
-      ? 'Selected polygon'
-      : (inherit ? 'About to paint (inherited)' : `${k.label} — next new polygon`);
-    container.appendChild(hdr);
+      ? `${k.label} — selected polygon`
+      : (inherit ? `${k.label} — about to paint (inherited)` : `${k.label} — next new polygon`);
+    root.appendChild(hdr);
 
+    // ─── Edge Fade (universal, applies to every kind) ────────────────
+    const kindDefault = k.defaultEdgeFade ?? DEFAULT_EDGE_FADE;
+    let edgeFadeValue: number;
+    if (editingPoly) {
+      edgeFadeValue = typeof editingPoly.edgeFade === 'number' ? editingPoly.edgeFade : kindDefault;
+    } else if (inherit) {
+      edgeFadeValue = inherit.edgeFade;
+    } else {
+      const v = draft['edgeFade'];
+      edgeFadeValue = typeof v === 'number' && Number.isFinite(v) ? v : kindDefault;
+    }
+    const edgeFadeDef: import('../mapfx/overlayKindRegistry.ts').SliderParamDef = {
+      id: 'edgeFade', label: 'Edge Fade', min: 0, max: 0.2, step: 0.05, default: kindDefault,
+    };
+    const edgeFadeRow = this._buildShaderSliderRow(
+      edgeFadeDef, k.label, edgeFadeValue,
+      (v) => {
+        if (editingPoly) this.state.setPolygonEdgeFade(editingPoly.id, v);
+        this.state.setShaderParams(this.activeOverlayKind, { edgeFade: v });
+        if (this._pendingPaintInherit) this._pendingPaintInherit.edgeFade = v;
+      },
+    );
+    root.appendChild(edgeFadeRow);
+
+    // ─── Kind-specific params ────────────────────────────────────────
+    const defs = k.shaderParams ?? [];
+    if (defs.length === 0) return;
+
+    const polyValues = editingPoly?.shaderParams ?? {};
+    const sourceMap: Record<string, number | string> =
+      editingPoly ? polyValues :
+      inherit     ? inherit.shaderParams :
+                    draft;
     for (const p of defs) {
-      // Resolution differs by edit target:
-      //   • Editing a polygon: show that polygon's stored value, falling
-      //     back to the registry default.
-      //   • Mid-Paint with inheritance: show the snapshot values so the
-      //     GM can see what the new polygon will get.
-      //   • Otherwise: show the kind draft (next-new defaults).
-      //
-      // Stored values are typed `number | string` so the colour-param
-      // branch reads a hex string while slider/toggle branches read
-      // numbers. The helpers below pick the right control per type.
-      const sourceMap: Record<string, number | string> =
-        editingPoly ? polyValues :
-        inherit     ? inherit.shaderParams :
-                      draft;
       const stored = sourceMap[p.id];
       const onChange = (v: number | string) => {
-        // Always update the kind draft so subsequent new polygons
-        // inherit the latest value. When a polygon is selected, ALSO
-        // patch that polygon's own shaderParams in a single state
-        // commit per slider tick. When mid-paint with inheritance
-        // pending, also update the snapshot so the GM can fine-tune
-        // before committing the new polygon.
         this.state.setShaderParams(this.activeOverlayKind, { [p.id]: v });
         if (editingPoly) this.state.setPolygonShaderParams(editingPoly.id, { [p.id]: v });
         if (this._pendingPaintInherit) this._pendingPaintInherit.shaderParams[p.id] = v;
@@ -3128,7 +3154,7 @@ export class GMApp {
         const n = typeof stored === 'number' && Number.isFinite(stored) ? stored : p.default;
         row = this._buildShaderSliderRow(p, k.label, n, (v) => onChange(v));
       }
-      container.appendChild(row);
+      root.appendChild(row);
     }
   }
 
@@ -3218,34 +3244,12 @@ export class GMApp {
     return row;
   }
 
-  /** v2.12 — sync the universal Edge Fade slider to the current
-   *  selection + kind. Mirrors the colour-swatch logic: if a poly of
-   *  the active kind is selected, show its value; mid-paint with
-   *  inheritance pending, show the snapshot; otherwise show the
-   *  kind's draft. */
+  /** v2.12 — Edge Fade UI moved into the MapFX FX popover. Legacy
+   *  callers still fire this on selection / kind changes; we route
+   *  to a popover refresh instead of mutating an inline slider.
+   *  No-op when the popover isn't open. */
   private _applyEdgeFadeSlider(): void {
-    const slider = document.getElementById('fog-edge-fade') as HTMLInputElement | null;
-    if (!slider) return;
-    const fog = this.state.getState().fog;
-    const selectedId = this.fogEditor.getSelectedId();
-    const selectedPoly = selectedId ? fog.polygons.find((p) => p.id === selectedId) ?? null : null;
-    const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
-    const inherit = !editingPoly ? this._pendingPaintInherit : null;
-    // Fallback when nothing's been tuned: per-kind default falling
-    // through to DEFAULT_EDGE_FADE. Fog overrides to 0 so the slider
-    // sits at hard-edge by default — that's the gameplay-correct
-    // starting point for "what can the party see".
-    const kindDefault = overlayKind(this.activeOverlayKind).defaultEdgeFade ?? DEFAULT_EDGE_FADE;
-    let value: number;
-    if (editingPoly) {
-      value = typeof editingPoly.edgeFade === 'number' ? editingPoly.edgeFade : kindDefault;
-    } else if (inherit) {
-      value = inherit.edgeFade;
-    } else {
-      const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
-      value = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : kindDefault;
-    }
-    slider.value = String(value);
+    this._mapfxFxPopover?.refresh();
   }
 
   /** Sync the colour swatch to the current selection + kind.
@@ -3848,8 +3852,18 @@ export class GMApp {
     // case rather than the solid one.
     this.viewBgFxBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (this._bgFxPopover) this._closeBgFxPopover();
+      if (this._bgFxPopover) this._bgFxPopover.close();
       else this._openBgFxPopover();
+    });
+
+    // MapFX FX button — opens the same sparkle popover style, but for
+    // the active overlay kind's Edge Fade + shader params. The kind
+    // dropdown itself stays inline so the GM can switch what's being
+    // tuned without diving through a menu.
+    this.mapFxBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this._mapfxFxPopover) this._mapfxFxPopover.close();
+      else this._openMapFxPopover();
     });
 
     // Open local player window as a real popup
@@ -4042,116 +4056,80 @@ export class GMApp {
    *  Layout: a list of backdrop options at the top; below it a params
    *  section that auto-rebuilds whenever the selection changes. Clicking
    *  an option commits the new backdrop kind AND keeps the popover open
-   *  so the GM can immediately tweak its tint / speed / etc. */
+   *  so the GM can immediately tweak its tint / speed / etc.
+   *
+   *  Built on the shared FxPopover component (src/gm/FxPopover.ts) so
+   *  the visual + dismissal behaviour matches the MapFX sparkle button. */
   private _openBgFxPopover(): void {
-    // Lazy import to avoid pulling the whole renderer registry into the
-    // GMApp critical bundle.
-    void import('../rendering/backdrops/backdropRegistry.ts').then(({ BACKDROPS }) => {
-      if (this._bgFxPopover) return; // race: another click closed it
-      const pop = document.createElement('div');
-      pop.className = 'fx-popover';
-      pop.setAttribute('role', 'menu');
+    void import('../rendering/backdrops/backdropRegistry.ts').then(async ({ BACKDROPS }) => {
+      if (this._bgFxPopover) return;
+      const { openFxPopover } = await import('./FxPopover.ts');
+      this._bgFxPopover = openFxPopover({
+        anchor: this.viewBgFxBtn,
+        populate: (root) => {
+          const optionList = document.createElement('div');
+          optionList.className = 'fx-popover-options';
+          root.appendChild(optionList);
 
-      const optionList = document.createElement('div');
-      optionList.className = 'fx-popover-options';
-      pop.appendChild(optionList);
+          const paramsBox = document.createElement('div');
+          paramsBox.className = 'fx-popover-params';
+          root.appendChild(paramsBox);
 
-      const paramsBox = document.createElement('div');
-      paramsBox.className = 'fx-popover-params';
-      pop.appendChild(paramsBox);
+          const refreshParams = (kind: string) => {
+            paramsBox.innerHTML = '';
+            const entry = BACKDROPS.find((b) => b.id === kind);
+            const params = entry?.params ?? [];
+            if (params.length === 0) { paramsBox.hidden = true; return; }
+            paramsBox.hidden = false;
+            const label = entry?.label ?? kind;
+            const stored = this.state.getState().view.backdrop?.params ?? {};
+            for (const p of params) {
+              const onChange = (v: number | string) => this._setBackdropParam(p.id, v);
+              let row: HTMLElement;
+              if (p.type === 'color') {
+                const v = stored[p.id];
+                const hex = typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : p.default;
+                row = this._buildShaderColorRow(p, label, hex, onChange);
+              } else if (p.type === 'toggle') {
+                const v = stored[p.id];
+                const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
+                row = this._buildShaderToggleRow(p, label, n, onChange);
+              } else {
+                const v = stored[p.id];
+                const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
+                row = this._buildShaderSliderRow(p, label, n, onChange);
+              }
+              paramsBox.appendChild(row);
+            }
+          };
 
-      const refreshParams = (kind: string) => {
-        paramsBox.innerHTML = '';
-        const entry = BACKDROPS.find((b) => b.id === kind);
-        const params = entry?.params ?? [];
-        if (params.length === 0) { paramsBox.hidden = true; return; }
-        paramsBox.hidden = false;
-        const label = entry?.label ?? kind;
-        const stored = this.state.getState().view.backdrop?.params ?? {};
-        for (const p of params) {
-          const onChange = (v: number | string) => this._setBackdropParam(p.id, v);
-          let row: HTMLElement;
-          if (p.type === 'color') {
-            const v = stored[p.id];
-            const hex = typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : p.default;
-            row = this._buildShaderColorRow(p, label, hex, onChange);
-          } else if (p.type === 'toggle') {
-            const v = stored[p.id];
-            const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
-            row = this._buildShaderToggleRow(p, label, n, onChange);
-          } else {
-            const v = stored[p.id];
-            const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
-            row = this._buildShaderSliderRow(p, label, n, onChange);
+          const currentKind = this.state.getState().view.backdrop?.kind ?? 'none';
+          for (const b of BACKDROPS) {
+            const opt = document.createElement('button');
+            opt.type = 'button';
+            opt.className = 'fx-popover-option';
+            if (b.id === currentKind) opt.classList.add('fx-popover-option--selected');
+            opt.textContent = b.label;
+            opt.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this._applyBackdrop(b.id);
+              for (const o of optionList.querySelectorAll('.fx-popover-option')) {
+                o.classList.remove('fx-popover-option--selected');
+              }
+              opt.classList.add('fx-popover-option--selected');
+              refreshParams(b.id);
+            });
+            optionList.appendChild(opt);
           }
-          paramsBox.appendChild(row);
-        }
-      };
-
-      const currentKind = this.state.getState().view.backdrop?.kind ?? 'none';
-      for (const b of BACKDROPS) {
-        const opt = document.createElement('button');
-        opt.type = 'button';
-        opt.className = 'fx-popover-option';
-        if (b.id === currentKind) opt.classList.add('fx-popover-option--selected');
-        opt.textContent = b.label;
-        opt.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this._applyBackdrop(b.id);
-          for (const o of optionList.querySelectorAll('.fx-popover-option')) {
-            o.classList.remove('fx-popover-option--selected');
-          }
-          opt.classList.add('fx-popover-option--selected');
-          refreshParams(b.id);
-        });
-        optionList.appendChild(opt);
-      }
-
-      refreshParams(currentKind);
-
-      // Position under the FX button, in document coords so panel scroll
-      // doesn't peel the popover away.
-      document.body.appendChild(pop);
-      const rect = this.viewBgFxBtn.getBoundingClientRect();
-      const left = Math.min(window.innerWidth - pop.offsetWidth - 8, rect.left);
-      pop.style.left = `${Math.max(8, left)}px`;
-      pop.style.top  = `${rect.bottom + 4}px`;
-
-      this._bgFxPopover = pop;
-      this.viewBgFxBtn.setAttribute('aria-expanded', 'true');
-
-      // Dismiss handlers — click anywhere off the popover, Escape, or
-      // scroll closes it.
-      const onDocClick = (ev: MouseEvent) => {
-        if (!this._bgFxPopover) return;
-        if (this._bgFxPopover.contains(ev.target as Node)) return;
-        if (this.viewBgFxBtn.contains(ev.target as Node)) return;
-        this._closeBgFxPopover();
-      };
-      const onKey = (ev: KeyboardEvent) => {
-        if (ev.key === 'Escape') this._closeBgFxPopover();
-      };
-      // Defer to next tick so the same click that opened the popover
-      // doesn't immediately close it.
-      setTimeout(() => {
-        document.addEventListener('mousedown', onDocClick);
-        document.addEventListener('keydown', onKey);
-      }, 0);
-      (pop as HTMLElement & { _cleanup?: () => void })._cleanup = () => {
-        document.removeEventListener('mousedown', onDocClick);
-        document.removeEventListener('keydown', onKey);
-      };
+          refreshParams(currentKind);
+        },
+        onClose: () => { this._bgFxPopover = null; },
+      });
     });
   }
 
-  private _closeBgFxPopover(): void {
-    if (!this._bgFxPopover) return;
-    const cleanup = (this._bgFxPopover as HTMLElement & { _cleanup?: () => void })._cleanup;
-    cleanup?.();
-    this._bgFxPopover.remove();
-    this._bgFxPopover = null;
-    this.viewBgFxBtn.setAttribute('aria-expanded', 'false');
-  }
+  // _closeBgFxPopover removed — callers now use `this._bgFxPopover?.close()`
+  // directly via the FxPopoverHandle, or click off / press Escape.
 
   /** Commit a backdrop choice into the active map's ViewState. The
    *  state change ripples through onStateChange → setBackdrop on the
