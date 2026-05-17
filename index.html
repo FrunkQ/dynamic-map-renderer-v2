@@ -40,9 +40,9 @@
         <!-- Hidden source-of-truth for the room code; rendered as a tooltip on the QR. -->
         <span id="room-code" hidden>…</span>
 
-        <div id="qr-container" role="button" tabindex="0" title="Click to copy player URL">
+        <div id="qr-container" role="button" tabindex="0" title="QR code for the player URL. Players scan this with a phone camera to join your session via their browser — no app install needed. Click anywhere on the QR to copy the URL to your clipboard so you can text / DM it to someone instead.">
           <button id="copy-url-btn" class="qr-copy-btn" type="button"
-                  title="Copy player URL" aria-label="Copy player URL">
+                  title="Copy the player URL to your clipboard. Same as clicking the QR itself; here for muscle memory if you'd rather aim at a button than the code." aria-label="Copy player URL">
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
               <rect x="4.25" y="4.25" width="8.5" height="9.5" rx="1.5"
                     fill="none" stroke="currentColor" stroke-width="1.5"/>
@@ -72,7 +72,7 @@
         </div>
 
         <div class="session-actions">
-          <button id="open-player-btn" class="btn btn--primary">Open Player Window</button>
+          <button id="open-player-btn" class="btn btn--primary" title="Open a player view as a popup window on this machine. Useful for previewing what players see, or as a secondary screen on the same PC. Note: same-machine player windows can struggle with animated map playback because of browser-level per-window decode throttling — use the projector window or a separate device for table-side animation.">Open Player Window</button>
         </div>
       </div>
     </section>
@@ -145,16 +145,16 @@
              realistic sweet spot the GM will tune around. -->
         <label class="fog-brush-row fog-row--edge">
           <span>Edge Fade</span>
-          <input id="fog-edge-fade" type="range" min="0" max="0.20" step="0.05" value="0.10" title="Soft fade of the polygon edge — 0 hard, 0.20 maximally blurred. Default 0.10 removes pixelation cleanly." />
+          <input id="fog-edge-fade" type="range" min="0" max="0.20" step="0.05" value="0.10" title="How soft the polygon edge is. 0 = pixel-sharp boundary; 0.20 = heavily blurred. Default 0.10 removes pixelation cleanly without softening too much. Works the same way for fog and every MapFX shader kind." />
         </label>
 
         <!-- Drawing Mode — sticky toggle, persists in localStorage. -->
         <div class="fog-row fog-row--mode">
           <span class="fog-row-label">Drawing Mode</span>
           <div class="fog-mode-toggle">
-            <button id="fog-mode-poly-btn"  class="btn btn--sm fog-mode-btn is-active" title="Click vertices to define an outline">Polygon</button>
-            <button id="fog-mode-brush-btn" class="btn btn--sm fog-mode-btn"           title="Drag to paint a shape">Brush</button>
-            <button id="fog-mode-fill-btn"  class="btn btn--sm fog-mode-btn"           title="Magic wand — click a region on the map to fill it">Fill</button>
+            <button id="fog-mode-poly-btn"  class="btn btn--sm fog-mode-btn is-active" title="Polygon mode — click on the map to add vertices in order; double-click or press Enter to close the shape. Best for precise outlines (room boundaries, rivers with bends, etc.).">Polygon</button>
+            <button id="fog-mode-brush-btn" class="btn btn--sm fog-mode-btn"           title="Brush mode — click and drag to paint a freeform shape. Each stroke becomes one polygon. Size adjustable below; zoom the canvas in for finer detail.">Brush</button>
+            <button id="fog-mode-fill-btn"  class="btn btn--sm fog-mode-btn"           title="Magic Wand mode — click a region on the map and the flood-fill algorithm captures everything within the colour Tolerance below. After clicking, drag Tolerance to widen / narrow the catch. Click somewhere else to start a fresh fill.">Fill</button>
           </div>
         </div>
 
@@ -162,7 +162,7 @@
         <div class="fog-brush-controls" hidden>
           <label class="fog-brush-row">
             <span>Size</span>
-            <input id="fog-brush-radius" type="range" min="2" max="80" step="1" value="20" title="Brush size in screen pixels — zoom in for finer detail" />
+            <input id="fog-brush-radius" type="range" min="2" max="80" step="1" value="20" title="Brush size in screen pixels (NOT map pixels). Zoom in on the canvas to get finer detail at the same screen-pixel size; zoom out to paint big shapes quickly." />
           </label>
         </div>
 
@@ -172,7 +172,7 @@
         <div class="fog-fill-controls" hidden>
           <label class="fog-brush-row">
             <span>Tolerance</span>
-            <input id="fog-fill-tolerance" type="range" min="0.01" max="0.6" step="0.01" value="0.1" title="How permissive the colour-match is. Drag after a fill click to widen / narrow the captured area." />
+            <input id="fog-fill-tolerance" type="range" min="0.01" max="0.6" step="0.01" value="0.1" title="How permissive the colour-match is for the magic-wand flood-fill. Low values catch only near-identical colours; high values bleed across subtle gradients. Click a region first to start a fill, then drag this slider — the captured area re-runs live so you can dial in the exact patch you wanted." />
           </label>
         </div>
 
@@ -180,8 +180,8 @@
              single-shot: click → draw one polygon/stroke under the current
              Drawing Mode → auto-exit. -->
         <div class="fog-row fog-row--actions">
-          <button id="fog-paint-btn" class="btn btn--sm fog-action fog-action--paint" title="Add one shape">Paint</button>
-          <button id="fog-erase-btn" class="btn btn--sm fog-action fog-action--erase" title="Carve one shape out of everything beneath">Erase</button>
+          <button id="fog-paint-btn" class="btn btn--sm fog-action fog-action--paint" title="Single-shot Paint — commits one shape using the current drawing mode (Polygon / Brush / Fill) and the active kind from the dropdown above. If a polygon was selected when you clicked Paint, the new shape inherits its colour + shader-param tuning (paint-another-like-this).">Paint</button>
+          <button id="fog-erase-btn" class="btn btn--sm fog-action fog-action--erase" title="Single-shot Erase — carves one shape out of every existing polygon it overlaps, regardless of kind. The carving polygon itself isn't added to the map; it's just used as a cookie-cutter.">Erase</button>
         </div>
 
         <!-- Per-kind shader tuning — populated by GMApp when the active
