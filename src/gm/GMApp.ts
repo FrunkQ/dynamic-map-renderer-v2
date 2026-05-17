@@ -3197,6 +3197,7 @@ export class GMApp {
    *  this") — lets the GM lay down a row of identical campfires, a
    *  consistent river flow, etc. without re-tuning per shape. */
   private _startAction(action: 'paint' | 'erase'): void {
+    this._actionInProgress = true;
     if (action === 'paint') {
       const selectedId = this.fogEditor.getSelectedId();
       const exemplar = selectedId
@@ -3274,6 +3275,7 @@ export class GMApp {
    *  finally kills the "Paint stays lit after committing a polygon"
    *  report we couldn't reproduce from inspection. */
   private _endAction(): void {
+    this._actionInProgress = false;
     this._pendingPaintInherit = null;
     this._lastFillState = null;
     this._clearPaintEraseActive();
@@ -3284,8 +3286,12 @@ export class GMApp {
     // Run the deactivation once more after the current event loop
     // tick drains — catches anything that re-asserts is-active via
     // any emitMode cascade triggered by setFog / syncPolygons.
-    queueMicrotask(() => this._clearPaintEraseActive());
-    setTimeout(() => this._clearPaintEraseActive(), 0);
+    // Skipped when _actionInProgress flipped true between scheduling
+    // and firing (e.g. drawing-mode pick → _endAction → immediate
+    // _startAction). Otherwise the deferred clears would clobber
+    // the legitimate new is-active state.
+    queueMicrotask(() => { if (!this._actionInProgress) this._clearPaintEraseActive(); });
+    setTimeout(() => { if (!this._actionInProgress) this._clearPaintEraseActive(); }, 0);
   }
 
   private _clearPaintEraseActive(): void {
@@ -4689,6 +4695,12 @@ export class GMApp {
    *  would (matches the by_name IDB index that populateMapList iterates).
    *  Preserves the " [T]" text-map marker so handouts keep their tag
    *  after rename. */
+  /** v2.12.x — guard so _endAction's deferred cleanup passes don't
+   *  clobber a _startAction that ran between the sync clear and the
+   *  microtask / timeout firing. Set true on _startAction, false on
+   *  _endAction. The deferred callbacks check it and bail when true. */
+  private _actionInProgress = false;
+
   private async _renameMap(id: string, name: string): Promise<void> {
     if (!id) return;
     // EditableSelect feeds the option's full textContent back as the

@@ -20,6 +20,8 @@
  */
 
 import { STARFIELD_BACKDROP } from './starfield.ts';
+import { AURORA_BACKDROP }    from './aurora.ts';
+import { EMBERS_BACKDROP }    from './embers.ts';
 
 export interface BackdropEntry {
   /** Stable id stored on the pack's ThemeConfig.backdrop.kind. */
@@ -33,6 +35,8 @@ export interface BackdropEntry {
 export const BACKDROPS: BackdropEntry[] = [
   { id: 'none', label: 'None (solid colour)', fragment: 'gl_FragColor = vec4(uBgColor, 1.0);' },
   STARFIELD_BACKDROP,
+  AURORA_BACKDROP,
+  EMBERS_BACKDROP,
 ];
 
 export function backdropById(id: string): BackdropEntry {
