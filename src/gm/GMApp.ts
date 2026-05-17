@@ -4683,6 +4683,17 @@ export class GMApp {
     if (map) {
       const asset = await MapAssetStore.get(map.mapAssetId);
       kind = _dropdownKindForAsset(asset);
+      // For text-map handouts, the underlying asset's filename IS the
+      // displayed name (handouts don't have a separate "source file
+      // name" the way image maps do). Keep the asset's filename in
+      // sync with the StoredMap rename so the TextMapEditor's Name
+      // input pre-populates with the new name on next open instead
+      // of showing the pre-rename original. The Editor's own save
+      // path already does the reverse propagation (asset → all
+      // StoredMaps using it) so the two directions stay in lockstep.
+      if (asset?.source === 'text-map' && asset.filename !== cleanName && cleanName) {
+        await MapAssetStore.update(asset.id, { filename: cleanName });
+      }
     }
     const displayName = cleanName || '(unnamed)';
     oldOpt.remove();
