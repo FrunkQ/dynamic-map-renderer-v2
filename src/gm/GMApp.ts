@@ -1116,6 +1116,12 @@ export class GMApp {
 
   async init(): Promise<void> {
     this.bindDOMRefs();
+    // Apply persisted UI scale to the sidebar before anything else
+    // measures itself — popovers + panels read offsetWidth during
+    // first render, and reading them while the sidebar is still at
+    // its unscaled size leads to one wrong-anchor frame on first
+    // open. No-op (scale=1.0) for users who haven't touched it.
+    void import('../storage/localSettings.ts').then(({ applyUiScale }) => applyUiScale());
     this.bindRenderer();
     this.bindFogEditor();
     this.bindViewportEditor();
@@ -2120,14 +2126,22 @@ export class GMApp {
     // frame otherwise) so player + projector display the correct
     // initial state. The GM's local renderer.loadMap below uses the
     // FINAL blob so the GM canvas shows the end state directly.
-    await this.state.loadForMap({ id: map.id, name: map.name }, broadcastBlob);
+    const hasSavedConfig = await this.state.loadForMap({ id: map.id, name: map.name }, broadcastBlob);
 
-    // Auto-sample the top-left pixel of the map image and use it as the
-    // background colour whenever there is no saved preference (i.e. still black).
-    if (this.state.getState().view.backgroundColor === '#000000') {
-      const colour = await this.sampleTopLeftPixel(blob);
-      const v = this.state.getState().view;
-      this.state.setView({ ...v, backgroundColor: colour });
+    // Auto-sample the top-left pixel as the bg colour, but ONLY on a
+    // map's first ever load (no saved config in IDB). Re-running this
+    // on every reload would clobber a user's explicit pick — including
+    // an explicit black on a non-transparent map, and red/blue/etc on
+    // a transparent textmap (where the sample always reads black
+    // because alpha=0 pixels decode as RGB 0,0,0). We also skip the
+    // write when the top-left pixel was transparent: the answer would
+    // be a meaningless '#000000' and the default already is black.
+    if (!hasSavedConfig) {
+      const sample = await this.sampleTopLeftPixel(blob);
+      if (sample.opaque) {
+        const v = this.state.getState().view;
+        this.state.setView({ ...v, backgroundColor: sample.hex });
+      }
     }
 
     this.fogEditor.loadState(this.state.getState().fog);
@@ -3494,7 +3508,11 @@ export class GMApp {
       let polys = fog.polygons;
       for (const blob of blobs) polys = subtractFromAll(polys, blob.outer);
       this.state.setFog({ polygons: polys });
-      this._endAction();
+      // Brush erase stays sticky — drag again to carve more without
+      // re-clicking Erase. Mirrors Fill erase's repeat-click flow and
+      // matches the "Brush mode is on" reading of the lit Brush button.
+      // Drop the inherit snapshot (was paint-only anyway).
+      this._pendingPaintInherit = null;
       return;
     }
     // Paint — one new polygon per blob, holes preserved (a donut scribble
@@ -3532,8 +3550,13 @@ export class GMApp {
       createdAt: now,
     }));
     this.state.setFog({ polygons: [...fog.polygons, ...newPolys] });
-    // Single-shot Paint/Erase: brush stroke committed → leave action mode.
-    this._endAction();
+    // Brush paint stays sticky — drag again to paint another stroke
+    // without re-clicking Paint. The Brush mode button is lit and the
+    // brush is functionally engaged; the next pointer-down on the
+    // canvas starts a fresh stroke. Drop the inherit snapshot so a
+    // second stroke doesn't keep inheriting from a now-stale exemplar
+    // (selection cleared on the first commit's setFog cascade anyway).
+    this._pendingPaintInherit = null;
   }
 
   /** v2.12 Magic Wand commit. Click in Fill mode runs flood-fill at
@@ -4058,22 +4081,24 @@ export class GMApp {
     });
   }
 
-  /** Sample the top-left pixel of a map asset and return a CSS hex colour.
-   *  Works for still images (createImageBitmap path) AND video maps
-   *  (webm / mp4 — decode the first frame via a hidden <video>). Returns
-   *  '#000000' when the asset can't be decoded as either, so the caller
-   *  just falls through to the default background. Errors are swallowed
-   *  — auto-bg is a nicety, not worth surfacing decode failures. */
-  private async sampleTopLeftPixel(blob: ArrayBuffer): Promise<string> {
+  /** Sample the top-left pixel of a map asset and return a CSS hex colour
+   *  plus an `opaque` flag set when alpha > 0. Works for still images
+   *  (createImageBitmap path) AND video maps (webm / mp4 — decode the
+   *  first frame via a hidden <video>). On decode failure returns
+   *  { hex: '#000000', opaque: false } so the caller can leave the
+   *  default in place. The opaque flag lets the caller distinguish a
+   *  genuinely-black pixel from a transparent one (both decode to
+   *  RGB 0,0,0 in the canvas readback). */
+  private async sampleTopLeftPixel(blob: ArrayBuffer): Promise<{ hex: string; opaque: boolean }> {
     try {
       if (_sniffIsVideo(blob)) return await this._sampleVideoTopLeft(blob);
       return await this._sampleImageTopLeft(blob);
     } catch {
-      return '#000000';
+      return { hex: '#000000', opaque: false };
     }
   }
 
-  private async _sampleImageTopLeft(buffer: ArrayBuffer): Promise<string> {
+  private async _sampleImageTopLeft(buffer: ArrayBuffer): Promise<{ hex: string; opaque: boolean }> {
     const bmp = await createImageBitmap(new Blob([buffer]));
     const cv  = document.createElement('canvas');
     cv.width  = 1;
@@ -4081,11 +4106,12 @@ export class GMApp {
     cv.getContext('2d')!.drawImage(bmp, 0, 0, 1, 1);
     bmp.close();
     const d = cv.getContext('2d')!.getImageData(0, 0, 1, 1).data;
-    return '#' + [d[0]!, d[1]!, d[2]!].map((v) => v.toString(16).padStart(2, '0')).join('');
+    const hex = '#' + [d[0]!, d[1]!, d[2]!].map((v) => v.toString(16).padStart(2, '0')).join('');
+    return { hex, opaque: (d[3] ?? 0) > 0 };
   }
 
-  private _sampleVideoTopLeft(buffer: ArrayBuffer): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
+  private _sampleVideoTopLeft(buffer: ArrayBuffer): Promise<{ hex: string; opaque: boolean }> {
+    return new Promise<{ hex: string; opaque: boolean }>((resolve, reject) => {
       // Build a Blob with a video MIME so the element actually decodes
       // it — magic-byte sniff already picked the right path; we just
       // need to give the browser a hint.
@@ -4111,7 +4137,7 @@ export class GMApp {
           const d = cv.getContext('2d')!.getImageData(0, 0, 1, 1).data;
           const hex = '#' + [d[0]!, d[1]!, d[2]!].map((n) => n.toString(16).padStart(2, '0')).join('');
           teardown();
-          resolve(hex);
+          resolve({ hex, opaque: (d[3] ?? 0) > 0 });
         } catch (err) {
           teardown();
           reject(err as Error);

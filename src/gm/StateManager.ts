@@ -36,7 +36,12 @@ export class StateManager {
 
   // ─── Load ─────────────────────────────────────────────────────────────────
 
-  async loadForMap(map: MapState, mapBlob: ArrayBuffer): Promise<void> {
+  /** @returns true if a saved config was loaded from IDB, false if we
+   *  seeded fresh defaults. Callers use this to decide whether to run
+   *  first-time setup (e.g. auto-sample the background colour from the
+   *  map's top-left pixel) — re-running that on reload would clobber
+   *  the user's saved picks. */
+  async loadForMap(map: MapState, mapBlob: ArrayBuffer): Promise<boolean> {
     const saved     = await loadConfig(map.id);
     const migrated  = saved ? migrateSessionState(saved) : null;
     const base      = defaultSessionState();
@@ -53,6 +58,7 @@ export class StateManager {
     this.seedFilterDefaults();
 
     this._notify(['map', 'view', 'filter', 'fog'], mapBlob);
+    return migrated !== null;
   }
 
   // ─── Setters ──────────────────────────────────────────────────────────────
