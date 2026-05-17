@@ -377,6 +377,13 @@ export class GMApp {
       onError: (err) => this.onP2PError(err),
       onPeerMessage: (peerId, msg) => this.onPeerMessage(peerId, msg),
     });
+    // v2.12 — wire the dev-only FX dump helper. Exposes
+    // `window.mappaduxDumpFx()` so the GM can capture their tuned
+    // MapFX + backdrop param values from the browser console; see
+    // src/gm/debugDumpFx.ts for the output shape.
+    void import('./debugDumpFx.ts').then(({ setupFxDump }) => {
+      setupFxDump(() => this.state.getState());
+    });
   }
 
   /**
