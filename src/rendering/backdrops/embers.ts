@@ -73,5 +73,10 @@ export const EMBERS_BACKDROP: BackdropEntry = {
     // soulfire, green for wisps, violet for arcane sparks.
     { id: 'tint',      label: 'Ember Colour', type: 'color', default: '#ff8b1f' },
     { id: 'intensity', label: 'Intensity',                   min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+    // Drift rate. 0 = embers freeze in place; 1 = original rising
+    // pace; 3 = wind-driven cinders streaming up. Multiplies the
+    // built-in uSpeed already referenced in the GLSL so existing
+    // saved configs keep their look.
+    { id: 'speed',     label: 'Speed',                       min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
   ],
 };

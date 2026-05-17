@@ -101,5 +101,9 @@ export const FIRESTORM_BACKDROP: BackdropEntry = {
     { id: 'fire',      label: 'Fire Core',  type: 'color', default: '#ffa64d' },
     { id: 'smoke',     label: 'Smoke',      type: 'color', default: '#1a0a08' },
     { id: 'intensity', label: 'Intensity',                 min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+    // Column rise rate. The raymarch already uses time * uSpeed in
+    // the volume offset; 0 freezes the columns mid-burn, 1 is the
+    // original pace, 3 reads as a column whipping skyward.
+    { id: 'speed',     label: 'Speed',                     min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
   ],
 };

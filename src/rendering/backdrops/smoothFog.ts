@@ -85,5 +85,9 @@ export const SMOOTH_FOG_BACKDROP: BackdropEntry = {
   params: [
     { id: 'color',     label: 'Fog Colour', type: 'color', default: '#6b6678' },
     { id: 'intensity', label: 'Density',                   min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+    // Wisp drift rate. The GLSL already uses time * uSpeed for the
+    // domain-warp offset; 0 freezes the fog, 1 is the original
+    // gentle drift, 3 reads as wind-driven sea fret.
+    { id: 'speed',     label: 'Speed',                     min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
   ],
 };

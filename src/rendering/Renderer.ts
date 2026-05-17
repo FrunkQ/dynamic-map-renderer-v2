@@ -1678,6 +1678,15 @@ export class Renderer {
     // toggles → float, colour → vec3 via THREE.Color). The GLSL
     // declarations for them are auto-injected ahead of the snippet so
     // the snippet author doesn't have to redeclare them.
+    //
+    // Collision rule: if a param's resolved uniform name matches a
+    // built-in (uSpeed, uBgColor, uRect, uResolution), the built-in's
+    // uniform OBJECT is replaced by the param's value (via the spread
+    // at the bottom of the uniforms map) but the GLSL declaration is
+    // skipped — GLSL forbids re-declaring the same uniform twice in
+    // one shader. This is how 'speed' becomes a tunable slider while
+    // keeping the legacy uSpeed built-in usable by snippets.
+    const BUILT_IN_UNIFORMS = new Set(['uSpeed', 'uBgColor', 'uRect', 'uResolution']);
     const paramUniforms: Record<string, { value: number | THREE.Color }> = {};
     const paramDeclarations: string[] = [];
     for (const p of entry.params ?? []) {
@@ -1686,11 +1695,11 @@ export class Renderer {
       if (p.type === 'color') {
         const hex = typeof stored === 'string' && /^#[0-9a-fA-F]{6}$/.test(stored) ? stored : p.default;
         paramUniforms[uName] = { value: new THREE.Color(hex) };
-        paramDeclarations.push(`uniform vec3 ${uName};`);
+        if (!BUILT_IN_UNIFORMS.has(uName)) paramDeclarations.push(`uniform vec3 ${uName};`);
       } else {
         const n = typeof stored === 'number' && Number.isFinite(stored) ? stored : p.default;
         paramUniforms[uName] = { value: n };
-        paramDeclarations.push(`uniform float ${uName};`);
+        if (!BUILT_IN_UNIFORMS.has(uName)) paramDeclarations.push(`uniform float ${uName};`);
       }
     }
 

@@ -53,5 +53,9 @@ export const AURORA_BACKDROP: BackdropEntry = {
     { id: 'colorA',    label: 'Curtain Colour',       type: 'color',  default: '#33bf73' },
     { id: 'colorB',    label: 'Secondary Colour',     type: 'color',  default: '#7340cc' },
     { id: 'intensity', label: 'Intensity',                            min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+    // Curtain drift rate. 0 freezes the bands; 1 is the original
+    // calm wash; 3 reads as a magical storm front. The aurora GLSL
+    // already scales time by uSpeed * 0.1 — slider just exposes it.
+    { id: 'speed',     label: 'Speed',                                min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
   ],
 };

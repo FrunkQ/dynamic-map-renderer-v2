@@ -16,13 +16,20 @@
  *     a wide range of bar widths.
  *
  * Snippet inlined into the clip-pass fragment shader. Uniforms used:
- *   time      — seconds since renderer start (animation clock).
- *   uSpeed    — GM-tuned scalar 0..2, defaults to 1.0.
- *   uGlow     — 0..1 dial. 0 = sharp pinpoint stars (no cross-flares,
- *               tight radial falloff); 1 = full haloed orbs with rays
- *               (the original look). Default 1.0 reproduces the
- *               registered Shadertoy entry.
- *   vUv       — full-canvas 0..1 (clip-pass varying).
+ *   time        — seconds since renderer start (animation clock).
+ *   uSpeed      — GM-tuned warp rate; 0 freezes the starfield,
+ *                 default 1.0 is the original Velocity = 0.025 pace,
+ *                 up to 10 reads as proper warp speed.
+ *   uDirection  — 0..π sweep. cos drives the forward/recede component
+ *                 (depth-warp rate); sin drives lateral horizontal
+ *                 scroll. 0 = stars approach head-on, π/2 = pure
+ *                 sideways flight, π = stars recede. Same convention
+ *                 as the MapFX starfield kind.
+ *   uGlow       — 0..1 dial. 0 = sharp pinpoint stars (no cross-flares,
+ *                 tight radial falloff); 1 = full haloed orbs with rays
+ *                 (the original look). Default 1.0 reproduces the
+ *                 registered Shadertoy entry.
+ *   vUv         — full-canvas 0..1 (clip-pass varying).
  *
  * Output: opaque RGBA over uBgColor so the bars never go transparent.
  */
@@ -47,7 +54,15 @@ const FRAGMENT = /* glsl */`
     // Aspect-correct so stars stay round across wide canvases.
     _bgUv.x *= max(1.0, uResolution.x / max(uResolution.y, 1.0));
 
-    float _t = time * uSpeed * 0.025;
+    // Direction sweep — same compass-style 0..π convention as the
+    // MapFX starfield kind. cos drives the forward depth-warp rate
+    // (positive at 0 = approaching, negative at π = receding); sin
+    // drives a horizontal lateral scroll (peaks at π/2 = pure
+    // sideways drift, no convergence).
+    float _forward = cos(uDirection);
+    float _lateral = sin(uDirection);
+    float _t = time * uSpeed * 0.025 * _forward;
+    vec2 _lateralOffset = vec2(_lateral * time * uSpeed * 0.8, 0.0);
     vec3  _col = vec3(0.0);
 
     for (int _li = 0; _li < _SF_LAYERS; _li++) {
@@ -56,7 +71,7 @@ const FRAGMENT = /* glsl */`
       float _scale = mix(_SF_CANVAS, 0.5, _depth);
       float _fade  = _depth * smoothstep(1.0, 0.9, _depth);
 
-      vec2 _uv = _bgUv * _scale + _i * 453.2 - time * 0.05;
+      vec2 _uv = _bgUv * _scale + _i * 453.2 - time * 0.05 + _lateralOffset;
       vec2 _gv = fract(_uv);
       vec2 _id = floor(_uv);
       vec3 _layer = vec3(0.0);
@@ -113,6 +128,13 @@ export const STARFIELD_BACKDROP: BackdropEntry = {
     // 1.0 reproduces the original haloed-orb look; 0.0 gives crisp
     // pinpoints — useful for a "night sky behind a window" reading
     // rather than the dramatic-space-vista default.
-    { id: 'glow', label: 'Glow', min: 0.0, max: 1.0, step: 0.05, default: 1.0 },
+    { id: 'glow',      label: 'Glow',                min: 0.0, max: 1.0,       step: 0.05,     default: 1.0 },
+    // Warp travel rate. 0 = static starfield (no motion); 1 = the
+    // original Velocity = 0.025 pace; 10 = proper warp-speed feel.
+    // Range matches the MapFX kind so behaviour is consistent.
+    { id: 'speed',     label: 'Speed',               min: 0.0, max: 10.0,      step: 0.1,      default: 1.0 },
+    // 0..π sweep — 0 stars approach head-on, π/2 sideways drift,
+    // π stars recede. Same convention as the MapFX starfield.
+    { id: 'direction', label: 'Direction',           min: 0.0, max: 3.1415927, step: 0.087266, default: 0.0 },
   ],
 };
