@@ -2877,25 +2877,10 @@ export class GMApp {
       this.fogEditor.deleteSelected();
     });
 
-    document.querySelector<HTMLInputElement>('#fog-colour')?.addEventListener('input', (e) => {
-      const c = (e.target as HTMLInputElement).value;
-      // Update the "next new polygon" draft + brush — same as before.
-      this.fogEditor.setColor(c);
-      this.fogEditor.setBrushSettings({ color: c });
-      // If a polygon of the active kind is selected, ALSO recolour it
-      // in the same state commit so the GM can repaint a placed
-      // polygon without having to delete + redraw.
-      const selectedId = this.fogEditor.getSelectedId();
-      if (selectedId) {
-        const poly = this.state.getState().fog.polygons.find((p) => p.id === selectedId);
-        if (poly && poly.kind === this.activeOverlayKind && overlayKind(poly.kind).allowColor) {
-          this.state.setPolygonColor(selectedId, c);
-        }
-      }
-      // If mid-paint with inheritance pending, update the snapshot so
-      // the new polygon picks up the tweaked colour at commit time.
-      if (this._pendingPaintInherit) this._pendingPaintInherit.color = c;
-    });
+    // v2.12 — inline #fog-colour swatch removed. Colour is edited via
+    // the popover's Colour row (which writes to fogEditor + state +
+    // _pendingPaintInherit identically to the old handler). The brush
+    // colour source for new polygons is fogEditor.getColor().
 
     // v2.12 — Edge Fade slider. Universal per-poly value baked into
     // the alpha mask at rasterise time. Same per-poly + draft +
@@ -2961,10 +2946,9 @@ export class GMApp {
     } else {
       const k = overlayKind(this.activeOverlayKind);
       const inherit = this._pendingPaintInherit;
-      const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
       const color = inherit
         ? inherit.color
-        : ((k.allowColor && swatch?.value) ? swatch.value : k.defaultColor);
+        : (k.allowColor ? this.fogEditor.getColor() : k.defaultColor);
       const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
       const params = inherit ? inherit.shaderParams : draft;
       // Edge-fade fall-through: explicit poly value → inheritance →
@@ -3110,26 +3094,25 @@ export class GMApp {
     // their colour is the kind's identity (e.g. aurora's dual-colour
     // params replace a single-swatch).
     if (k.allowColor) {
-      const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
       const currentColor =
         editingPoly && editingPoly.color ? editingPoly.color :
         inherit                          ? inherit.color :
-        (swatch?.value ?? k.defaultColor);
+        (this.fogEditor.getColor() || k.defaultColor);
       const colourDef: import('../mapfx/overlayKindRegistry.ts').ColorParamDef = {
         id: 'color', label: 'Colour', type: 'color', default: k.defaultColor,
       };
       const colourRow = this._buildShaderColorRow(
         colourDef, k.label, currentColor,
         (hex) => {
-          // Match the inline #fog-colour handler: brush + per-poly +
-          // inheritance snapshot all stay in sync. Also nudges the
-          // inline swatch so the two stay visually identical.
+          // Update the FogEditor's brush colour (source of truth for
+          // "next new polygon" tint), recolour the selected polygon
+          // if one is active, and keep any pending paint-inherit
+          // snapshot in sync so the about-to-be-painted polygon
+          // commits with the GM's latest tweak.
           this.fogEditor.setColor(hex);
           this.fogEditor.setBrushSettings({ color: hex });
           if (editingPoly) this.state.setPolygonColor(editingPoly.id, hex);
           if (this._pendingPaintInherit) this._pendingPaintInherit.color = hex;
-          const inlineSwatch = document.getElementById('fog-colour') as HTMLInputElement | null;
-          if (inlineSwatch) inlineSwatch.value = hex;
         },
       );
       root.appendChild(colourRow);
@@ -3293,20 +3276,22 @@ export class GMApp {
    *  Greys out for identity-colour kinds (electric is always
    *  electric-blue, etc.). */
   private _applyKindToColourSwatch(): void {
-    const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
-    if (!swatch) return;
+    // Inline #fog-colour swatch was removed in v2.12 — colour is now
+    // edited via the popover. This function keeps its name + call
+    // sites but only does the FogEditor brush-colour sync now:
+    // pulls the selected polygon's colour (if of the active kind)
+    // or the kind default into the brush, so a freshly-painted
+    // polygon picks up the right tint without the GM touching the
+    // popover. No-op when the kind doesn't allow colour.
     const k = overlayKind(this.activeOverlayKind);
+    if (!k.allowColor) return;
     const selectedId = this.fogEditor.getSelectedId();
     const selectedPoly = selectedId
       ? this.state.getState().fog.polygons.find((p) => p.id === selectedId) ?? null
       : null;
     const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
     const value = editingPoly?.color ?? k.defaultColor;
-    swatch.value = value;
-    swatch.disabled = !k.allowColor;
-    swatch.title = k.allowColor
-      ? (editingPoly ? 'Colour of the selected polygon' : 'Colour for new shapes of this kind')
-      : `Colour is fixed for ${k.label} — kind colour is part of its identity`;
+    this.fogEditor.setColor(value);
   }
 
   /** v2.12 — start a Paint or Erase action under the current Drawing Mode.
@@ -3375,8 +3360,10 @@ export class GMApp {
     // the swatch + slider panel back to the inherited values so the GM
     // visually sees what the new polygon will get.
     if (this._pendingPaintInherit) {
-      const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
-      if (swatch) swatch.value = this._pendingPaintInherit.color;
+      // Inline swatch removed in v2.12 — the FogEditor's own brush
+      // colour gets nudged so a brushed stroke picks up the inherited
+      // tint, and the popover refreshes to show the snapshot values.
+      this.fogEditor.setColor(this._pendingPaintInherit.color);
       this._applyEdgeFadeSlider();
       this._rebuildShaderParamsPanel();
     }
@@ -3519,10 +3506,9 @@ export class GMApp {
     // Paint — inheritance + draft + default chain like the other commits.
     const k = overlayKind(this.activeOverlayKind);
     const inherit = this._pendingPaintInherit;
-    const swatch = document.getElementById('fog-colour') as HTMLInputElement | null;
     const color = inherit
       ? inherit.color
-      : ((k.allowColor && swatch?.value) ? swatch.value : k.defaultColor);
+      : (k.allowColor ? this.fogEditor.getColor() : k.defaultColor);
     const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
     const params = inherit ? inherit.shaderParams : draft;
     const kindDefault = k.defaultEdgeFade ?? DEFAULT_EDGE_FADE;

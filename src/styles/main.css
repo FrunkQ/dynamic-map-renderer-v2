@@ -1569,21 +1569,9 @@ option.select-option--add {
   width: 90px;
   flex: 0 0 auto;
 }
-/* Kind row carries the most control density of the panel (dropdown,
- * colour swatch, sparkle FX button). Drop the 90px label slot so the
- * dropdown starts right after "Kind" — alignment with rows below is
- * worth less than the extra ~50px the dropdown gets here. */
+/* Kind row in v2.12: [active-kind label] [sparkle FX button]. Colour
+ * + kind picker + params all live in the popover the sparkle opens. */
 .fog-row--kind > .fog-row-label { width: auto; }
-.fog-row--kind > select { flex: 1 1 auto; min-width: 0; }
-.fog-row--kind > input[type="color"] { flex: 0 0 32px; }
-.fog-row--kind > input[type="color"]:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  filter: grayscale(0.6);
-}
-/* Sparkle FX button on the right of the kind row — same 28px square
- * as the Backdrop FX button so both rows line up visually. flex: 0 0
- * keeps it from being squashed when the select needs the slack. */
 .fog-row--kind > .bg-fx-btn { flex: 0 0 28px; }
 
 /* Drawing Mode — Polygon / Brush sticky toggle. Active button gets a fill;

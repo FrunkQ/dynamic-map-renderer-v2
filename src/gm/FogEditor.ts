@@ -271,6 +271,13 @@ export class FogEditor {
     this.activeColor = color;
   }
 
+  /** Current brush colour — the "next new polygon" tint when the
+   *  active kind has allowColor: true. Updated by the popover's
+   *  Colour row and the kind-default fall-through on kind switch. */
+  getColor(): string {
+    return this.activeColor;
+  }
+
   /** v2.12 — what kind to tag on new polygon-mode polygons. */
   setActiveKind(kind: OverlayKind): void {
     this.activeKind = kind;
