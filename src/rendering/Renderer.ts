@@ -92,6 +92,17 @@ export class Renderer {
    *  gone silent while the video is supposed to be playing. Cleared
    *  on dispose. */
   private _videoWatchdogId: ReturnType<typeof setInterval> | null = null;
+  /** v2.12.x — count of consecutive watchdog fires with no progress.
+   *  When this passes a threshold and the document isn't fullscreen,
+   *  we conclude Chrome's decoder is throttled for this window and
+   *  fall back to pause-until-fullscreen mode. */
+  private _videoStallStrikes = 0;
+  /** v2.12.x — pause-until-fullscreen overlay element when an
+   *  animated map gets throttled by the browser. Null when not shown. */
+  private _videoStallOverlay: HTMLElement | null = null;
+  /** v2.12.x — bound fullscreenchange handler, kept so we can remove
+   *  it cleanly on dispose. */
+  private _onFullscreenChange: (() => void) | null = null;
   /** Lazily-built ImageData cache for the loaded map's pixels. Used
    *  by the Magic Wand fill (src/mapfx/floodFill.ts) which needs to
    *  read the map's raw pixels to flood-fill from a click point.
@@ -265,6 +276,10 @@ export class Renderer {
       }
       this.needsRender = true;
       this._videoLastFrameAt = performance.now();
+      // Frame fired = decoder isn't throttled right now. Reset the
+      // stall strike count so a brief hiccup doesn't escalate to
+      // "pause until fullscreen".
+      this._videoStallStrikes = 0;
       frameCount++;
       // Heartbeat at 5 s intervals — always-on (not gated by the
       // verbose flag) so the GM can confirm playback is active just
@@ -314,8 +329,66 @@ export class Renderer {
           console.error('[video-map] watchdog play() rejected', err);
         });
         this._videoLastFrameAt = performance.now();
+        // v2.12.x — sustained-stall escalation. When the browser
+        // refuses to decode regardless of how often we call play()
+        // (Chrome's same-process secondary-window throttling on big
+        // 4K+ videos), give up gracefully: pause the video, show an
+        // overlay nudging the user to fullscreen the window, and
+        // auto-resume on fullscreenchange. 4 strikes ≈ 6-8 s of
+        // sustained no-progress before we declare it.
+        this._videoStallStrikes++;
+        if (this._videoStallStrikes >= 4 && !this._isFullscreen()) {
+          // eslint-disable-next-line no-console
+          console.warn('[video-map] sustained stall — pausing until fullscreen');
+          v.pause();
+          this._showVideoStallOverlay();
+        }
       }
     }, 500);
+  }
+
+  /** Document.fullscreenElement check, normalised across the small
+   *  amount of vendor-prefix legacy that still exists. */
+  private _isFullscreen(): boolean {
+    const d = document as Document & {
+      webkitFullscreenElement?: Element;
+      msFullscreenElement?:    Element;
+    };
+    return !!(d.fullscreenElement || d.webkitFullscreenElement || d.msFullscreenElement);
+  }
+
+  /** v2.12.x — pause-until-fullscreen overlay. Shown when the
+   *  decoder gives up under Chrome's secondary-window throttling.
+   *  Hidden by _hideVideoStallOverlay on either fullscreen entry
+   *  (via the listener installed in start()) or map switch
+   *  (via _disposeMapTexture). */
+  private _showVideoStallOverlay(): void {
+    if (this._videoStallOverlay) return;
+    const div = document.createElement('div');
+    div.style.position = 'fixed';
+    div.style.top      = '50%';
+    div.style.left     = '50%';
+    div.style.transform = 'translate(-50%, -50%)';
+    div.style.padding  = '14px 20px';
+    div.style.background = 'rgba(0, 0, 0, 0.82)';
+    div.style.color    = '#fff';
+    div.style.borderRadius = '8px';
+    div.style.fontSize = '14px';
+    div.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    div.style.zIndex   = '10000';
+    div.style.pointerEvents = 'none';
+    div.style.maxWidth = '90%';
+    div.style.textAlign = 'center';
+    div.style.lineHeight = '1.4';
+    div.textContent = '▶ Animated map paused. Fullscreen this window (F11) for smooth playback.';
+    document.body.appendChild(div);
+    this._videoStallOverlay = div;
+  }
+
+  private _hideVideoStallOverlay(): void {
+    if (!this._videoStallOverlay) return;
+    this._videoStallOverlay.remove();
+    this._videoStallOverlay = null;
   }
 
   private _stopVideoFramePump(): void {
@@ -362,6 +435,9 @@ export class Renderer {
     // switch to a still image otherwise.
     this.mapVideoScaleCanvas = null;
     this.mapVideoScaleCtx    = null;
+    // Stall-escalation state belongs to the video that's going away.
+    this._videoStallStrikes = 0;
+    this._hideVideoStallOverlay();
     this.hasVideoMap = false;
   }
 
@@ -1195,6 +1271,24 @@ export class Renderer {
       this.renderFrame();
     };
     loop();
+    // v2.12.x — fullscreenchange listener for the animated-map
+    // pause-until-fullscreen escalation. When the user enters
+    // fullscreen, hide the overlay and resume playback; the
+    // decoder budget jumps in fullscreen, so the stall should
+    // clear straight away. Leaving fullscreen just lets the
+    // watchdog re-detect and re-pause if needed.
+    if (!this._onFullscreenChange) {
+      this._onFullscreenChange = () => {
+        if (this._isFullscreen()) {
+          this._hideVideoStallOverlay();
+          this._videoStallStrikes = 0;
+          if (this.mapVideo && this.mapVideo.paused) {
+            void this.mapVideo.play().catch(() => { /* autoplay policy */ });
+          }
+        }
+      };
+      document.addEventListener('fullscreenchange', this._onFullscreenChange);
+    }
   }
 
   stop(): void {
@@ -1202,6 +1296,11 @@ export class Renderer {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
+    if (this._onFullscreenChange) {
+      document.removeEventListener('fullscreenchange', this._onFullscreenChange);
+      this._onFullscreenChange = null;
+    }
+    this._hideVideoStallOverlay();
   }
 
   /**
