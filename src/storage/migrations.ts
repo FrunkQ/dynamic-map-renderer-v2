@@ -100,9 +100,14 @@ export function migrateSessionState(saved: any): SessionState | null {
   // polygon with a now-removed kind (cold/smoke/blood/water/shadow/
   // electric/poison/holy/healing/fear) is migrated to 'fog' so the shape
   // is preserved and the GM can morph it via the dropdown if they want.
+  // Keep in sync with the OverlayKind union in types.ts. Adding a new
+  // kind without listing it here causes a silent data-loss bug —
+  // saved polygons of the new kind get coerced to 'fog' on reload.
+  // Caught 2026-05-17 when 'transparent' polygons came back as fog.
   const SUPPORTED_KINDS: Record<string, boolean> = {
-    fog: true, fire: true, river: true, ocean: true, light: true,
-    starfield: true, portal: true, thundercloud: true, mist: true,
+    fog: true, fire: true, firestorm: true, river: true, ocean: true,
+    light: true, starfield: true, portal: true, thundercloud: true,
+    mist: true, aurora: true, embers: true, noise: true, transparent: true,
   };
   const coerceKind = (k: any): string => (typeof k === 'string' && SUPPORTED_KINDS[k]) ? k : 'fog';
   const rawFog = (cur.fog && Array.isArray(cur.fog.polygons)) ? cur.fog.polygons : [];
