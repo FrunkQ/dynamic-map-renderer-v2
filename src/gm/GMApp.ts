@@ -4265,32 +4265,48 @@ export class GMApp {
    *  state change ripples through onStateChange → setBackdrop on the
    *  renderer and a view_update broadcast.
    *
-   *  When swapping kinds, the previous backdrop's params are dropped on
-   *  purpose: param ids are kind-scoped and a value like "Curtain Tint"
-   *  on aurora has no meaning under embers. New kind starts at its
-   *  registered defaults. */
+   *  When swapping kinds, restore the kind's stashed draft (if any)
+   *  so "I tuned Aurora last time and want it back" works without
+   *  re-dialling. The draft is kept in view.backdropDrafts[kind] and
+   *  populated on every _setBackdropParam call below. Mirrors the
+   *  MapFX side, where fog.shaderParams[kind] serves the same role
+   *  for per-poly shader-param drafts. */
   private _applyBackdrop(kind: string): void {
     const v = this.state.getState().view;
     const next = { ...v };
     if (kind === 'none') {
       delete next.backdrop;
     } else {
-      next.backdrop = { kind };
+      const draft = v.backdropDrafts?.[kind];
+      next.backdrop = draft && Object.keys(draft).length > 0
+        ? { kind, params: { ...draft } }
+        : { kind };
     }
     this.state.setView(next);
   }
 
   /** Patch a single backdrop param's value into the active map's
    *  ViewState. Triggered by the popover slider / colour-picker / toggle
-   *  rows. No-op when no backdrop is currently active. */
+   *  rows. No-op when no backdrop is currently active.
+   *
+   *  Writes the new value to TWO places:
+   *    • backdrop.params — the live active config that drives the
+   *      renderer and the player broadcast.
+   *    • backdropDrafts[kind] — the per-kind stash that _applyBackdrop
+   *      reads when the user switches to this kind again later. */
   private _setBackdropParam(id: string, value: number | string): void {
     const v = this.state.getState().view;
     if (!v.backdrop) return;
+    const kind = v.backdrop.kind;
     const next = {
       ...v,
       backdrop: {
         ...v.backdrop,
         params: { ...(v.backdrop.params ?? {}), [id]: value },
+      },
+      backdropDrafts: {
+        ...(v.backdropDrafts ?? {}),
+        [kind]: { ...(v.backdropDrafts?.[kind] ?? {}), [id]: value },
       },
     };
     this.state.setView(next);

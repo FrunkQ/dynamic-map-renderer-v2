@@ -31,6 +31,19 @@ export interface ViewState {
    * solid backgroundColor (default).
    */
   backdrop?: BackdropConfig;
+  /**
+   * v2.13.x — per-backdrop-kind param drafts. When the GM tweaks a
+   * live backdrop's sliders the values land both into the active
+   * `backdrop.params` AND here keyed by kind. Switching to a
+   * different kind reads its draft (if any) as the starting values
+   * instead of registry defaults, so "I tuned Aurora last time and
+   * now I want it back" works without re-dialling.
+   *
+   * Param ids are kind-scoped (Aurora's 'colorA' has nothing to do
+   * with Ocean's 'waveHeight'), so keying by kind is the natural
+   * unit. Mirrors `FogState.shaderParams[kind]` on the MapFX side.
+   */
+  backdropDrafts?: Record<string, Record<string, number | string>>;
 }
 
 // ─── Fog of War / Overlay (v2.12 unified system) ─────────────────────────────
