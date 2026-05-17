@@ -3256,18 +3256,38 @@ export class GMApp {
    *  buttons (re-click to cancel), by the Drawing Mode switch, and
    *  automatically by polygon-complete + brush-commit handlers.
    *  Clears any pending paint-inheritance snapshot so the next Paint
-   *  starts fresh. */
+   *  starts fresh.
+   *
+   *  v2.12.x — the button reset runs both synchronously AND in a
+   *  follow-up microtask. Synchronous handles the simple case;
+   *  microtask defends against the bug where a commit's downstream
+   *  cascade (state.setFog → syncPolygons → emitMode → onModeChange
+   *  → various panel rebuilds; plus FogEditor's own follow-up
+   *  this.disable() after the commit handler returns) sometimes
+   *  reaches DOM after our class removal. Whatever runs in that
+   *  window can't out-race the microtask. Cheap, idempotent, and
+   *  finally kills the "Paint stays lit after committing a polygon"
+   *  report we couldn't reproduce from inspection. */
   private _endAction(): void {
     this._pendingPaintInherit = null;
     this._lastFillState = null;
-    const paintBtn = document.querySelector<HTMLButtonElement>('#fog-paint-btn');
-    const eraseBtn = document.querySelector<HTMLButtonElement>('#fog-erase-btn');
-    paintBtn?.classList.remove('is-active');
-    eraseBtn?.classList.remove('is-active');
+    this._clearPaintEraseActive();
     this.fogEditor.disable();
     this.fogEditor.setBrushActive(false);
     this.fogEditor.setFillActive(false);
     this.markerEditor?.setPointerCapture(true);
+    // Run the deactivation once more after the current event loop
+    // tick drains — catches anything that re-asserts is-active via
+    // any emitMode cascade triggered by setFog / syncPolygons.
+    queueMicrotask(() => this._clearPaintEraseActive());
+    setTimeout(() => this._clearPaintEraseActive(), 0);
+  }
+
+  private _clearPaintEraseActive(): void {
+    const paintBtn = document.querySelector<HTMLButtonElement>('#fog-paint-btn');
+    const eraseBtn = document.querySelector<HTMLButtonElement>('#fog-erase-btn');
+    paintBtn?.classList.remove('is-active');
+    eraseBtn?.classList.remove('is-active');
   }
 
   /** Brush stroke commit. Converts the polyline to a polygon (offset at
