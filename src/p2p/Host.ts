@@ -180,7 +180,16 @@ export class Host {
     const seq = ++this.broadcastSeq;
     const tagged = { ...msg, _seq: seq } as unknown as GMMessage;
 
-    this.local.send(tagged);
+    // v2.12.x — animated-map video_bundle messages are deliberately
+    // suppressed from the LocalChannel path. Same-browser windows
+    // (player popups, same-machine projector) compete with the GM
+    // for Chrome's per-window decoder budget; sending them the full
+    // video bytes just makes both windows worse. They stay on the
+    // first-frame snapshot from the preceding map_change instead.
+    // Remote peers (PeerJS) still get the bundle and animate normally.
+    if (msg.type !== 'video_bundle') {
+      this.local.send(tagged);
+    }
 
     // Keep cached state current for new joiners.
     if (msg.type === 'full_state') {

@@ -232,7 +232,7 @@ calibrate.html  Standalone projector-calibration window
 - **PeerJS relay** — connections go through the public PeerJS broker by default. On restricted networks a self-hosted PeerJS server may be needed.
 - **Single GM** — the session model assumes one GM and any number of read-only players.
 
-See [CHANGELOG.md](./CHANGELOG.md) for release history.
+For more detail on caveats and workarounds, see [docs/KNOWN_ISSUES.md](./docs/KNOWN_ISSUES.md). [CHANGELOG.md](./CHANGELOG.md) has the release history.
 
 ---
 

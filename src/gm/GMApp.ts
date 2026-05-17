@@ -1962,48 +1962,43 @@ export class GMApp {
       this._setAnimationButtonState('idle');
     }
     if (this.revealProgressEl) this.revealProgressEl.hidden = true;
-    let finalBlob = await this.maps.getBlob(map.id);
-    if (!finalBlob) { this.setStatus('Map blob not found', 'error'); return; }
+    const fileBlob = await this.maps.getBlob(map.id);
+    if (!fileBlob) { this.setStatus('Map blob not found', 'error'); return; }
 
-    // v2.12.x two-phase animated-map delivery —
-    // For video map assets we don't actually want to load the 57 MB
-    // (often more) video into the GM canvas, nor blast it over WebRTC
-    // up front. Instead:
-    //   1. Extract the first frame as a PNG snapshot here.
-    //   2. Use that snapshot for BOTH the GM's local renderer.loadMap
-    //      and the broadcast map_change mapBlob. Receivers see a
-    //      usable static map within a second or two.
-    //   3. Stash the full video bytes in _pendingVideoBundle; after
-    //      the map_change broadcast settles we send them along in a
-    //      separate MsgVideoBundle. Player + projector swap their
-    //      renderer texture to a VideoTexture once the bundle lands.
-    // GM canvas stays static throughout — keeps GPU + decode load
-    // down on the GM machine, which is usually also running the
-    // projector window locally.
+    // v2.12.x animated-map delivery — split-render strategy:
+    //   • GM canvas: gets the FULL video. The GM is staring at this
+    //     window; it's the one that needs to animate. File is local,
+    //     so no transfer overhead.
+    //   • Same-browser peers (player popups, same-machine projector):
+    //     get only the first-frame snapshot via map_change. Host
+    //     suppresses video_bundle over LocalChannel so they don't
+    //     fight the GM for Chrome's per-window decoder budget.
+    //   • Remote PeerJS peers (phone, separate-device player): get
+    //     the snapshot first, then the video_bundle follow-up over
+    //     the wire. They have their own browser process and decode
+    //     budget — animation works fine.
+    let snapshotBlob: ArrayBuffer = fileBlob;       // What we broadcast (always the snapshot for video maps).
+    const localBlob:  ArrayBuffer = fileBlob;       // What the GM canvas renders (full video for video maps).
     this._pendingVideoBundle = null;
-    if (_sniffIsVideo(finalBlob)) {
+    if (_sniffIsVideo(fileBlob)) {
       try {
-        // EBML magic byte → webm, otherwise treat as mp4 (matches
-        // _sniffMediaKind's logic; this branch already proved it's
-        // one of the two).
-        const isWebm = new Uint8Array(finalBlob.slice(0, 1))[0] === 0x1a;
+        const isWebm = new Uint8Array(fileBlob.slice(0, 1))[0] === 0x1a;
         const videoMime = isWebm ? 'video/webm' : 'video/mp4';
-        const snapBlob  = await extractFirstFrameSnapshot(new Blob([finalBlob], { type: videoMime }));
-        const snapBuf   = await snapBlob.arrayBuffer();
-        // Hold onto the full video for the follow-up bundle broadcast.
+        const snap = await extractFirstFrameSnapshot(new Blob([fileBlob], { type: videoMime }));
+        snapshotBlob = await snap.arrayBuffer();
+        // Stash the full video bytes for the follow-up video_bundle
+        // broadcast; remote peers swap from snapshot to VideoTexture
+        // when this lands. Same-browser peers never see it (Host
+        // skips LocalChannel for this message type).
         this._pendingVideoBundle = {
           mapId:    map.id,
-          buffer:   finalBlob,
+          buffer:   fileBlob,
           mimeType: videoMime,
         };
-        // Swap finalBlob for the snapshot — every downstream path
-        // (local renderer, broadcast, top-left auto-bg sampler) now
-        // operates on a regular still image.
-        finalBlob = snapBuf;
       } catch (err) {
-        // Snapshot extraction failed — fall through to broadcasting
-        // the full video as before. Worst case is the original
-        // behaviour (connect/disconnect on big transfers).
+        // Snapshot extraction failed — fall through and let everyone
+        // (including the GM's broadcast path) operate on the full
+        // file. Worst case is the pre-v2.12 behaviour.
         console.warn('[GMApp] video snapshot failed; falling back to full broadcast', err);
       }
     }
@@ -2016,9 +2011,9 @@ export class GMApp {
     // doesn't need to see the transition; a progress bar at trigger
     // time indicates animation is in flight.
     const broadcastBlob: ArrayBuffer = hasReveal
-      ? (await this.maps.getStartingFrameBlob(map.id) ?? finalBlob)
-      : finalBlob;
-    const blob = finalBlob; // for local renderer.loadMap below
+      ? (await this.maps.getStartingFrameBlob(map.id) ?? snapshotBlob)
+      : snapshotBlob;
+    const blob = localBlob; // for local renderer.loadMap below — GM canvas animates
     this.currentMapBlob = broadcastBlob;
 
     // Clear old-map fog immediately so it never appears on the new map's
