@@ -74,6 +74,13 @@ export class PlayerApp {
   private lastFog:      FogState           = { polygons: [] };
   private lastFilter:   FilterState | null = null;
   private lastView:     ViewState  | null  = null;
+  /** v2.14 — promise that resolves when the in-flight map_change /
+   *  handout_reveal / video_bundle texture load finishes. Each
+   *  message that loads a new map texture awaits this before
+   *  starting its own load, so handout_reveal can't race against a
+   *  same-map reload's still-decoding starting-frame texture.
+   *  Caught while debugging the "reveal snaps to end" report. */
+  private _pendingMapLoad: Promise<void> = Promise.resolve();
   private _contextLost = false;
   /**
    * Sequence numbers of messages already processed.
@@ -304,7 +311,14 @@ export class PlayerApp {
           this.lastFog     = fog;
           if (filter) this.lastFilter = filter;
           if (view)   this.lastView   = view;
-          void (async () => {
+          // Track this map load on _pendingMapLoad so a follow-up
+          // handout_reveal awaits it before swapping the texture
+          // again. Without this serialisation the reveal can race
+          // against the still-decoding starting-frame load and the
+          // animation visibly "snaps to end".
+          const prior = this._pendingMapLoad;
+          this._pendingMapLoad = (async () => {
+            await prior;
             if (msg.iconData?.length)       await this._decodeIconData(msg.iconData);
             if (msg.soundboardActive?.length) this._applySoundboardActive(msg.soundboardActive);
             await this.runTransition(msg.transition, async () => {
@@ -335,7 +349,15 @@ export class PlayerApp {
         const filter = this.lastFilter;
         const view   = this.lastView;
         this.lastMapBlob = finalBlob;
-        void (async () => {
+        // Serialise behind any in-flight map_change load so the
+        // reveal's applyChange doesn't race against the still-
+        // decoding starting-frame texture. Without this the
+        // underlying canvas state is undefined during def.play and
+        // the animation visibly snaps to end. _pendingMapLoad chains
+        // the new load AFTER the previous one resolves.
+        const prior = this._pendingMapLoad;
+        this._pendingMapLoad = (async () => {
+          await prior;
           let preSnap: ImageBitmap | undefined;
           if (startBlob) {
             try {
