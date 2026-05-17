@@ -60,10 +60,11 @@ Players connect over peer-to-peer (PeerJS); no server infrastructure beyond stat
   | Aurora | Drifting horizontal curtain bands with dual-colour mix |
   | Starfield | Eight-layer parallax warp; direction + glow + speed (warp-speed reads as warp-speed) |
   | Noise | Colourable TV-static; haunted-screen, magical-interference, retro-CRT |
+  | Make Transparent *(v2.13)* | Punches alpha holes through the map so the active **Backdrop** shows through — magical view-throughs, glass floors, aurora bleed-through |
 
   Each kind has its own tuning popover (intensity, scale, speed, colours, plus kind-specific knobs). Paint with click-polygon, brush, or magic-wand fill. The same polygon can be repurposed mid-session by switching its kind from the dropdown.
 
-- **Animated backdrops** *(new in v2.12)* — every backdrop-suitable MapFX kind also runs as a full-screen animated backdrop filling the letterbox / pillarbox bars around the map. Pick **Aurora** for sky-themed maps, **Ocean** for a ship floorplan with sea around the deck, **Firestorm** for siege scenes, **Thundercloud** for storms, **Noise** for cursed-tech, etc. The bars are calibrated dead space on tabletop projection setups, so backdrops add immersion without ever overlaying the map itself.
+- **Animated backdrops** *(new in v2.12, see-through in v2.13)* — every backdrop-suitable MapFX kind also runs as a full-screen animated backdrop filling the letterbox / pillarbox bars around the map. Pick **Aurora** for sky-themed maps, **Ocean** for a ship floorplan with sea around the deck, **Firestorm** for siege scenes, **Thundercloud** for storms, **Noise** for cursed-tech, etc. The bars are calibrated dead space on tabletop projection setups, so backdrops add immersion without ever overlaying the map itself. **v2.13:** a Make-Transparent MapFX patch on any image map (or a transparent textmap handout) lets the backdrop show through painted regions — so the starfield shines through a constellation chart, the ocean swells behind a ship's deckplan, etc.
 - **Visual filters** — full-screen post-processing effects applied to the player view only:
 
   | Filter | Style |

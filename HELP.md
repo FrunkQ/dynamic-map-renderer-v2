@@ -18,8 +18,10 @@ Pack-level actions live behind the hamburger.
 
 **New Map Pack…** *(red)* — Wipes the current workspace and starts a fresh, empty pack with a name you choose. Save first if you want to keep your current work.
 
-**Settings…** — Three sections:
+**Settings…** — Five sections:
 - **Storage** — How much of your browser's IndexedDB quota Mappadux is using. **Request persistent storage** asks the browser not to evict data under pressure.
+- **Display** — **UI scale** slider (75–150%) shrinks or grows the whole left-hand sidebar in proportion — fonts, padding, icons, popovers all scale together. The map canvas itself is untouched. Useful on very high-DPI screens where the default reads tiny, or on small laptops where shrinking buys back canvas space. Double-click the slider to reset to 100%.
+- **Performance** — **Send only the first frame to local player windows** (for same-machine player popups where a 4K animated map is starving Chrome's decoder budget) and **Cap animated map texture at 1080p** (for remote players whose GPUs struggle with full-resolution video uploads). Both default off.
 - **API Keys (this browser only)** — Lists any external-service credentials stored locally (e.g. Freesound). Keys never travel in Map Pack exports. Bulk delete available.
 - **Danger Zone** — **Delete DB** wipes IndexedDB but keeps API keys + projector calibration. **Delete All Data** wipes everything including local settings — acts like a fresh install.
 
@@ -104,17 +106,41 @@ A second map type for letters, posters, journal pages, stat blocks, and in-ficti
 
 ---
 
-## Fog of War
+## Fog of War & MapFX
 
-Hides parts of the map from players.
+One unified system covers both "hide a region from players" (fog) and "paint an animated effect onto a region" (MapFX). Same drawing tools, same selection model — only the **Kind** picker decides what the shape does.
 
-**Draw** — Click to place polygon vertices on the map. Click the first vertex again (or near it) to close and commit the shape. Press **Esc** or right-click to cancel.
+**Kind** *(dropdown)* — Pick what your next painted shape will be:
+- **Fog of War** — opaque colourable fill. The original use case.
+- **Make Transparent** — punches alpha holes in the map so the chosen **Backdrop** shows through. Lets you reveal the backdrop through any map (e.g. a magical window, a glass floor, an aurora bleed-through).
+- **MapFX** — animated shaders that live on the map itself: **Fire**, **Firestorm**, **Embers**, **River**, **Ocean**, **Light**, **Mist**, **Thundercloud**, **Aurora**, **Portal**, **Starfield**, **Noise** (colourable TV static).
 
-**Delete** — Appears when a polygon is selected. Removes it to reveal that area. **Del** / **Backspace** also work.
+Polygons of every kind coexist. Click any kind in the dropdown to switch what you're painting; existing shapes of other kinds stay put. Kinds in active use are marked with a green dot prefix in the dropdown.
 
-**Select** — Click any existing fog polygon (with Draw off) to select it; click empty space to deselect.
+**Drawing Mode** *(sticky preference)* — Three ways to paint a shape:
+- **Polygon** — click vertices, click near the first vertex (or double-click) to close.
+- **Brush** — click and drag to paint a freeform stroke; each stroke commits one polygon. Brush stays armed after a commit — drag again to paint another without re-clicking Paint. **Size** slider underneath controls brush radius.
+- **Fill** *(Magic Wand)* — click a region on the map and the flood-fill algorithm captures everything within the colour **Tolerance**. After clicking, drag the Tolerance slider to widen/narrow the catch live.
 
-**Fog Colour** — Sets the colour of new polygons. Matching it to your map's border or background makes the fog blend in seamlessly.
+**Paint / Erase** *(action buttons)* — Picking a drawing mode auto-engages Paint. Click **Erase** instead to carve a hole out of every existing polygon (regardless of kind) that the next shape overlaps. Re-click the lit button to disengage.
+
+**Sparkle button** (✨ next to the Kind dropdown) — Opens a popover with the active kind's tuning sliders: **Edge Fade** (soft polygon edges), kind-specific shader params (Intensity, Speed, Direction, Glow, etc.), and a colour swatch when the kind supports tinting.
+
+**Select** — Click any existing polygon to select it. Selected polygons get a trash-can handle at the bottom-left apex (red) — drag/click to delete. **Del** / **Backspace** also work.
+
+**Paint-another-like-this** — If a polygon is selected when you click Paint, the next shape inherits its colour + shader params. Lets you lay down a row of identical campfires or aurora patches without re-tuning each one.
+
+**Clear all of this Kind** — Wipes every polygon of the currently active kind without touching other kinds. Confirms first with the count.
+
+---
+
+## Backdrops — animated letterbox / pillarbox effects
+
+When the player's screen has a different aspect ratio from the active map's viewport, the bars around the map fill with a **backdrop**. By default that's the per-map **Background Colour**; the **Backdrop** picker (sparkle button next to the colour swatch in Map Selection) replaces the solid fill with an animated shader.
+
+**Kinds** — Same library as MapFX: Aurora, Embers, Fire, Firestorm, Light, Mist, Noise, Ocean, Portal, Starfield, Thundercloud. (River is MapFX-only — it works better on the larger map plane.) Each kind has the same tuning sliders as its MapFX cousin.
+
+**Use with Make Transparent** — A transparent textmap (handout with paper set to transparent) or a Make-Transparent MapFX patch on any image map both reveal the backdrop through the map. Lets you composite a starfield behind a constellation chart, a fire glow under a translucent battlemap, or an ocean swell behind a ship's deckplan.
 
 ---
 

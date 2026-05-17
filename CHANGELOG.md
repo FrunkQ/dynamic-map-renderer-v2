@@ -1,5 +1,85 @@
 # Changelog
 
+## v2.13.0 — 2026-05-17
+
+### Transparency, persistence, UI scale
+
+Smaller release than v2.12 — three threads that fit together cleanly.
+
+**Make Transparent — new MapFX kind.** A polygon kind that doesn't
+draw anything visible; instead it punches alpha holes through the
+map. The clip-pass downstream mixes the active backdrop in behind
+the holes, so a Make-Transparent patch on any image map becomes a
+window through to whatever backdrop the GM has chosen. Pair with a
+Starfield backdrop for a constellation chart, an Ocean backdrop for
+a ship's deckplan, etc. Renderer uses CustomBlending with src=Zero
+on both RGB and alpha — RGB factors leave the destination untouched
+while the alpha factors do `dstAlpha *= (1 - srcAlpha)`, so the
+shader's mask coverage scales the alpha-removal linearly.
+
+**Background colour persists across reloads.** The auto-sample
+heuristic ("if bg is `#000000`, sample the map's top-left pixel")
+couldn't tell "user never picked anything" from "user picked black"
+from "user picked something we lost". On a transparent textmap the
+sample also returned `#000000` (alpha-0 pixels decode as RGB 0,0,0),
+so the state could quietly churn black-over-black on every reload
+and mask a persistence race. Replaced with an explicit
+hasSavedConfig signal from loadForMap; the auto-sample only fires
+on a map's *first* ever load. Also: a transparent sampled pixel no
+longer writes anything, leaving the default `#000000` in place.
+
+**Migrations preserve every MapFX kind.** Caught while testing
+Make Transparent: areas marked transparent came back as opaque fog
+after a refresh. The migration's `SUPPORTED_KINDS` allowlist hadn't
+been kept up with the OverlayKind union — firestorm, aurora,
+embers, noise, and transparent all coerced to fog on load. Silent
+data loss. Allowlist now covers every kind with a comment pinning
+it to types.ts so a future addition surfaces the same hazard.
+(Pre-v2.13 saves can't be recovered — the data was already
+overwritten with 'fog' at the previous save.)
+
+**Live backdrop changes propagate to player windows.** The player's
+view_update handler called `setView` but not `setBackdrop`. Because
+the renderer rebuilds the clip-pass when the backdrop kind changes
+on a separate code path, bg-colour edits ticked the uniform but
+backdrop kind / param tweaks needed the player to disconnect and
+reconnect before taking effect. Mirror the map_change handler:
+setView, then setBackdrop with msg.payload.backdrop ?? null.
+
+**Brush mode is now sticky.** Each brush stroke commits and the
+next drag starts a fresh stroke without re-clicking Paint —
+matches Fill's behaviour and resolves the "Brush button still
+glowing after I dragged once" confusion. Brush erase the same way.
+
+**UI scale slider in Settings → Display.** New 75–150% slider
+scales the whole left-hand sidebar in proportion: fonts, padding,
+borders, icons, popovers all scale together via CSS `zoom` on
+`#sidebar`. The grid column also scales — `--sidebar-width: calc(280px
+* var(--ui-scale))` in main.css — so the column footprint shrinks
+or grows in lockstep with the contents. The map canvas itself is
+untouched. Persists in `dmr_ui_scale`. Default 100%; double-click
+the slider to reset.
+
+**Make Transparent is also visible through transparent textmaps.**
+Combining the v2.12 transparent-paper handout option with a
+backdrop produces a "see through" handout where the backdrop fills
+everywhere the page is transparent. Plus a Make-Transparent patch
+on the same handout extends the effect to image maps too.
+
+**Logo tooltip.** The brand icon now carries the Latin etymology
+(mappa + dux = map guide; also a duck on a map) in addition to the
+share-link hint.
+
+**Smaller fixes.** Brush mode is sticky like Fill. Live view edits
+(bg colour, backdrop kind, backdrop params) reach connected players
+without forcing a reconnect. MOTD popup system stays in place
+(empty version disables it for v2.13; ready for the first future
+release that wants to surface a message).
+
+**Help.md** catches up with the unified Fog of War & MapFX surface
+(kinds, drawing modes, sparkle popover, paint-another-like-this,
+Make Transparent) and adds Display + Performance Settings sections.
+
 ## v2.12.x — 2026-05-17
 
 ### Backdrops + MapFX unification + UI consolidation
