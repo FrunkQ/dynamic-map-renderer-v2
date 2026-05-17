@@ -420,17 +420,28 @@ export class Renderer {
         try { video.currentTime = 0; } catch { /* benign */ }
         void video.play().catch(() => {});
       });
-      // Attach to DOM — detached video elements get throttled by
-      // browsers. Keep it in normal layout flow at a non-zero size
-      // (off-screen positioning trips browser intersection-observer
-      // heuristics that throttle "invisible" videos and was making
-      // the stall WORSE rather than better). Visibility: hidden
-      // leaves the layout box in place but doesn't paint.
-      video.style.position = 'absolute';
-      video.style.width = '2px';
-      video.style.height = '2px';
-      video.style.visibility = 'hidden';
+      // v2.12.14 debug heartbeats revealed the real Chrome behaviour:
+      // when a <video> element is styled "effectively invisible"
+      // (visibility: hidden, tiny size, off-screen), Chrome's
+      // intersection observer flags it as off-viewport and cuts the
+      // decoder budget to near zero — readyState stays at 2 forever,
+      // currentTime freezes, and play() does nothing. The phone
+      // worked because mobile browsers don't apply the same throttle.
+      //
+      // The fix is to make the element "look on-screen to the
+      // intersection observer" while staying visually invisible:
+      // position: fixed, viewport-sized, opacity 0.001 (nominally
+      // visible to the visibility heuristic, totally transparent to
+      // the eye), pointer-events: none, z-index: -1 so it sits
+      // behind any normal page content.
+      video.style.position = 'fixed';
+      video.style.top  = '0';
+      video.style.left = '0';
+      video.style.width  = '100%';
+      video.style.height = '100%';
+      video.style.opacity = '0.001';
       video.style.pointerEvents = 'none';
+      video.style.zIndex = '-1';
       document.body.appendChild(video);
       // Stash the blob URL on the element so _disposeMapTexture can
       // revoke it at the right moment — i.e. when the video really is
