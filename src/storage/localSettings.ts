@@ -132,14 +132,26 @@ export const API_KEY_ENTRIES: Array<{ key: string; label: string }> = [
   { key: 'dmr_freesound_api_key', label: 'Freesound API key' },
 ];
 
-/** All localStorage entries Mappadux owns. Anything starting with `dmr_` is
- *  reasonably assumed to be ours. Anything else added in future should be
- *  enumerated here so deletions stay precise. */
+/** All localStorage entries Mappadux owns. Two prefix conventions
+ *  built up over the project's lifetime:
+ *    • `dmr_*`        — the original prefix from the v1/v2 days.
+ *    • `mappadux:*`   — used by features added after the rename
+ *                       (projector calibrations, drawing mode pref,
+ *                       fullscreen-button-seen flag, etc.).
+ *    • `mappadux_*`   — handful of older keys with an underscore
+ *                       instead of a colon (remote_audio toggle,
+ *                       debug_video flag).
+ *  Delete All Data wipes every key matching any of these prefixes —
+ *  earlier only `dmr_*` was covered, so projector calibrations +
+ *  drawing-mode preference + a few perf flags survived a "fresh
+ *  install" reset, contradicting the Settings copy. Caught in the
+ *  2026-05-17 storage audit. */
+const OWNED_PREFIXES = ['dmr_', 'mappadux:', 'mappadux_'] as const;
 export function listOwnedKeys(): string[] {
   const out: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && k.startsWith('dmr_')) out.push(k);
+    if (k && OWNED_PREFIXES.some((p) => k.startsWith(p))) out.push(k);
   }
   return out;
 }

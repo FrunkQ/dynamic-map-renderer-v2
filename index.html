@@ -91,16 +91,14 @@
           <div id="reveal-progress-bar" class="reveal-progress-bar"></div>
         </div>
         <button id="fix-missing-map-btn" class="btn btn--danger btn--sm btn--full" hidden>⚠ Fix Missing Map</button>
-        <div class="param-row param-row--bg">
-          <label>Backdrop</label>
-          <div class="bg-controls">
-            <span class="mapfx-kind-label" id="view-bg-display" title="Active backdrop — click the sparkle button to pick + tune backdrop, background colour, and any backdrop-specific params.">None</span>
-            <button type="button" id="view-bg-fx-btn" class="icon-btn bg-fx-btn" title="Pick + tune the backdrop: which animated effect fills the letterbox / pillarbox bars (Starfield, Aurora, Embers, etc.), the solid background colour, and the backdrop's own params (colour, intensity, speed, etc.)." aria-label="Backdrop effect" aria-haspopup="true" aria-expanded="false">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 3 L13.5 10.5 L21 12 L13.5 13.5 L12 21 L10.5 13.5 L3 12 L10.5 10.5 Z" />
-              </svg>
-            </button>
-          </div>
+        <div class="fog-row fog-row--kind">
+          <span class="fog-row-label">Backdrop</span>
+          <span class="mapfx-kind-label" id="view-bg-display" title="Active backdrop — click the sparkle button to pick + tune backdrop, background colour, and any backdrop-specific params.">None</span>
+          <button type="button" id="view-bg-fx-btn" class="icon-btn bg-fx-btn" title="Pick + tune the backdrop: which animated effect fills the letterbox / pillarbox bars (Starfield, Aurora, Embers, etc.), the solid background colour, and the backdrop's own params (colour, intensity, speed, etc.)." aria-label="Backdrop effect" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L13.5 10.5 L21 12 L13.5 13.5 L12 21 L10.5 13.5 L3 12 L10.5 10.5 Z" />
+            </svg>
+          </button>
         </div>
         <div class="btn-row">
           <button id="clone-map-btn"  class="btn btn--ghost   btn--sm">Clone Map</button>
@@ -135,6 +133,7 @@
              matching the Backdrop FX pattern but compact via a
              <select> rather than a vertical button list. -->
         <div class="fog-row fog-row--kind">
+          <span class="fog-row-label">Type</span>
           <span class="mapfx-kind-label" id="mapfx-kind-display" title="Active MapFX kind — click the sparkle button to change kind, colour, edge fade, and per-shader params.">Fog of War</span>
           <button type="button" id="mapfx-fx-btn" class="icon-btn bg-fx-btn" title="Pick + tune the MapFX effect: kind (Fog of War, Coloured Flames, Aurora, etc.), Colour, Edge Fade, and the kind's own params (intensity, scale, speed, etc.)." aria-label="MapFX tuning" aria-haspopup="true" aria-expanded="false">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
