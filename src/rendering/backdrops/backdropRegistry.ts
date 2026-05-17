@@ -24,8 +24,9 @@ import { AURORA_BACKDROP }    from './aurora.ts';
 import { EMBERS_BACKDROP }    from './embers.ts';
 import { MIST_BACKDROP }      from './mist.ts';
 import { FIRESTORM_BACKDROP } from './firestorm.ts';
-import { PORTAL_BACKDROP }    from './portal.ts';
-import { NOISE_BACKDROP }     from './noise.ts';
+import { PORTAL_BACKDROP }       from './portal.ts';
+import { NOISE_BACKDROP }        from './noise.ts';
+import { THUNDERCLOUD_BACKDROP } from './thundercloud.ts';
 
 export interface BackdropEntry {
   /** Stable id stored on the pack's ThemeConfig.backdrop.kind. */
@@ -68,6 +69,7 @@ export const BACKDROPS: BackdropEntry[] = [
   FIRESTORM_BACKDROP,
   PORTAL_BACKDROP,
   NOISE_BACKDROP,
+  THUNDERCLOUD_BACKDROP,
 ];
 
 /** Backwards-compat alias map for backdrop kind ids that have been
