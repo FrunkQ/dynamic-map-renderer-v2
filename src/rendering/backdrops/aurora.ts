@@ -1,15 +1,20 @@
 /**
- * Aurora backdrop — drifting horizontal bands of green/purple light,
- * concentrated around the mid-height of the viewport with soft falloff
- * toward the top and bottom edges. Slow enough to read as ambient,
- * fast enough that the player notices it's alive.
+ * Aurora backdrop — drifting horizontal bands of light, concentrated
+ * around the mid-height of the viewport with soft falloff toward the
+ * top and bottom edges. Slow enough to read as ambient, fast enough
+ * that the player notices it's alive.
  *
  * Inline trigonometric construction — no FBM helpers, so the snippet
  * lives entirely inside its own block scope and doesn't need any
  * top-level function definitions in the clip-pass template.
  *
- * Uniforms used: time, uSpeed, vUv, uBgColor.
+ * Uniforms used:
+ *   • time, uSpeed, vUv, uBgColor (built-in clip-pass uniforms)
+ *   • uColorA, uColorB (curtain colours; auto-injected from params)
+ *   • uIntensity (overall brightness multiplier; auto-injected)
  */
+
+import type { BackdropEntry } from './backdropRegistry.ts';
 
 const FRAGMENT = /* glsl */`
   {
@@ -26,20 +31,27 @@ const FRAGMENT = /* glsl */`
     // the aurora "hangs" in the upper-middle band area instead of
     // smearing across the whole screen.
     float _falloff = 1.0 - smoothstep(0.25, 0.5, abs(_uv.y));
-    // Slow hue drift between aurora-green and aurora-violet across
-    // the horizontal axis + time.
-    vec3 _green  = vec3(0.20, 0.75, 0.45);
-    vec3 _violet = vec3(0.45, 0.25, 0.80);
-    vec3 _hue = mix(_green, _violet, sin(_uv.x * 2.0 + _t) * 0.5 + 0.5);
-    vec3 _col = _hue * _band * _falloff * 0.55;
+    // Slow hue drift between the two curtain colours across the
+    // horizontal axis + time. Defaults match the original
+    // aurora-green / aurora-violet pair.
+    vec3 _hue = mix(uColorA, uColorB, sin(_uv.x * 2.0 + _t) * 0.5 + 0.5);
+    vec3 _col = _hue * _band * _falloff * 0.55 * uIntensity;
     // Composite over the pack's chosen bg colour so a non-black bg
     // still tints through the aurora.
     gl_FragColor = vec4(uBgColor + _col, 1.0);
   }
 `;
 
-export const AURORA_BACKDROP = {
+export const AURORA_BACKDROP: BackdropEntry = {
   id:       'aurora',
   label:    'Aurora',
   fragment: FRAGMENT,
+  // Defaults reproduce the original look: green↔violet, full
+  // intensity. GM can swap them for fire-red ribbons over a swamp,
+  // ice-blue over an arctic map, etc.
+  params: [
+    { id: 'colorA',    label: 'Curtain Colour',       type: 'color',  default: '#33bf73' },
+    { id: 'colorB',    label: 'Secondary Colour',     type: 'color',  default: '#7340cc' },
+    { id: 'intensity', label: 'Intensity',                            min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+  ],
 };
