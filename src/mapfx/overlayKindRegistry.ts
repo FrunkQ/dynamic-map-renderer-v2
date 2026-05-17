@@ -328,6 +328,11 @@ const STARFIELD_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'scale',     label: 'Scale',     min: 0.25, max: 4.0,        step: 0.05,     default: 1.0 },
   { id: 'speed',     label: 'Speed',     min: 0.0,  max: 10.0,       step: 0.1,      default: 1.0 },
   { id: 'direction', label: 'Direction', min: 0.0,  max: 3.1415927,  step: 0.087266, default: 0.0 },
+  // Glow: 0 = crisp pinpoint stars, 1 = haloed orbs with cross-flare
+  // rays (the original Shadertoy look). Same control as the
+  // backdrop variant — restored after being missed during the
+  // earlier backdrop-only addition.
+  { id: 'glow',      label: 'Glow',      min: 0.0,  max: 1.0,        step: 0.05,     default: 1.0 },
 ];
 
 // Portal shader params:
@@ -414,9 +419,12 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   fire:         { id: 'fire',         label: 'Coloured Flames', iconSvg: SVG_FLAME,        defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire',         shaderParams: FIRE_SHADER_PARAMS         },
   // Firestorm: volumetric raymarched fire+smoke columns. Normal
   // blend so dense columns obscure the map underneath; defaultColor
-  // sets the fire core hue. Marked '(heavy)' in the label so GMs
-  // notice this is the priciest MapFX shader.
-  firestorm:    { id: 'firestorm',    label: 'Firestorm (heavy)', iconSvg: SVG_FIRESTORM,   defaultColor: '#ffa64d', defaultRadius: 30, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 11, shader: 'firestorm',    shaderParams: FIRESTORM_SHADER_PARAMS    },
+  // sets the fire core hue. This is the heaviest MapFX shader (48-
+  // step raymarch per pixel) — fine on typical polygons, will dent
+  // frame rate if carpeted across most of the map at 4K. Cost note
+  // lives in the registry comment + ACKNOWLEDGEMENTS, not in the
+  // user-facing label.
+  firestorm:    { id: 'firestorm',    label: 'Firestorm',         iconSvg: SVG_FIRESTORM,   defaultColor: '#ffa64d', defaultRadius: 30, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 11, shader: 'firestorm',    shaderParams: FIRESTORM_SHADER_PARAMS    },
   river:        { id: 'river',        label: 'River',           iconSvg: SVG_WATER,        defaultColor: '#5aa9d6', defaultRadius: 35, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'river',        shaderParams: RIVER_SHADER_PARAMS        },
   ocean:        { id: 'ocean',        label: 'Ocean',           iconSvg: SVG_WATER,        defaultColor: '#5fa9d6', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'ocean',        shaderParams: OCEAN_SHADER_PARAMS        },
   light:        { id: 'light',        label: 'Magical Light',   iconSvg: SVG_LIGHT,        defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'light',        shaderParams: LIGHT_SHADER_PARAMS        },

@@ -36,6 +36,7 @@ uniform float     uIntensity;
 uniform float     uScale;
 uniform float     uSpeed;
 uniform float     uDirection; // 0..π — 0 approaching, π/2 sideways, π receding
+uniform float     uGlow;      // 0..1 — pinpoint stars (0) to full haloed orbs (1)
 
 varying vec2 vUv;
 
@@ -46,9 +47,18 @@ varying vec2 vUv;
 
 float Star(vec2 uv, float flare) {
   float d = length(uv);
-  float m = sin(STAR_GLOW * 1.2) / d;
+  // Glow control: at uGlow=0 we want crisp pinpoints, so the halo
+  // collapses to a near-sharp falloff. At uGlow=1 we keep the
+  // original 1/d radial halo. Rays only contribute proportional to
+  // glow so pinpoint mode reads as clean dots. Same curve as the
+  // backdrop variant — both render identically now.
+  float halo = mix(
+    smoothstep(0.08, 0.0, d),               // pinpoint at glow=0
+    sin(STAR_GLOW * 1.2) / max(d, 1e-4),    // haloed at glow=1
+    uGlow
+  );
   float rays = max(0.0, 0.5 - abs(uv.x * uv.y * 1000.0));
-  m += (rays * flare) * 2.0;
+  float m = halo + (rays * flare) * 2.0 * uGlow;
   m *= smoothstep(1.0, 0.1, d);
   return m;
 }
