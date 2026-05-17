@@ -408,8 +408,13 @@ async function renderSvgToPng(
   if (!ctx) throw new Error('canvas 2D context unavailable');
   // Paint the background first as a safety net — some browsers don't
   // composite the foreignObject div's background-color reliably.
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, pxW, pxH);
+  // Skip the fill entirely when the textmap is set to 'transparent'
+  // so the canvas keeps its initial alpha=0 and the resulting PNG
+  // preserves the transparency end-to-end.
+  if (bgColor !== 'transparent') {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, pxW, pxH);
+  }
   ctx.drawImage(img, 0, 0, pxW, pxH);
   return await canvasToBlob(canvas);
 }
@@ -432,8 +437,12 @@ async function renderPlainTextFallback(
   canvas.height = pxH;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas 2D context unavailable');
-  ctx.fillStyle = cfg.backgroundColor;
-  ctx.fillRect(0, 0, pxW, pxH);
+  // Skip the bg fill on transparent textmaps so the canvas keeps
+  // alpha=0 and the encoded PNG preserves transparency.
+  if (cfg.backgroundColor !== 'transparent') {
+    ctx.fillStyle = cfg.backgroundColor;
+    ctx.fillRect(0, 0, pxW, pxH);
+  }
 
   const plain = htmlToPlainText(sanitisedBodyHtml);
   ctx.fillStyle = cfg.textColor;

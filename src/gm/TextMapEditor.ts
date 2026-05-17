@@ -512,10 +512,45 @@ export class TextMapEditor {
     });
     row.appendChild(aspectSel);
 
-    row.appendChild(this._buildColourInput('Paper colour', this.cfg.backgroundColor, (v) => {
-      this.cfg.backgroundColor = v;
-      if (this.pageEl) this.pageEl.style.backgroundColor = v;
-    }));
+    // Paper colour + transparent toggle. When 'Transparent' is on,
+    // the colour swatch is disabled and the textmap rasterises with
+    // a clear background — alpha channel preserved through to the
+    // final PNG, so a backdrop / underlying map can show through any
+    // gaps in the body when the textmap is used as a map.
+    const swatchSlot   = document.createElement('span');
+    const transToggle  = document.createElement('label');
+    transToggle.className = 'txt-map-toolbar-checkbox';
+    const transCheck   = document.createElement('input');
+    transCheck.type    = 'checkbox';
+    transCheck.checked = this.cfg.backgroundColor === 'transparent';
+    transToggle.appendChild(transCheck);
+    const transText    = document.createElement('span');
+    transText.textContent = 'Transparent';
+    transToggle.appendChild(transText);
+    transToggle.title  = 'Transparent paper — the textmap rasterises with a clear background so anything behind the map (backdrop effects, underlying terrain) shows through.';
+
+    // The last-picked solid colour, restored when Transparent is
+    // unchecked. Falls back to the registered default if the
+    // textmap loaded with backgroundColor='transparent'.
+    let lastSolid = this.cfg.backgroundColor === 'transparent' ? '#f4e9c8' : this.cfg.backgroundColor;
+    const swatch = this._buildColourInput('Paper colour', lastSolid, (v) => {
+      lastSolid = v;
+      if (!transCheck.checked) {
+        this.cfg.backgroundColor = v;
+        if (this.pageEl) this.pageEl.style.background = v;
+      }
+    });
+    (swatch as HTMLInputElement).disabled = transCheck.checked;
+    swatchSlot.appendChild(swatch);
+    transCheck.addEventListener('change', () => {
+      (swatch as HTMLInputElement).disabled = transCheck.checked;
+      const next = transCheck.checked ? 'transparent' : lastSolid;
+      this.cfg.backgroundColor = next;
+      if (this.pageEl) this.pageEl.style.background = next;
+    });
+
+    row.appendChild(swatchSlot);
+    row.appendChild(transToggle);
 
     return section;
   }
