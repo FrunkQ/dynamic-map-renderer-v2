@@ -12,12 +12,17 @@
  * the bars and over chosen map regions.
  *
  * Uniforms used:
- *   • time, uSpeed, vUv, uResolution (built-ins)
+ *   • time, uSpeed, vUv, uResolution, uBgColor (built-ins)
  *   • uColor (fog colour; default reproduces the original grey)
- *   • uBg    (deep background colour bleeding through the gaps)
  *   • uIntensity (fog density; the original INTENSITY constant
  *     lifted out of the snippet so the GM can dial calm haze through
  *     pea-souper)
+ *
+ * The deep background that bleeds through the gaps in the fog is the
+ * pack-level Background Colour (`uBgColor`) — same convention as the
+ * starfield backdrop, so picking a different bg colour propagates
+ * consistently across both backdrop kinds without duplicating the
+ * setting.
  */
 
 import type { BackdropEntry } from './backdropRegistry.ts';
@@ -63,7 +68,7 @@ const FRAGMENT = /* glsl */`
     float _t = time * uSpeed;
     vec2 _motion = vec2(_fog_fbm(_pos + vec2(_t * -0.5, _t * -0.3)));
     float _final = _fog_fbm(_pos + _motion) * 2.0 * uIntensity;
-    gl_FragColor = vec4(mix(uBg, uColor, _final), 1.0);
+    gl_FragColor = vec4(mix(uBgColor, uColor, _final), 1.0);
   }
 `;
 
@@ -72,12 +77,13 @@ export const SMOOTH_FOG_BACKDROP: BackdropEntry = {
   label:    'Smooth Fog',
   fragment: FRAGMENT,
   helpers:  HELPERS,
-  // Defaults match deusnovus's original look: pale grey fog over
-  // black. Tint to brown for sandstorm, sickly green for poison
-  // marsh, deep blue for night-time sea fret, etc.
+  // Defaults match deusnovus's original look: pale grey fog. Tint to
+  // brown for sandstorm, sickly green for poison marsh, deep blue for
+  // night-time sea fret, etc. The "background" the fog fades into is
+  // the pack-level Background Colour — picked once in the Map panel
+  // and shared across every backdrop, so changing it ripples through.
   params: [
-    { id: 'color',     label: 'Fog Colour',        type: 'color', default: '#6b6678' },
-    { id: 'bg',        label: 'Background',        type: 'color', default: '#000000' },
-    { id: 'intensity', label: 'Density',                          min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+    { id: 'color',     label: 'Fog Colour', type: 'color', default: '#6b6678' },
+    { id: 'intensity', label: 'Density',                   min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
   ],
 };

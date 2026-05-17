@@ -18,6 +18,10 @@
  * Snippet inlined into the clip-pass fragment shader. Uniforms used:
  *   time      — seconds since renderer start (animation clock).
  *   uSpeed    — GM-tuned scalar 0..2, defaults to 1.0.
+ *   uGlow     — 0..1 dial. 0 = sharp pinpoint stars (no cross-flares,
+ *               tight radial falloff); 1 = full haloed orbs with rays
+ *               (the original look). Default 1.0 reproduces the
+ *               registered Shadertoy entry.
  *   vUv       — full-canvas 0..1 (clip-pass varying).
  *
  * Output: opaque RGBA over uBgColor so the bars never go transparent.
@@ -66,9 +70,20 @@ const FRAGMENT = /* glsl */`
           vec2 _sp = _gv - _offs - vec2(_n, fract(_n * 34.0)) + 0.5;
           float _d = length(_sp);
           float _flare = smoothstep(0.1, 0.9, _size) * 0.46;
-          float _m = sin(_SF_GLOW * 1.2) / max(_d, 1e-4);
+          // Glow control: the original combined a soft radial halo
+          // (1/_d) with cross-shaped rays (the _rays * _flare
+          // term). At uGlow=0 we want crisp pinpoints, so the
+          // radial halo collapses to a near-sharp falloff via
+          // smoothstep and the rays drop out entirely. At uGlow=1
+          // we keep the original look. Intermediate values cross-
+          // fade so the slider feels continuous.
+          float _halo = mix(
+            smoothstep(0.08, 0.0, _d),         // pinpoint at glow=0
+            sin(_SF_GLOW * 1.2) / max(_d, 1e-4), // haloed at glow=1
+            uGlow
+          );
           float _rays = max(0.0, 0.5 - abs(_sp.x * _sp.y * 1000.0));
-          _m += (_rays * _flare) * 2.0;
+          float _m = _halo + (_rays * _flare) * 2.0 * uGlow;
           _m *= smoothstep(1.0, 0.1, _d);
           // Per-star hue variance — keep the classic violet vibe.
           vec3 _base = sin(vec3(0.5, 0.6, 0.7) * fract(_n * 2345.2) * _SF_TAU) * 0.25 + 0.75;
@@ -88,8 +103,16 @@ const FRAGMENT = /* glsl */`
   }
 `;
 
-export const STARFIELD_BACKDROP = {
+import type { BackdropEntry } from './backdropRegistry.ts';
+
+export const STARFIELD_BACKDROP: BackdropEntry = {
   id:       'starfield',
   label:    'Starfield',
   fragment: FRAGMENT,
+  params: [
+    // 1.0 reproduces the original haloed-orb look; 0.0 gives crisp
+    // pinpoints — useful for a "night sky behind a window" reading
+    // rather than the dramatic-space-vista default.
+    { id: 'glow', label: 'Glow', min: 0.0, max: 1.0, step: 0.05, default: 1.0 },
+  ],
 };
