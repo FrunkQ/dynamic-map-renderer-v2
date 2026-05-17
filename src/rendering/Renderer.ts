@@ -63,6 +63,13 @@ export class Renderer {
   // Layer meshes
   private mapMesh:      THREE.Mesh | null = null;
   private fogMesh:      THREE.Mesh | null = null;
+  /** v2.12 — pack background colour. Tracked here rather than on
+   *  scene.background because setting scene.background to a Color
+   *  forces alpha = 1 on the framebuffer clear, which would destroy
+   *  the transparent-map → backdrop-bleed-through path. scene.bg
+   *  stays null; this colour goes to renderer.setClearColor + the
+   *  clip-pass uBgColor uniform. */
+  private bgColour:     THREE.Color = new THREE.Color(0x000000);
   private mapTexture:   THREE.Texture | null = null;
   /** v2.12 — set when the loaded map is a video. Held so the renderer
    *  can play / pause / dispose the underlying element separately
@@ -775,7 +782,13 @@ export class Renderer {
     });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.autoClear = false;
-    this.renderer.setClearColor(0x000000, 1);
+    // Clear alpha = 0 so transparent map pixels survive through the
+    // composer's internal RT into the clip-pass, which can then mix
+    // the backdrop in behind them. The visible canvas stays opaque
+    // because the WebGL context defaults to alpha: false — the
+    // browser composites against opaque black at the canvas level
+    // — so this only affects internal compositing.
+    this.renderer.setClearColor(0x000000, 0);
 
     // Allow the browser to auto-restore a lost context; fire callbacks so the
     // player app can re-feed cached state rather than showing a black screen.
@@ -794,7 +807,10 @@ export class Renderer {
     );
 
     this.scene   = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000);
+    // scene.background stays null so the clear-with-alpha-0 in the
+    // composer RT survives. Bg colour lives on this.bgColour and
+    // flows to the clip-pass uBgColor uniform + setClearColor.
+    this.scene.background = null;
     this.gmScene = new THREE.Scene();
 
     this.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 100);
@@ -1236,8 +1252,11 @@ export class Renderer {
   /** Apply the background colour without touching the camera — used by the GM renderer */
   setBackgroundColour(colour: string): void {
     const c = new THREE.Color(colour);
-    (this.scene.background as THREE.Color).copy(c);
-    this.renderer.setClearColor(c, 1);
+    this.bgColour.copy(c);
+    // Alpha 0 on the clear so transparent map pixels survive through
+    // the composer; the clip-pass writes the bg colour back in (via
+    // uBgColor) for opaque output.
+    this.renderer.setClearColor(c, 0);
     // Keep the GM map border colour in sync (inverted background)
     if (this.mapBorderMat) {
       this.mapBorderMat.color.set(this.invertColour(colour));
@@ -1748,11 +1767,27 @@ export class Renderer {
         varying vec2  vUv;
         ${entry.helpers ?? ''}
         void main() {
-          if (vUv.x < uRect.x || vUv.x > uRect.z ||
-              vUv.y < uRect.y || vUv.y > uRect.w) {
+          vec4 scene = texture2D(tDiffuse, vUv);
+          bool outsideRect = (vUv.x < uRect.x || vUv.x > uRect.z ||
+                              vUv.y < uRect.y || vUv.y > uRect.w);
+          if (outsideRect) {
+            // Bars: backdrop fills the dead space, full opaque.
             ${entry.fragment}
+          } else if (scene.a < 0.999) {
+            // Inside the map viewport but the map plane has alpha
+            // (transparent textmap, alpha-channel PNG, etc.) — run
+            // the backdrop snippet so gl_FragColor holds the backdrop
+            // colour, then composite the scene over it using the
+            // scene's own alpha. Opaque-map pixels skip this branch
+            // entirely (the alpha-near-1 check) and take the cheap
+            // pass-through below.
+            ${entry.fragment}
+            gl_FragColor = vec4(mix(gl_FragColor.rgb, scene.rgb, scene.a), 1.0);
           } else {
-            gl_FragColor = texture2D(tDiffuse, vUv);
+            // Opaque map: pass through unchanged. Same fast path
+            // every renderer used before the transparent-textmap
+            // bleed-through landed.
+            gl_FragColor = vec4(scene.rgb, 1.0);
           }
         }`,
     });
@@ -1855,10 +1890,16 @@ export class Renderer {
 
     const geo = new THREE.PlaneGeometry(this.aspectRatio, 1);
 
-    // Map layer
+    // Map layer. transparent:true so a textmap rasterised with the
+    // "Transparent paper" option (alpha-channel PNG) lets the clip-
+    // pass see the texture's actual alpha and mix the backdrop in
+    // behind. Opaque maps are unaffected — their alpha is 1
+    // everywhere, the clip-pass takes the pass-through branch, and
+    // the visible result is identical to before.
     const mapMat = new THREE.MeshBasicMaterial({
       map: this.mapTexture!,
       depthWrite: false,
+      transparent: true,
     });
     this.mapMesh = new THREE.Mesh(geo, mapMat);
     this.mapMesh.position.z = 0;
@@ -1888,7 +1929,7 @@ export class Renderer {
     ]);
     const borderGeo = new THREE.BufferGeometry();
     borderGeo.setAttribute('position', new THREE.BufferAttribute(borderPts, 3));
-    const bgColour = (this.scene.background as THREE.Color).getHexString();
+    const bgColour = this.bgColour.getHexString();
     this.mapBorderMat = new THREE.LineBasicMaterial({
       color: this.invertColour('#' + bgColour),
     });
