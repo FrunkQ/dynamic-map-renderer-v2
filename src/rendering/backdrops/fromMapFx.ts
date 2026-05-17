@@ -30,23 +30,15 @@ import type { OverlayKindEntry, BlendMode } from '../../mapfx/overlayKindRegistr
 const BEGIN_MARKER = '// === BEGIN backdrop-shareable ===';
 const END_MARKER   = '// === END backdrop-shareable ===';
 
-/** Uniforms the clip-pass declares on its own. The MapFX shader may
- *  also declare any of these (it shares the same uniform names by
- *  design); we strip the duplicate decl when extracting so the
- *  fragment compiles. */
-const CLIP_PASS_BUILT_INS = new Set([
-  'uAspect',
-  'uSpeed',
-  'uBgColor',
-  'uRect',
-  'uResolution',
-  'tDiffuse',
-  'time',
-]);
-
 /** Extract the marker-delimited block from a MapFX fragment shader,
- *  stripping any uniform declarations that conflict with clip-pass
- *  built-ins. */
+ *  stripping ALL uniform declarations. The clip-pass builder
+ *  declares every uniform the backdrop needs on its own — both
+ *  built-ins (time / uAspect / uSpeed / uBgColor / uRect /
+ *  uResolution / tDiffuse) and per-param uniforms generated from
+ *  BackdropEntry.params (uColor, uIntensity, etc.). The shader
+ *  file's uniform decls in the marker block are MapFX-mode
+ *  declarations; they would collide with the clip-pass's own
+ *  declarations and break GLSL compilation if not removed here. */
 function extractFxBlock(shaderText: string, kindId: string): string {
   const a = shaderText.indexOf(BEGIN_MARKER);
   const b = shaderText.indexOf(END_MARKER);
@@ -57,16 +49,12 @@ function extractFxBlock(shaderText: string, kindId: string): string {
     );
   }
   const inner = shaderText.slice(a + BEGIN_MARKER.length, b);
-  // Strip lines that declare a uniform whose name is in CLIP_PASS_
-  // BUILT_INS. Comments + non-uniform lines pass through verbatim.
-  const uniformLine = /^\s*uniform\s+\w+\s+(\w+)\s*;/;
+  // Drop every `uniform <type> <name>;` line. Helpers, constants,
+  // function bodies, and comments pass through verbatim.
+  const uniformLine = /^\s*uniform\s+\w+\s+\w+\s*;/;
   return inner
     .split('\n')
-    .filter((line) => {
-      const m = uniformLine.exec(line);
-      if (!m) return true;
-      return !CLIP_PASS_BUILT_INS.has(m[1]!);
-    })
+    .filter((line) => !uniformLine.test(line))
     .join('\n');
 }
 
