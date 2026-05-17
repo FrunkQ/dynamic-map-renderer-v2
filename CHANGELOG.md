@@ -1,5 +1,99 @@
 # Changelog
 
+## v2.14.0 — 2026-05-17
+
+### New onboarding pack + smaller fixes
+
+**Getting Started pack refreshed.** New default bundle ships an
+eight-step onboarding flow as handouts the GM lands on at first
+launch:
+
+  1. Welcome
+  2. No Logins. WTF?
+  3. Player Connections
+  4. Map Selection and...
+  5. Making Stuff Look Fancy (starfield backdrop, CRT-collapse reveal)
+  6. Griffinholm (image map with fog of war, audio, mist filter)
+  7. Markers, Sound & Motion
+  8. Rons-Moto-1979 — Encounter (Mothership-style scenario: 12
+     markers, 10 fog polys, 3 audio sources, motion tracker, retro
+     sci-fi green filter)
+
+`lastMapId` points at "1. Welcome" so a fresh install opens on
+context, then the GM moves through the tutorial sequentially.
+Demonstrates every major surface: FoW + MapFX, Backdrops, filters,
+transitions, markers, soundboard, motion tracker, handout
+animations.
+
+**Per-backdrop-kind drafts.** Tuning a backdrop's sliders, then
+switching kinds, then switching back, now restores the previous
+kind's values. Earlier the params dropped on every switch and the
+GM had to re-dial. Stashed in view.backdropDrafts[kind]; mirrors
+MapFX's per-kind shaderParams behaviour. Per-map; travels in
+.mappadux exports via the existing ViewState path.
+
+**Paint button clears after every commit.** Each polygon close,
+brush stroke release, or fill click now clears the green Paint
+highlight so the GM gets visible "operation completed" feedback.
+Drawing-mode toggle (Polygon / Brush / Fill) remains the sticky
+preference. Fill's Tolerance slider still refines the last-placed
+polygon via a new `preserveFillState` opt on _endAction.
+
+**New handout from hamburger Asset Library auto-selects.** The
+"Map Asset Library…" hamburger entry used a no-op onPick, so a
+handout created from there saved to IDB but left the dropdown
+stale and the map unselected. Both library entry points now route
+through openAddMapDialog — pick / create from either, get the same
+insert + select + load.
+
+**Delete All Data wider sweep.** Earlier only `dmr_*` localStorage
+keys were wiped; `mappadux:*` keys (projector calibrations,
+drawing mode pref, broadcast audio toggle, fullscreen-seen flag,
+etc.) survived. Settings copy reads "wipes everything including
+local settings — acts like a fresh install"; the prefix filter now
+matches.
+
+**Backdrop + FoW row styling unified.** Both surfaces now share
+`.fog-row--kind`: `[Backdrop] [None] [✨]` and
+`[Type] [Fog of War] [✨]`. Removed the wide param-row gap on the
+Backdrop side; added a "Type" label on the FoW side; same flex
+treatment on both.
+
+**Local fonts: 12 catalog faces now bundled.** The
+@fontsource/* packages ship the woff2 bytes inside the app bundle,
+precached by the PWA service worker. Mappadux's Small Asset
+Library principle ("SAVE HERE") now holds for fonts too — the 12
+catalog families work fully offline, no Google CDN dependency for
+the built-in set. User-added Browse-Google-Fonts entries keep
+streaming; uploaded woff2/ttf blobs keep the FontFace API path.
+
+  - Rasteriser walks `document.styleSheets` to inline the bundled
+    woff2 bytes into the SVG document so handout PNGs render
+    locally too (was hitting Google's CDN per render via the
+    inline-from-css fetch).
+  - Bundle export schema gained `fontFamily` — user-added Google
+    Fonts now round-trip through .mappadux exports.
+
+**Migration covers every overlay kind.** The
+`SUPPORTED_KINDS` allowlist in migrations.ts hadn't been kept up
+with the OverlayKind union — firestorm, aurora, embers, noise,
+and transparent polygons were silently coerced to fog on reload.
+Allowlist updated; new kinds round-trip cleanly. Pre-v2.14 saves
+that had already lost their non-fog kinds aren't recoverable
+(data was overwritten with 'fog' previously).
+
+**Live backdrop changes propagate to player windows.** Player
+view_update handler missed setBackdrop, so backdrop kind / param
+edits required a player reconnect to apply. Now mirrors map_change
+behaviour and tweaks reach the player instantly.
+
+**Smaller fixes.** Bg-colour persistence on transparent textmaps
+(auto-sample no longer overwrites user picks on reload); UI scale
+slider in Settings → Display (75–150% scales the whole sidebar in
+proportion); new text-element font inheritance from selected /
+last-on-page element; logo etymology surfaces on the brand icon
+tooltip.
+
 ## v2.13.1 — 2026-05-17
 
 ### Text Map editor — font dropdown + new-text inheritance
