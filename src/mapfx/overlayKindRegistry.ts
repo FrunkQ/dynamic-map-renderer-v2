@@ -217,6 +217,19 @@ const SVG_EMBERS =
   '<path d="M12 10v-3"/>' +
   '<path d="M17 5v-2"/>';
 
+// Noise / static — a scatter of dots in a rough grid, reads as TV
+// static at icon size.
+const SVG_NOISE =
+  '<circle cx="6"  cy="6"  r="0.9"/>' +
+  '<circle cx="12" cy="6"  r="0.6"/>' +
+  '<circle cx="18" cy="7"  r="1.0"/>' +
+  '<circle cx="7"  cy="12" r="0.7"/>' +
+  '<circle cx="13" cy="11" r="1.1"/>' +
+  '<circle cx="18" cy="13" r="0.6"/>' +
+  '<circle cx="6"  cy="18" r="1.0"/>' +
+  '<circle cx="12" cy="17" r="0.8"/>' +
+  '<circle cx="18" cy="18" r="0.9"/>';
+
 // defaultRadius is now in CSS pixels — see the type doc above. Brush stays
 // visually the same size as you zoom in / out; the resulting map polygon
 // shrinks at higher zoom which gives fine-detail painting for free.
@@ -420,6 +433,20 @@ const EMBERS_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'speed',     label: 'Speed',     min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
 ];
 
+// Noise shader params. Per-pixel-cell hash; uColor (the kind's main
+// colour swatch) tints the static. Cheap; no helper textures.
+const NOISE_SHADER_PARAMS: ShaderParamDef[] = [
+  { id: 'intensity', label: 'Intensity', min: 0.1, max: 1.5, step: 0.05, default: 0.7 },
+  // Scale: grain density. <1 chunkier blocks, >1 finer per-pixel
+  // static. Default 1.0 reads as classic TV static on a 1080p canvas.
+  { id: 'scale',     label: 'Scale',     min: 0.2, max: 3.0, step: 0.05, default: 1.0 },
+  // Speed: flicker rate. 0 freezes the pattern (single snapshot of
+  // noise), 1 = live framerate churn (proper TV static), <1 gives
+  // a visible chunkier flicker as the pattern updates less often
+  // than the framerate.
+  { id: 'speed',     label: 'Speed',     min: 0.0, max: 2.0, step: 0.05, default: 1.0 },
+];
+
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   fog:          { id: 'fog',          label: 'Fog of War',      iconSvg: SVG_FOG,          defaultColor: '#000000', defaultRadius: 25, blend: 'normal', animated: false, selectByInterior: true,  allowColor: true,  z: 100, defaultEdgeFade: 0 },
   fire:         { id: 'fire',         label: 'Coloured Flames', iconSvg: SVG_FLAME,        defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire',         shaderParams: FIRE_SHADER_PARAMS         },
@@ -453,6 +480,11 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   // so the embers glow over the map. Per-poly colour swatch drives
   // the tint (per-cell hash adds variation).
   embers:       { id: 'embers',       label: 'Embers',          iconSvg: SVG_EMBERS,       defaultColor: '#ff8b1f', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 9,  shader: 'embers',       shaderParams: EMBERS_SHADER_PARAMS       },
+  // Noise: colourable TV-static. Cheap; default white tint reads as
+  // classic monochrome static. Useful as a creative atmosphere
+  // (haunted screen, magical interference) and as a chaotic
+  // backdrop.
+  noise:        { id: 'noise',        label: 'Noise',           iconSvg: SVG_NOISE,        defaultColor: '#ffffff', defaultRadius: 40, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 6,  shader: 'noise',        shaderParams: NOISE_SHADER_PARAMS        },
 };
 
 /** Order for the kind dropdown — fog first (most-used + click-priority),
@@ -462,7 +494,7 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   'fog',
   'fire', 'firestorm', 'embers', 'river', 'ocean', 'light',
-  'mist', 'thundercloud',
+  'mist', 'thundercloud', 'noise',
   'aurora', 'portal', 'starfield',
 ];
 

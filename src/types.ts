@@ -58,7 +58,8 @@ export type OverlayKind =
   | 'thundercloud'
   | 'mist'
   | 'aurora'
-  | 'embers';
+  | 'embers'
+  | 'noise';
 
 /**
  * The unified polygon used by the overlay system. Every shape that renders
