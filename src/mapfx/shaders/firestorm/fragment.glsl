@@ -17,6 +17,9 @@ uniform vec3  uColor;       // fire core tint
 uniform vec3  uSmoke;       // cooler smoke colour (upper region)
 uniform float uIntensity;
 uniform float uSpeed;       // animation rate; 1.0 = original pace
+uniform float uScale;       // column density / intensity multiplier; >1 = more aggressive
+                            //   structure, denser smoke, taller flames. 1.0 = original
+                            //   look; 3.0 = inferno.
 
 // Slight camera tilt so columns lean toward the viewer, matching
 // the original entry's view direction.
@@ -50,7 +53,11 @@ vec4 _fs_vol(vec3 p, float t) {
   f += 0.1250  * _fs_noise3(q);       q = q * 2.01 - vec3(0.0, 1.0, 0.0) * t;
   f += 0.0625  * _fs_noise3(q);       q = q * 2.02 - vec3(0.0, 1.0, 0.0) * t;
   f += 0.03125 * _fs_noise3(q);
-  d = clamp(d + 4.5 * f, 0.0, 1.0);
+  // uScale amplifies the noise-driven column structure. 1.0 = the
+  // original 4.5 multiplier; 3.0 pushes the noise contribution to
+  // ~13.5, which after clamping pegs the density at the max across
+  // most of the volume — proper inferno.
+  d = clamp(d + 4.5 * uScale * f, 0.0, 1.0);
   vec3 col = mix(uColor * 0.9 + vec3(0.1), uSmoke, d) + 0.05 * sin(p);
   return vec4(col, d);
 }

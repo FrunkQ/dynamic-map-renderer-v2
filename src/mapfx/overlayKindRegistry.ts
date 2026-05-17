@@ -393,6 +393,12 @@ const FIRESTORM_SHADER_PARAMS: ShaderParamDef[] = [
   // the backdrop's smoke tint — a deep warm black.
   { id: 'smoke',     label: 'Smoke',     type: 'color', default: '#1a0a08' },
   { id: 'intensity', label: 'Intensity',                min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+  { id: 'speed',     label: 'Speed',                    min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
+  // Scale: amplifies the column structure. 1.0 = original tame
+  // raymarch. 3.0 = inferno — noise contribution saturates the
+  // density across most of the volume, columns read as a solid
+  // wall of flame + smoke.
+  { id: 'scale',     label: 'Scale',                    min: 0.5, max: 3.0, step: 0.05, default: 1.0 },
 ];
 
 // Aurora shader params. Drifting horizontal curtain bands within the
