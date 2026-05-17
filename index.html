@@ -128,17 +128,15 @@
     <section class="panel" id="fog-panel">
       <button type="button" class="panel-title" aria-expanded="false" title="Pick a Kind, then Drawing Mode (sticky). Click Paint to add one shape or Erase to carve one out. Polygon: click vertices, click near first to close. Brush: drag. Click a polygon to select it; trashcan or Del to remove.">Fog of War &amp; MapFX</button>
       <div class="panel-body" hidden>
-        <!-- Kind picker + per-poly colour swatch + FX sparkle button.
-             The sparkle opens a popover with Edge Fade + the active
-             kind's shader params — same UI affordance as the Backdrop
-             FX button on the Map panel. -->
+        <!-- Per-poly colour swatch + FX sparkle button. The sparkle
+             opens a popover that contains the kind picker AND that
+             kind's params — same affordance shape as the Backdrop FX
+             button on the Map panel (where you also pick + tune inside
+             the popover). Kind dropdown is gone from the panel itself;
+             everything lives inside the popover for consistency. -->
         <div class="fog-row fog-row--kind">
-          <span class="fog-row-label">Kind</span>
-          <select id="mapfx-kind-select" title="What gets painted — fog, fire, water, light, etc.">
-            <!-- Filled from OVERLAY_KIND_ORDER in JS. -->
-          </select>
-          <input  type="color" id="fog-colour" value="#000000" title="Colour (fog only — other kinds use their own colour)" />
-          <button type="button" id="mapfx-fx-btn" class="icon-btn bg-fx-btn" title="Tune this kind: Edge Fade and the shader's own parameters (intensity, scale, speed, colours, etc.). Opens the same popover style as the Backdrop FX button." aria-label="MapFX tuning" aria-haspopup="true" aria-expanded="false">
+          <input  type="color" id="fog-colour" value="#000000" title="Colour for the active kind (per-polygon)." />
+          <button type="button" id="mapfx-fx-btn" class="icon-btn bg-fx-btn" title="Pick + tune the MapFX effect: kind (Fog of War, Coloured Flames, Aurora, etc.), Edge Fade, and the kind's own params (intensity, scale, speed, colours)." aria-label="MapFX tuning" aria-haspopup="true" aria-expanded="false">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 3 L13.5 10.5 L21 12 L13.5 13.5 L12 21 L10.5 13.5 L3 12 L10.5 10.5 Z" />
             </svg>

@@ -1770,15 +1770,8 @@ option.select-option--add {
   font-family: var(--font-mono);
   padding-right: 4px;
 }
-#mapfx-kind-select {
-  flex: 1 1 90px;
-  padding: 4px 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: 0.85rem;
-}
+/* #mapfx-kind-select removed in v2.12 — kind picking lives inside the
+ * MapFX FX popover now, matching the backdrop pattern. */
 #fog-canvas.mapfx-paint,
 #fog-canvas.mapfx-poly { pointer-events: auto; cursor: crosshair; }
 

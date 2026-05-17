@@ -61,13 +61,14 @@ vec4 _fs_vol(vec3 p, float t) {
 vec4 fxEffect(vec2 uv) {
   // Map the region's UV onto the camera plane the original entry
   // used. Aspect-correct so wide rectangular regions don't squash
-  // the columns horizontally. Divide by uScale before normalising
-  // the ray direction — higher uScale shrinks the visible angular
-  // range, so the camera "zooms in" and the columns fill more of
-  // the region with bigger, more detailed features.
+  // the columns horizontally. Multiply ndc by uScale before
+  // normalising the ray direction — higher uScale widens the
+  // angular range, so the camera sees more of the volume and the
+  // columns spread denser across the canvas. <1 narrows the FOV
+  // for a tighter close-up.
   vec2 ndc = (uv - 0.5) * 2.0;
   ndc.x *= uAspect;
-  ndc /= max(uScale, 0.01);
+  ndc *= max(uScale, 0.01);
   vec3 ro = vec3(0.0, 4.9, -40.0);
   vec3 rd = normalize(vec3(ndc, 2.0)) * _fs_rot;
   float t = time * uSpeed;

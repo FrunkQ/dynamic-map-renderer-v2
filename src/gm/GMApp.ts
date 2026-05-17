@@ -736,36 +736,14 @@ export class GMApp {
     this._markerOverlay?.updateMapFXSelectors([]);
   }
 
-  /** v2.12 — mark kind-dropdown options whose kind has at least one
-   *  polygon in the current map's fog state. Lets the GM see at a
-   *  glance which effects are already in use on the active map —
-   *  handy when reopening a map mid-session or when morphing a
-   *  selected polygon between kinds.
-   *
-   *  Two complementary cues:
-   *    • Inline `style.color` on the option element — works in the
-   *      dropdown popup on most browsers (Chrome, Firefox); ignored
-   *      in the collapsed select view.
-   *    • A '●' prefix glyph on the option label — works in both
-   *      states everywhere, since it's actual text content.
-   *
-   *  Called from initial selector build + every fog state change
-   *  (paint, erase, kind morph, etc.). */
+  /** v2.12 — kind list is now in the MapFX FX popover (sparkle button
+   *  on the FoW panel). The in-use green '●' prefix + colour live in
+   *  the popover's kind-list builder (_populateMapFxPopover). This
+   *  function survives as a refresh hook so the legacy call sites
+   *  (fog state change, map change) still nudge the popover when it's
+   *  open. No-op when the popover is closed. */
   private _refreshKindSelectorUsage(): void {
-    const kindSelect = document.querySelector<HTMLSelectElement>('#mapfx-kind-select');
-    if (!kindSelect) return;
-    const fog = this.state.getState().fog;
-    const inUse = new Set<string>();
-    for (const p of fog.polygons) inUse.add(p.kind);
-    for (const opt of Array.from(kindSelect.querySelectorAll<HTMLOptionElement>('option'))) {
-      const id = opt.dataset['kindId'] as OverlayKind | undefined;
-      if (!id) continue;
-      const used = inUse.has(id);
-      const label = OVERLAY_KIND_REGISTRY[id].label;
-      const rendered = id === 'fog' ? _toUnicodeBold(label) : label;
-      opt.textContent = used ? `● ${rendered}` : rendered;
-      opt.style.color = used ? '#4ade80' : '';
-    }
+    this._mapfxFxPopover?.refresh();
   }
 
   /** Off-screen viewport indicators — small edge-pinned pills with a
@@ -2876,49 +2854,15 @@ export class GMApp {
     });
 
     // ─── v2.12 unified — overlay kind picker ─────────────────────────────
-    // Single dropdown for what new strokes / polygons get tagged as. 'fog'
-    // is the default; everything else (fire / cold / smoke / …) is just
-    // another kind in the registry.
-    const kindSelect = document.querySelector<HTMLSelectElement>('#mapfx-kind-select');
-    if (kindSelect) {
-      kindSelect.innerHTML = '';
-      for (const id of OVERLAY_KIND_ORDER) {
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.dataset['kindId'] = id;
-        const label = OVERLAY_KIND_REGISTRY[id].label;
-        // Visually distinguish Fog of War from the MapFX kinds. Most
-        // browsers ignore CSS on <option>, so we lean on Mathematical
-        // Sans-Serif Bold Unicode codepoints — renders as a bold
-        // typeface in every dropdown without any font-weight CSS.
-        opt.textContent = id === 'fog' ? _toUnicodeBold(label) : label;
-        kindSelect.appendChild(opt);
-      }
-      kindSelect.value = this.activeOverlayKind;
-      this._applyActiveKindToBrush();
-      this._applyKindToColourSwatch();
-      this._applyEdgeFadeSlider();
-      this._rebuildShaderParamsPanel();
-      this._refreshKindSelectorUsage();
-      this.fogEditor.setActiveKind(this.activeOverlayKind);
-      kindSelect.addEventListener('change', () => {
-        const newKind = kindSelect.value as OverlayKind;
-        this.activeOverlayKind = newKind;
-        // If a polygon is selected, morph its kind in place so the GM
-        // can repurpose a drawn shape via the dropdown ("this FoW patch
-        // is actually flames", "this fire pool should be cool-looking
-        // fog"). The polygon's colour + shaderParams reset to the new
-        // kind's defaults so the user re-tints + re-tunes from there.
-        const selectedId = this.fogEditor.getSelectedId();
-        if (selectedId) this.state.setPolygonKind(selectedId, newKind);
-        this._applyActiveKindToBrush();
-        this._applyKindToColourSwatch();
-        this._applyEdgeFadeSlider();
-        this._rebuildShaderParamsPanel();
-        this.fogEditor.setActiveKind(newKind);
-        this.fogEditor.setColor(overlayKind(newKind).defaultColor);
-      });
-    }
+    // Kind picking moved into the MapFX FX popover (sparkle button next
+    // to the colour swatch). The inline <select> is gone; the popover
+    // shows the same list the dropdown used to, with the active kind
+    // highlighted + a green '●' prefix on kinds in use on the current
+    // map. Initial-state syncs to the active kind so the brush + swatch
+    // + fog editor all start coherent.
+    this._applyActiveKindToBrush();
+    this._applyKindToColourSwatch();
+    this.fogEditor.setActiveKind(this.activeOverlayKind);
 
     document.querySelector('#fog-delete-btn')?.addEventListener('click', () => {
       this.fogEditor.deleteSelected();
@@ -3043,14 +2987,13 @@ export class GMApp {
    *  picked polygon. */
   private _syncPanelToKind(kind: OverlayKind): void {
     this.activeOverlayKind = kind;
-    const kindSelect = document.querySelector<HTMLSelectElement>('#mapfx-kind-select');
-    if (kindSelect) kindSelect.value = kind;
     this._applyActiveKindToBrush();
     this._applyKindToColourSwatch();
-    this._applyEdgeFadeSlider();
-    this._rebuildShaderParamsPanel();
     this.fogEditor.setActiveKind(kind);
     this.fogEditor.setColor(overlayKind(kind).defaultColor);
+    // Popover (if open) rebuilds to highlight the new active kind +
+    // show its params. Closed popover is a no-op.
+    this._mapfxFxPopover?.refresh();
   }
 
   /** Push the active brush kind's defaults into the FogEditor's brush
@@ -3085,9 +3028,10 @@ export class GMApp {
     });
   }
 
-  /** Fill the MapFX popover with Edge Fade + the active kind's
-   *  shader-param controls. Pulled out so populate() and the refresh
-   *  hook both go through one builder.
+  /** Fill the MapFX popover with kind picker + Edge Fade + the active
+   *  kind's shader-param controls. Pulled out so populate() and the
+   *  refresh hook both go through one builder. Layout mirrors the
+   *  Backdrop FX popover: list-of-kinds at top, params below.
    *
    *  Edit-target resolution (matches the original inline behaviour):
    *    • Editing a polygon of the active kind  → show poly's stored values.
@@ -3102,9 +3046,52 @@ export class GMApp {
     const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
     const inherit = !editingPoly ? this._pendingPaintInherit : null;
 
+    // ─── Kind picker ─────────────────────────────────────────────────
+    // Replaces the old inline #mapfx-kind-select. Same green '●' prefix
+    // + colour as the previous in-place selector for kinds with at
+    // least one polygon on the active map. Clicking switches the
+    // active kind, morphs the selected polygon if any, and refreshes
+    // the popover so the params section reflects the new kind.
+    const optionList = document.createElement('div');
+    optionList.className = 'fx-popover-options';
+    const inUse = new Set<string>();
+    for (const p of fog.polygons) inUse.add(p.kind);
+    for (const id of OVERLAY_KIND_ORDER) {
+      const entry = OVERLAY_KIND_REGISTRY[id];
+      const opt = document.createElement('button');
+      opt.type = 'button';
+      opt.className = 'fx-popover-option';
+      if (id === this.activeOverlayKind) opt.classList.add('fx-popover-option--selected');
+      const used = inUse.has(id);
+      let rendered = id === 'fog' ? _toUnicodeBold(entry.label) : entry.label;
+      if (used) {
+        rendered = `● ${rendered}`;
+        opt.style.color = '#4ade80';
+      }
+      opt.textContent = rendered;
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.activeOverlayKind === id) return;
+        this.activeOverlayKind = id;
+        // Morph any selected polygon to the new kind (matches the
+        // legacy dropdown behaviour).
+        const selId = this.fogEditor.getSelectedId();
+        if (selId) this.state.setPolygonKind(selId, id);
+        this._applyActiveKindToBrush();
+        this._applyKindToColourSwatch();
+        this.fogEditor.setActiveKind(id);
+        this.fogEditor.setColor(overlayKind(id).defaultColor);
+        // Rebuild the popover so the kind highlight + param section
+        // reflect the new choice.
+        this._mapfxFxPopover?.refresh();
+      });
+      optionList.appendChild(opt);
+    }
+    root.appendChild(optionList);
+
     // Small header so the GM knows what they're editing.
     const hdr = document.createElement('div');
-    hdr.className = 'fog-shader-params-header';
+    hdr.className = 'fog-shader-params-header fx-popover-params-header';
     hdr.textContent = editingPoly
       ? `${k.label} — selected polygon`
       : (inherit ? `${k.label} — about to paint (inherited)` : `${k.label} — next new polygon`);
