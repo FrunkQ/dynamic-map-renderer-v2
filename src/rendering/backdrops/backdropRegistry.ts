@@ -19,11 +19,11 @@
  * and `fragment` strings, register it in BACKDROPS.
  */
 
-import { STARFIELD_BACKDROP }  from './starfield.ts';
-import { AURORA_BACKDROP }     from './aurora.ts';
-import { EMBERS_BACKDROP }     from './embers.ts';
-import { SMOOTH_FOG_BACKDROP } from './smoothFog.ts';
-import { FIRESTORM_BACKDROP }  from './firestorm.ts';
+import { STARFIELD_BACKDROP } from './starfield.ts';
+import { AURORA_BACKDROP }    from './aurora.ts';
+import { EMBERS_BACKDROP }    from './embers.ts';
+import { MIST_BACKDROP }      from './mist.ts';
+import { FIRESTORM_BACKDROP } from './firestorm.ts';
 
 export interface BackdropEntry {
   /** Stable id stored on the pack's ThemeConfig.backdrop.kind. */
@@ -62,10 +62,23 @@ export const BACKDROPS: BackdropEntry[] = [
   STARFIELD_BACKDROP,
   AURORA_BACKDROP,
   EMBERS_BACKDROP,
-  SMOOTH_FOG_BACKDROP,
+  MIST_BACKDROP,
   FIRESTORM_BACKDROP,
 ];
 
+/** Backwards-compat alias map for backdrop kind ids that have been
+ *  renamed. Saved packs with the old id still resolve to the new
+ *  entry. Add entries here whenever a backdrop id changes so older
+ *  bundles keep loading without manual user migration. */
+const BACKDROP_ID_ALIASES: Record<string, string> = {
+  // The standalone 'smooth_fog' backdrop was a duplicate of the MapFX
+  // 'mist' shader. Unified to 'mist' as part of the Phase 2 shader
+  // consolidation; old packs that picked 'smooth_fog' transparently
+  // get the same look from the mist entry.
+  smooth_fog: 'mist',
+};
+
 export function backdropById(id: string): BackdropEntry {
-  return BACKDROPS.find((b) => b.id === id) ?? BACKDROPS[0]!;
+  const resolved = BACKDROP_ID_ALIASES[id] ?? id;
+  return BACKDROPS.find((b) => b.id === resolved) ?? BACKDROPS[0]!;
 }

@@ -1,71 +1,81 @@
-// Mist — adapted from "Smooth Fog Shader" by deusnovus (2021-11-14)
-//   https://www.shadertoy.com/view/7ldGWf
-//   A remix of pontino's Fog Shader (https://www.shadertoy.com/view/tst3zr).
-//   Used under Shadertoy default licence (CC-BY-NC-SA 3.0) — see
-//   ACKNOWLEDGEMENTS.md.
+// Mist / Smoke — adapted from deusnovus's "Smooth Fog Shader" (2021),
+// itself a remix of pontino's Fog Shader. Used under CC-BY-NC-SA 3.0
+// — see ACKNOWLEDGEMENTS.md.
 //
-// Adaptation notes:
-//   • iTime → time; iResolution → uAspect.
-//   • Already a clean 2D shader — straight port to plane-local UV.
-//     The original's two-FBM domain-warp recipe is kept intact: one
-//     FBM produces a per-pixel motion vector, the second FBM samples
-//     the (position + motion) for the final density. Gives that
-//     drifting, "wispy" mist character.
-//   • uScale tunes the ZOOM constant (default 3.0); higher uScale
-//     gives lazier / bigger wisps, lower uScale gives finer ripple
-//     detail. Useful for everything from a small graveyard fog patch
-//     to a horizon-spanning sea-mist.
-//   • uSpeed scales the time multipliers (original used -0.5, -0.3).
-//     0 freezes the mist; 4 gives a wind-driven storm-front feel.
-//   • uColor replaces the hard-coded grey-purple `vec3(0.42, 0.40,
-//     0.47)`. The background colour stays at vec3(0.0) so the mist
-//     fades transparently rather than blending toward a fixed bg.
-//   • Output uses normal alpha blending — wisps fade out gracefully
-//     where the FBM is dark, fully obscure the map where it's bright.
+// One source for MapFX (polygon-masked, paint mist regions on the
+// map) and Backdrop (full-bars; smoke obscures the bg via alpha
+// composition). The same shader was previously duplicated as a
+// separate 'smooth_fog' backdrop with hardcoded colours — the
+// 'smooth_fog' id is now an alias for 'mist' in backdropById so
+// saved packs still resolve.
 
-uniform sampler2D uMask;
-uniform float     time;
-uniform float     uAspect;
-uniform vec3      uColor;
-uniform float     uIntensity;
-uniform float     uScale;
-uniform float     uSpeed;
-uniform float     uDirection; // radians, compass (0 = north)
+// === BEGIN backdrop-shareable ===
+uniform float time;
+uniform float uAspect;
+uniform vec3  uColor;        // mist hue
+uniform float uIntensity;
+uniform float uScale;
+uniform float uSpeed;
+uniform float uDirection;    // radians, compass (0 = north)
 
-varying vec2 vUv;
-
-vec2 random2(vec2 st) {
+vec2 _mist_random2(vec2 st) {
   st = vec2(dot(st, vec2(127.1, 311.7)), dot(st, vec2(269.5, 183.3)));
   return -1.0 + 2.0 * fract(sin(st) * 7.0);
 }
 
-float noise(vec2 st) {
+float _mist_noise(vec2 st) {
   vec2 i = floor(st);
   vec2 f = fract(st);
   vec2 u = f * f * (3.0 - 2.0 * f);
   return mix(
-    mix(dot(random2(i + vec2(0.0, 0.0)), f - vec2(0.0, 0.0)),
-        dot(random2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
-    mix(dot(random2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)),
-        dot(random2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0)), u.x),
+    mix(dot(_mist_random2(i + vec2(0.0, 0.0)), f - vec2(0.0, 0.0)),
+        dot(_mist_random2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
+    mix(dot(_mist_random2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)),
+        dot(_mist_random2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0)), u.x),
     u.y
   );
 }
 
-// 5 octaves (original used 4) — extra fine detail breaks up the
-// soft mid-frequency areas that made my earlier version read as
-// "flat haze" instead of "wisps". The starting scale is a bit
-// higher too so dense regions actually reach high density.
-float fbm(vec2 coord) {
+// 5 octaves (deusnovus original used 4) — the extra fine detail
+// breaks up mid-frequency flatness so dense regions read as proper
+// "wisps" rather than haze.
+float _mist_fbm(vec2 coord) {
   float value = 0.0;
   float scale = 0.25;
   for (int i = 0; i < 5; i++) {
-    value += noise(coord) * scale;
+    value += _mist_noise(coord) * scale;
     coord *= 2.0;
     scale *= 0.5;
   }
   return value + 0.25;
 }
+
+vec4 fxEffect(vec2 uv) {
+  // Aspect-corrected, scaled to the original sampling space.
+  vec2 st = vec2(uv.x * uAspect, uv.y);
+  vec2 pos = st * (3.0 / max(uScale, 0.01));
+
+  // First FBM produces a drifting motion vector; the original used
+  // a fixed diagonal (-0.5, -0.3). We expose direction as a slider
+  // (compass convention: 0 = north).
+  float t = time * uSpeed;
+  vec2 d = vec2(sin(uDirection), cos(uDirection));
+  vec2 motion = vec2(_mist_fbm(pos + d * t * 0.5));
+
+  // Second FBM at the warped position is the final density. The
+  // original baked INTENSITY=2; we keep that as a base and let
+  // uIntensity scale further.
+  float density = _mist_fbm(pos + motion) * 2.0 * uIntensity;
+  // Soft S-curve so wisp edges read as shape rather than a straight
+  // gradient.
+  density = smoothstep(0.05, 1.0, density);
+
+  return vec4(uColor, density);
+}
+// === END backdrop-shareable ===
+
+uniform sampler2D uMask;
+varying vec2 vUv;
 
 void main() {
   float maskAlpha = texture2D(uMask, vUv).a;
@@ -73,42 +83,8 @@ void main() {
     gl_FragColor = vec4(0.0);
     return;
   }
-
-  // Plane-local position, aspect-corrected. ZOOM=3 was the original
-  // sampling scale; we divide by uScale so bigger uScale = bigger
-  // wisp features (matches the convention used across the other
-  // shaders).
-  vec2 st = vec2(vUv.x * uAspect, vUv.y);
-  vec2 pos = st * (3.0 / max(uScale, 0.01));
-
-  // First FBM produces a drifting motion vector. The original used a
-  // fixed diagonal drift (-0.5, -0.3); we expose direction as a per-
-  // poly slider so the GM can pick which way the smoke/mist is
-  // blowing — wind-driven sea fret rolling in from the coast, swamp
-  // gas creeping south, etc. Compass convention to match river:
-  // 0 = north (wisps drift toward the top of the map).
-  float t = time * uSpeed;
-  vec2 d = vec2(sin(uDirection), cos(uDirection));
-  vec2 motion = vec2(fbm(pos + d * t * 0.5));
-
-  // Second FBM, sampled at the warped position, is the final mist
-  // density. The original baked an INTENSITY=2 multiplier here for
-  // the visible-mist look; we keep that and let uIntensity scale
-  // further so the slider default of 1.0 reads as proper mist
-  // rather than a faint haze.
-  float density = fbm(pos + motion) * 2.0 * uIntensity;
-
-  // Soft S-curve so wisp edges read as "shape" rather than a
-  // straight transparency gradient; also pushes the dense centres
-  // of wisps closer to fully opaque.
-  density = smoothstep(0.05, 1.0, density);
-
-  // Normal-blend output: col is the full mist hue (uColor), alpha
-  // controls visibility. Previously I had col = uColor * density,
-  // which double-attenuated against the alpha-blend and made even
-  // dense regions read as a thin haze. Single-attenuation now.
-  vec3 col = uColor;
-  float alpha = density * maskAlpha;
-
-  gl_FragColor = vec4(col, alpha);
+  vec4 c = fxEffect(vUv);
+  // Normal blend: rgb is the mist hue, alpha is the density gated
+  // by polygon coverage at the edges.
+  gl_FragColor = vec4(c.rgb, c.a * maskAlpha);
 }
