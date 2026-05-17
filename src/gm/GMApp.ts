@@ -738,12 +738,21 @@ export class GMApp {
 
   /** v2.12 — kind list is now in the MapFX FX popover (sparkle button
    *  on the FoW panel). The in-use green '●' prefix + colour live in
-   *  the popover's kind-list builder (_populateMapFxPopover). This
+   *  the popover's kind-picker builder (_populateMapFxPopover). This
    *  function survives as a refresh hook so the legacy call sites
    *  (fog state change, map change) still nudge the popover when it's
    *  open. No-op when the popover is closed. */
   private _refreshKindSelectorUsage(): void {
     this._mapfxFxPopover?.refresh();
+  }
+
+  /** v2.12 — update the always-visible label on the FoW panel that
+   *  shows which kind is currently active. Called whenever the kind
+   *  changes (popover dropdown, polygon selection sync, etc.). */
+  private _updateActiveKindDisplay(): void {
+    const el = document.getElementById('mapfx-kind-display');
+    if (!el) return;
+    el.textContent = overlayKind(this.activeOverlayKind).label;
   }
 
   /** Off-screen viewport indicators — small edge-pinned pills with a
@@ -2855,13 +2864,13 @@ export class GMApp {
 
     // ─── v2.12 unified — overlay kind picker ─────────────────────────────
     // Kind picking moved into the MapFX FX popover (sparkle button next
-    // to the colour swatch). The inline <select> is gone; the popover
-    // shows the same list the dropdown used to, with the active kind
-    // highlighted + a green '●' prefix on kinds in use on the current
-    // map. Initial-state syncs to the active kind so the brush + swatch
-    // + fog editor all start coherent.
+    // to the colour swatch). The popover hosts the kind dropdown; the
+    // panel label shows the currently-active kind at a glance.
+    // Initial-state syncs to the active kind so the brush + swatch +
+    // fog editor + label all start coherent.
     this._applyActiveKindToBrush();
     this._applyKindToColourSwatch();
+    this._updateActiveKindDisplay();
     this.fogEditor.setActiveKind(this.activeOverlayKind);
 
     document.querySelector('#fog-delete-btn')?.addEventListener('click', () => {
@@ -2989,6 +2998,7 @@ export class GMApp {
     this.activeOverlayKind = kind;
     this._applyActiveKindToBrush();
     this._applyKindToColourSwatch();
+    this._updateActiveKindDisplay();
     this.fogEditor.setActiveKind(kind);
     this.fogEditor.setColor(overlayKind(kind).defaultColor);
     // Popover (if open) rebuilds to highlight the new active kind +
@@ -3046,48 +3056,44 @@ export class GMApp {
     const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
     const inherit = !editingPoly ? this._pendingPaintInherit : null;
 
-    // ─── Kind picker ─────────────────────────────────────────────────
-    // Replaces the old inline #mapfx-kind-select. Same green '●' prefix
-    // + colour as the previous in-place selector for kinds with at
-    // least one polygon on the active map. Clicking switches the
-    // active kind, morphs the selected polygon if any, and refreshes
-    // the popover so the params section reflects the new kind.
-    const optionList = document.createElement('div');
-    optionList.className = 'fx-popover-options';
+    // ─── Kind picker (compact <select>) ──────────────────────────────
+    // 13 kinds is a lot vertically; a single dropdown reads much
+    // smaller in the popover. Same green '●' prefix for in-use kinds
+    // + bold Unicode for Fog of War (works in <option> text content
+    // even though CSS doesn't reliably style options).
+    const kindSelect = document.createElement('select');
+    kindSelect.className = 'fx-popover-kind-select';
     const inUse = new Set<string>();
     for (const p of fog.polygons) inUse.add(p.kind);
     for (const id of OVERLAY_KIND_ORDER) {
       const entry = OVERLAY_KIND_REGISTRY[id];
-      const opt = document.createElement('button');
-      opt.type = 'button';
-      opt.className = 'fx-popover-option';
-      if (id === this.activeOverlayKind) opt.classList.add('fx-popover-option--selected');
-      const used = inUse.has(id);
+      const opt = document.createElement('option');
+      opt.value = id;
       let rendered = id === 'fog' ? _toUnicodeBold(entry.label) : entry.label;
-      if (used) {
+      if (inUse.has(id)) {
         rendered = `● ${rendered}`;
         opt.style.color = '#4ade80';
       }
       opt.textContent = rendered;
-      opt.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (this.activeOverlayKind === id) return;
-        this.activeOverlayKind = id;
-        // Morph any selected polygon to the new kind (matches the
-        // legacy dropdown behaviour).
-        const selId = this.fogEditor.getSelectedId();
-        if (selId) this.state.setPolygonKind(selId, id);
-        this._applyActiveKindToBrush();
-        this._applyKindToColourSwatch();
-        this.fogEditor.setActiveKind(id);
-        this.fogEditor.setColor(overlayKind(id).defaultColor);
-        // Rebuild the popover so the kind highlight + param section
-        // reflect the new choice.
-        this._mapfxFxPopover?.refresh();
-      });
-      optionList.appendChild(opt);
+      if (id === this.activeOverlayKind) opt.selected = true;
+      kindSelect.appendChild(opt);
     }
-    root.appendChild(optionList);
+    kindSelect.addEventListener('change', () => {
+      const newKind = kindSelect.value as OverlayKind;
+      if (this.activeOverlayKind === newKind) return;
+      this.activeOverlayKind = newKind;
+      // Morph any selected polygon to the new kind.
+      const selId = this.fogEditor.getSelectedId();
+      if (selId) this.state.setPolygonKind(selId, newKind);
+      this._applyActiveKindToBrush();
+      this._applyKindToColourSwatch();
+      this._updateActiveKindDisplay();
+      this.fogEditor.setActiveKind(newKind);
+      this.fogEditor.setColor(overlayKind(newKind).defaultColor);
+      // Rebuild the popover so the param section reflects the new kind.
+      this._mapfxFxPopover?.refresh();
+    });
+    root.appendChild(kindSelect);
 
     // Small header so the GM knows what they're editing.
     const hdr = document.createElement('div');

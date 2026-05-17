@@ -1771,7 +1771,31 @@ option.select-option--add {
   padding-right: 4px;
 }
 /* #mapfx-kind-select removed in v2.12 — kind picking lives inside the
- * MapFX FX popover now, matching the backdrop pattern. */
+ * MapFX FX popover now, matching the backdrop pattern. The label
+ * below shows the currently-active kind at a glance on the panel. */
+.mapfx-kind-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 4px;
+}
+/* Kind-picker dropdown inside the FX popover — single compact <select>
+ * replaces the older vertical button list, since the popover was
+ * getting long with 13 kinds. */
+.fx-popover-kind-select {
+  width: 100%;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
 #fog-canvas.mapfx-paint,
 #fog-canvas.mapfx-poly { pointer-events: auto; cursor: crosshair; }
 
