@@ -11,41 +11,81 @@ entries land at the top.
 
 **Symptom.** You open the player view as a popup on the GM's own
 machine (the "Open Player Window" button). When an animated map
-(`.webm` / `.mp4`) loads, the popup shows the first frame and never
-animates — even after sitting there for a while.
+(`.webm` / `.mp4`) loads, the popup either never animates or starts
+and then freezes within a few seconds.
 
 **Cause.** Chrome (and Chromium-based browsers) aggressively
 throttle the video decoder for background / non-focused windows in
 the same browser process. Two windows on the same machine are
 fighting for the same per-process decode budget; the secondary
-window loses every time. Phones, tablets, and PCs running player
-view in a separate browser don't have this problem because they're
-in their own process.
+window loses every time. Phones, tablets, and PCs running the
+player view in a separate browser don't have this problem because
+they're in their own process.
 
-**Workaround.** Intentional. As of v2.12.19 the GM never sends the
-full video bytes to same-browser peers — they only receive the
-first-frame snapshot via the regular `map_change` channel. Use a
-remote device (phone on the LAN, separate laptop) as the player
-view if you want to see the animation there. The GM's own canvas
-plays the animation locally; same-machine projector windows behave
-the same as player popups (static first frame only).
+**Workaround.** Settings → Performance → **Send only the first
+frame to local player windows**. With this on, the GM withholds
+the full video from same-browser peers (player popups, same-machine
+projector window) — they show a static first frame instead, and
+never start a video decoder. Remote players (phones / separate
+devices on the LAN) still receive the animation. Default off —
+flip it on if you hit the stall on a high-resolution source.
+
+**When to leave off (default).** Lower-resolution animated maps
+that play fine in popups; sessions where no local player windows
+are open; capable hardware where the secondary-window throttle
+doesn't kick in.
+
+**Alternative.** Use a remote device (phone on the LAN, separate
+laptop) as the player view — different process, no throttle, full
+animation. The GM's own canvas always animates locally regardless
+of the toggle.
 
 ---
 
 ## Animated-map texture is GPU-heavy at very high source resolutions
 
-**Symptom.** A 4K-or-larger animated map runs OK fullscreen but
-stutters / freezes when the window isn't maximised, even on remote
-players.
+**Symptom.** A 4K-or-larger animated map runs OK fullscreen on the
+GM canvas / remote player but stutters when the window isn't
+maximised, or stutters even at fullscreen on older GPUs.
 
 **Cause.** WebGL `texImage2D` on a `HTMLVideoElement` uploads the
 full source frame to the GPU every render. At 4K + 60 Hz that's
 ~2 GB/s. Lower-end GPUs can't keep up.
 
-**Workaround.** Settings → Performance → **Cap animated maps at
-1080p**. Bounces the video through a CPU-sized downscale canvas
-before upload. Looks slightly softer, plays much more reliably.
-Off by default — capable hardware doesn't need it.
+**Workaround.** Settings → Performance → **Cap animated map
+texture at 1080p**. Bounces the video through a CPU-sized
+downscale canvas before upload. Looks slightly softer when zoomed
+in, plays much more reliably. Off by default — capable hardware
+doesn't need it.
+
+**Both toggles combine.** A modest setup with 4K animated maps can
+turn BOTH on: local windows show the static first frame
+(no decoder), remote players receive the video but render it at
+1080p texture (cheap GPU). Hardware does the minimum work to deliver
+the experience.
+
+**Future options if these become a blunt instrument** — Mappadux
+could escalate beyond these toggles, in roughly this order of
+increasing complexity:
+
+1. **Picture-in-Picture mode.** Render the video into a PiP window
+   on demand — PiP gets foreground-priority decoder budget from
+   the browser. Trade-off: visible PiP UI is intrusive.
+2. **WebCodecs decode loop.** Bypass `HTMLVideoElement` entirely;
+   demux + decode on a worker thread, push frames as ImageBitmaps
+   to the texture. Full control, no browser throttling. Heavy to
+   implement but the architectural "right answer".
+3. **Import-time transcode.** Re-encode 4K → 1080p in the GM's
+   browser when the asset is uploaded, store the transcoded
+   version alongside. Pays the cost once, every playback after is
+   cheap. Adds a "preparing animated map…" step on upload.
+4. **Per-asset opt-in to animate-on-remote-only.** Tag specific
+   high-cost assets to never animate same-machine, regardless of
+   the global toggle, so a creator's heavyweight loop doesn't ruin
+   a host's table session.
+
+Sketched in `src/rendering/Renderer.ts` as a comment block; nothing
+implemented today.
 
 ---
 

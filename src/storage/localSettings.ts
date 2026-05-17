@@ -37,6 +37,28 @@ export function setVideoCap1080Enabled(enabled: boolean): void {
   } catch { /* private mode etc. — no-op */ }
 }
 
+/** Same-machine player static-only mode (v2.12.x). When set, the GM
+ *  suppresses the video_bundle broadcast on the LocalChannel
+ *  (BroadcastChannel) path — same-browser peers see only the first
+ *  frame, never the animated playback. Saves Chrome's per-window
+ *  decoder budget from being fought over by the GM + popup. Default
+ *  off — the GM ships the full animation everywhere unless the user
+ *  explicitly opts in. Projector keeps trying to animate regardless;
+ *  it's never a "local player" in this sense. */
+export const LOCAL_PLAYER_STATIC_ONLY_KEY = 'dmr_local_player_static_only';
+
+export function isLocalPlayerStaticOnly(): boolean {
+  try { return localStorage.getItem(LOCAL_PLAYER_STATIC_ONLY_KEY) === '1'; }
+  catch { return false; }
+}
+
+export function setLocalPlayerStaticOnly(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(LOCAL_PLAYER_STATIC_ONLY_KEY, '1');
+    else         localStorage.removeItem(LOCAL_PLAYER_STATIC_ONLY_KEY);
+  } catch { /* private mode etc. — no-op */ }
+}
+
 /** Known API key entries kept in localStorage. Used by Settings to list +
  *  delete credentials separately from other local state. */
 export const API_KEY_ENTRIES: Array<{ key: string; label: string }> = [

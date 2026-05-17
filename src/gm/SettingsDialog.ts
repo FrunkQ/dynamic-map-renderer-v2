@@ -3,6 +3,8 @@ import {
   deleteAllApiKeys,
   isVideoCap1080Enabled,
   setVideoCap1080Enabled,
+  isLocalPlayerStaticOnly,
+  setLocalPlayerStaticOnly,
   type StoredApiKey,
 } from '../storage/localSettings.ts';
 
@@ -226,33 +228,58 @@ export class SettingsDialog {
   private _buildPerformanceSection(): HTMLElement {
     const sec = mkSection(
       'Performance',
-      'Settings that trade visual fidelity for smoother playback. Useful on lower-end GPUs or when running many windows at once.',
+      'Trade-offs for animated-map playback. Default values work fine on capable hardware (modern GPUs, decent-resolution sources); flip these on if you hit stalls or stutter.',
     );
 
+    sec.appendChild(this._buildPerfToggle({
+      title: 'Send only the first frame to local player windows',
+      help:
+        'When the GM\'s own PC is also running a player window (the "Open Player Window" popup) or a same-machine projector window, both compete with the GM canvas for Chrome\'s per-window video decoder budget. With this on, the GM doesn\'t send the full video bytes to same-browser peers — they show the first frame as a static map. ' +
+        'The projector window keeps trying to animate regardless. Remote players (phones, separate laptops on the LAN) always get full animation; their browser has its own decode budget.<br><br>' +
+        '<em>When to enable:</em> 4K (or larger) animated maps + GM popup-player on the same machine + visible stalling. <em>Leave off for:</em> lower-resolution animated maps that play fine in popups, or when no local player windows are open.',
+      get: isLocalPlayerStaticOnly,
+      set: setLocalPlayerStaticOnly,
+    }));
+
+    sec.appendChild(this._buildPerfToggle({
+      title: 'Cap animated map texture at 1080p',
+      help:
+        'Animated-map texture uploads are sized to the WebGL canvas by default — so a fullscreen 4K player on a 4K display uploads 4K every frame. On lower-end GPUs that saturates the upload budget and playback stalls. ' +
+        'Tick this to cap the texture at 1920 px on the longest side regardless of window size: looks slightly softer when zoomed in, plays smoothly even on modest hardware.<br><br>' +
+        '<em>When to enable:</em> remote players reporting stutter on animated maps even when fullscreen. <em>Leave off for:</em> capable GPUs where the difference is noticeable.',
+      get: isVideoCap1080Enabled,
+      set: setVideoCap1080Enabled,
+    }));
+
+    return sec;
+  }
+
+  /** Build one row in the Performance section — title + multi-line
+   *  help text + a right-aligned toggle that mirrors a localStorage
+   *  flag via the supplied get/set pair. */
+  private _buildPerfToggle(opts: {
+    title: string;
+    help:  string;
+    get:   () => boolean;
+    set:   (v: boolean) => void;
+  }): HTMLElement {
     const row = document.createElement('div');
     row.className = 'settings-danger-row';
-
     const label = document.createElement('div');
     label.innerHTML =
-      '<strong>Cap animated maps at 1080p</strong><br>' +
-      '<span class="settings-stat-sub">Animated map textures render at the size of the player / projector window by default — so a 4K source on a 4K display uploads 4K every frame. ' +
-      'On lower-end GPUs that can saturate the upload budget and the playback stalls. Tick this to cap the texture at 1920 px on the longest side regardless of window size — looks slightly softer when zoomed in, plays smoothly everywhere.</span>';
-
+      `<strong>${opts.title}</strong><br>` +
+      `<span class="settings-stat-sub">${opts.help}</span>`;
     const toggle = document.createElement('label');
     toggle.className = 'toggle-switch';
     const input = document.createElement('input');
     input.type = 'checkbox';
-    input.checked = isVideoCap1080Enabled();
-    input.addEventListener('change', () => {
-      setVideoCap1080Enabled(input.checked);
-    });
+    input.checked = opts.get();
+    input.addEventListener('change', () => opts.set(input.checked));
     const slider = document.createElement('span');
     slider.className = 'toggle-slider';
     toggle.append(input, slider);
-
     row.append(label, toggle);
-    sec.appendChild(row);
-    return sec;
+    return row;
   }
 
   // ─── Danger Zone ────────────────────────────────────────────────────────

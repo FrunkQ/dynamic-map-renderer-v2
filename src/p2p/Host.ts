@@ -2,6 +2,7 @@ import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage, SessionState, MarkerIconData, SoundboardAudioData } from '../types.ts';
 import { LocalChannel } from './LocalChannel.ts';
 import { generateRoomCode } from './roomCode.ts';
+import { isLocalPlayerStaticOnly } from '../storage/localSettings.ts';
 
 const CHUNK_SIZE = 16 * 1024; // 16 KB — safe DataChannel message size
 
@@ -180,14 +181,20 @@ export class Host {
     const seq = ++this.broadcastSeq;
     const tagged = { ...msg, _seq: seq } as unknown as GMMessage;
 
-    // v2.12.x — animated-map video_bundle messages are deliberately
-    // suppressed from the LocalChannel path. Same-browser windows
-    // (player popups, same-machine projector) compete with the GM
-    // for Chrome's per-window decoder budget; sending them the full
-    // video bytes just makes both windows worse. They stay on the
-    // first-frame snapshot from the preceding map_change instead.
-    // Remote peers (PeerJS) still get the bundle and animate normally.
-    if (msg.type !== 'video_bundle') {
+    // v2.12.20 — same-machine animated-map suppression is now opt-in.
+    // When the user enables "Send only the first frame to local
+    // player windows" in Settings → Performance, the GM holds the
+    // video_bundle back from the LocalChannel path so same-browser
+    // peers (player popups, same-machine projector) stay on the
+    // first-frame snapshot from the preceding map_change. They
+    // never spin up a video decoder, never fight the GM for Chrome's
+    // per-window decode budget. Default off — full animation reaches
+    // every connected view unless the GM opts into the bypass.
+    // Remote PeerJS peers always receive the bundle regardless.
+    if (msg.type === 'video_bundle' && isLocalPlayerStaticOnly()) {
+      // skip LocalChannel for this message; PeerJS sendTo below
+      // still delivers to remote peers.
+    } else {
       this.local.send(tagged);
     }
 
