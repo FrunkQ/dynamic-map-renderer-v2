@@ -437,13 +437,13 @@
           <p id="projection-map-cal-warning" class="view-warn" hidden>⚠ Active map is not calibrated — Full Map view enabled &mdash; calibrate map to change.</p>
 
           <div id="projection-default-actions" class="viewport-actions">
-            <button id="edit-projection-btn"     class="btn btn--primary btn--full">Move Projection View</button>
+            <button id="edit-projection-btn"     class="btn btn--primary btn--full" title="Drag the projector viewport rectangle around the GM canvas to choose which slice of the map the projector shows at true 1″/25 mm scale.">Move Projection View</button>
             <!-- Blackout button retired in v2.11/A8.3 — the panel's
                  broadcast switch (faff placeholder) covers the same
                  "hide what players see" need with a friendlier UX. -->
-            <button id="projection-fullmap-btn" class="btn btn--ghost btn--sm btn--full" title="Show the entire map fit-to-window on the projector, ignoring calibration">Full Map</button>
+            <button id="projection-fullmap-btn" class="btn btn--ghost btn--sm btn--full" title="Project the entire map fit-to-window, ignoring calibration. Useful for handouts, world maps, or any image you want everyone to see at once instead of at table-scale.">Full Map</button>
             <div class="param-row param-row--toggle">
-              <label for="projection-filter-toggle" title="When on, the GM&rsquo;s visual filter does NOT apply to the projector — useful when projecting battlemaps that should stay unfiltered.">Disable Filters</label>
+              <label for="projection-filter-toggle" title="When on, the GM's visual filter (parchment, hand-drawn, CRT, etc.) does NOT apply to the projector — useful when projecting battlemaps that should stay unfiltered at the table while players still see the filtered view on their own screens.">Disable Filters</label>
               <label class="toggle-switch">
                 <input type="checkbox" id="projection-filter-toggle" />
                 <span class="toggle-slider"></span>
@@ -458,17 +458,17 @@
             </div>
           </div>
 
-          <p class="view-hint view-hint--gap">Rotation</p>
+          <p class="view-hint view-hint--gap" title="Rotate the projected image at the projector end. Useful when the table screen is mounted upside-down, sideways, or you want to flip the orientation for players sitting opposite each other.">Rotation</p>
           <div class="btn-row" id="projection-rotation-row">
-            <button class="btn btn--ghost btn--sm" data-rotation="0">0&deg;</button>
-            <button class="btn btn--ghost btn--sm" data-rotation="90">90&deg;</button>
-            <button class="btn btn--ghost btn--sm" data-rotation="180">180&deg;</button>
-            <button class="btn btn--ghost btn--sm" data-rotation="270">270&deg;</button>
+            <button class="btn btn--ghost btn--sm" data-rotation="0"   title="No rotation — projector renders the map as the GM canvas does.">0&deg;</button>
+            <button class="btn btn--ghost btn--sm" data-rotation="90"  title="Quarter-turn clockwise. Use when the projector / TV is mounted on its side (portrait orientation).">90&deg;</button>
+            <button class="btn btn--ghost btn--sm" data-rotation="180" title="Half-turn. Use when the table screen is mounted upside-down or to flip for opposite-facing players.">180&deg;</button>
+            <button class="btn btn--ghost btn--sm" data-rotation="270" title="Three-quarter turn clockwise. Use for portrait mounts in the opposite orientation to 90°.">270&deg;</button>
           </div>
 
-          <p class="view-hint view-hint--gap">1&Prime; Grid Overlay</p>
+          <p class="view-hint view-hint--gap" title="Optional 1″/25 mm grid drawn over the projected image. Anchored to projector calibration (not map calibration) so squares always line up with the physical surface regardless of which map is loaded.">1&Prime; Grid Overlay</p>
           <div class="param-row param-row--toggle">
-            <label for="projection-grid-toggle">Show grid</label>
+            <label for="projection-grid-toggle" title="When on, the projector overlays a grid of 1″/25 mm squares on top of the map. Stays anchored to physical scale even when zooming the GM canvas.">Show grid</label>
             <label class="toggle-switch">
               <input type="checkbox" id="projection-grid-toggle" />
               <span class="toggle-slider"></span>
@@ -476,11 +476,11 @@
           </div>
           <div class="param-row">
             <label for="projection-grid-colour">Colour</label>
-            <input type="color" id="projection-grid-colour" value="#ffffff" title="Grid line colour" />
+            <input type="color" id="projection-grid-colour" value="#ffffff" title="Grid line colour. White reads well on dark maps; pick a contrasting colour for light or busy artwork." />
           </div>
 
-          <button id="projection-monitor-btn"   class="btn btn--ghost btn--sm btn--full view-hint--gap">+ Open Projector Monitor&hellip;</button>
-          <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full">Recalibrate this Map&hellip;</button>
+          <button id="projection-monitor-btn"   class="btn btn--ghost btn--sm btn--full view-hint--gap" title="Open an additional projector window that mirrors the primary's crop with a bezel frame. Use when you want a second screen showing the same calibrated view (e.g. a tablet on the same LAN that's not the main table screen).">+ Open Projector Monitor&hellip;</button>
+          <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full" title="Re-run the calibration flow for the active map — adjust pixels-per-square if the projected scale looks off compared to physical miniatures.">Recalibrate this Map&hellip;</button>
 
           <p id="projector-status" class="projector-status">No projector connected.</p>
         </div>

@@ -82,32 +82,42 @@ function buildBadges(m: Marker): OverlayBadge[] {
   out.push({
     kind:  'visibility',
     on:    !m.hidden,
-    title: m.hidden ? 'Hidden — click to show' : 'Visible — click to hide',
+    title: m.hidden
+      ? 'Hidden — players don\'t see this marker. You see it as a ghost. Click to reveal to players.'
+      : 'Visible — players can see this marker. Click to hide (it\'ll ghost for you only).',
   });
   if (m.roles.audio === 'source') {
     out.push({
       kind:  'audio-source',
       on:    !m.audioMuted,
-      title: m.audioMuted ? 'Sound source muted — click to unmute' : 'Sound source — click to mute',
+      title: m.audioMuted
+        ? 'Positional audio source — silenced. Click to start emitting the assigned sound for the listening player; volume falls off with distance to the listener marker.'
+        : 'Positional audio source — playing. Click to mute. Volume is attenuated by distance to whichever marker holds the listener role.',
     });
   } else if (m.roles.audio === 'listener') {
     out.push({
       kind:  'audio-listener',
       on:    !m.audioMuted,
-      title: m.audioMuted ? 'Deaf listener — click to enable' : 'Listener — click to mute',
+      title: m.audioMuted
+        ? 'Listener — silenced. This is the player\'s "ear" on the map. Source markers emit positional audio whose volume falls off with distance to this listener. Click to re-enable.'
+        : 'Listener — active. The player\'s "ear" on the map; source markers play louder the closer they are to this position. Click to mute everything.',
     });
   }
   if (m.roles.motion === 'source') {
     out.push({
       kind:  'motion-source',
       on:    !m.motionMuted,
-      title: m.motionMuted ? 'Motion source muted — click to enable' : 'Motion source — click to mute',
+      title: m.motionMuted
+        ? 'Motion source — silenced. Tracker scans ignore this marker. Click to make it detectable again.'
+        : 'Motion source — detectable. When the tracker marker scans, this source shows up as a blob (or audio ping) on the player view. Click to silence.',
     });
   } else if (m.roles.motion === 'tracker') {
     out.push({
       kind:  'motion-tracker',
       on:    !m.motionMuted,
-      title: m.motionMuted ? 'Tracker off — click to enable' : 'Tracker scanning — click to disable',
+      title: m.motionMuted
+        ? 'Motion tracker — off. The scanning ring + ping are paused. Click to start scanning for nearby motion sources.'
+        : 'Motion tracker — scanning. Expanding ring sweeps periodically; any motion source within range shows as a return blob + ping. Click to disable.',
     });
   }
   return out;
