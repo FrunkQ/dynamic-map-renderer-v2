@@ -1704,6 +1704,7 @@ export class GMApp {
       this.renderer.setBackgroundColour(state.view.backgroundColor);
       this.renderer.setBackdrop(state.view.backdrop ?? null);
       this._refreshBgFxButtonState();
+      this._updateActiveBgDisplay();
       // During a map switch, view travels inside map_change — same reasoning as
       // filter above.  Live viewport-editor drags only have 'view' in changed.
       if (!changed.includes('map')) {
