@@ -5,6 +5,12 @@ import {
   setVideoCap1080Enabled,
   isLocalPlayerStaticOnly,
   setLocalPlayerStaticOnly,
+  getUiScale,
+  setUiScale,
+  applyUiScale,
+  UI_SCALE_MIN,
+  UI_SCALE_MAX,
+  UI_SCALE_DEFAULT,
   type StoredApiKey,
 } from '../storage/localSettings.ts';
 
@@ -75,6 +81,8 @@ export class SettingsDialog {
 
     // ── Storage section ──────────────────────────────────────────────────
     body.appendChild(this._buildStorageSection());
+    // ── Display section ──────────────────────────────────────────────────
+    body.appendChild(this._buildDisplaySection());
     // ── Performance section ──────────────────────────────────────────────
     body.appendChild(this._buildPerformanceSection());
     // ── API Keys section ─────────────────────────────────────────────────
@@ -220,6 +228,63 @@ export class SettingsDialog {
       sec.appendChild(btnRow);
     }
 
+    return sec;
+  }
+
+  // ─── Display ────────────────────────────────────────────────────────────
+
+  /** UI scale slider. Drives CSS `zoom` on #sidebar so the whole left
+   *  panel — fonts, padding, borders, icons, popovers — scales as one
+   *  unit. The map canvas + screen-space marker overlay are untouched.
+   *  Persists immediately on drag; double-click resets to 100%. */
+  private _buildDisplaySection(): HTMLElement {
+    const sec = mkSection(
+      'Display',
+      'How the left-hand panel renders. The map canvas itself is unaffected.',
+    );
+
+    const row = document.createElement('div');
+    row.className = 'settings-danger-row';
+
+    const label = document.createElement('div');
+    const cur = Math.round(getUiScale() * 100);
+    const valueEl = document.createElement('strong');
+    valueEl.textContent = `UI scale — ${cur}%`;
+    label.appendChild(valueEl);
+    label.appendChild(document.createElement('br'));
+    const help = document.createElement('span');
+    help.className = 'settings-stat-sub';
+    help.textContent =
+      `Shrink or grow the whole sidebar in proportion. Useful on very ` +
+      `high-DPI screens where the default reads tiny, or on small ` +
+      `laptops where shrinking buys back canvas space. Range ` +
+      `${Math.round(UI_SCALE_MIN * 100)}–${Math.round(UI_SCALE_MAX * 100)}%. ` +
+      `Double-click the slider to reset to ${Math.round(UI_SCALE_DEFAULT * 100)}%.`;
+    label.appendChild(help);
+
+    const slider = document.createElement('input');
+    slider.type  = 'range';
+    slider.min   = String(UI_SCALE_MIN);
+    slider.max   = String(UI_SCALE_MAX);
+    slider.step  = '0.05';
+    slider.value = String(getUiScale());
+    slider.style.width = '120px';
+    slider.style.flex  = '0 0 auto';
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      setUiScale(v);
+      applyUiScale(v);
+      valueEl.textContent = `UI scale — ${Math.round(v * 100)}%`;
+    });
+    slider.addEventListener('dblclick', () => {
+      slider.value = String(UI_SCALE_DEFAULT);
+      setUiScale(UI_SCALE_DEFAULT);
+      applyUiScale(UI_SCALE_DEFAULT);
+      valueEl.textContent = `UI scale — ${Math.round(UI_SCALE_DEFAULT * 100)}%`;
+    });
+
+    row.append(label, slider);
+    sec.appendChild(row);
     return sec;
   }
 

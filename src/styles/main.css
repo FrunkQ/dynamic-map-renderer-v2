@@ -47,8 +47,12 @@
   --radius-md: 6px;
   --radius-lg: 8px;
 
-  /* Sidebar */
-  --sidebar-width: 280px;
+  /* Sidebar — width tracks --ui-scale so the column shrinks/grows in
+     lockstep with the in-panel CSS `zoom` applied via Settings →
+     Display. Without this, zoom would shrink the contents but leave
+     a fixed-width column with empty padding to its right. */
+  --ui-scale: 1;
+  --sidebar-width: calc(280px * var(--ui-scale));
 
   /* Aliases — newer code uses shorter names that were never originally
      defined. Resolve them to the canonical tokens so colour and surface

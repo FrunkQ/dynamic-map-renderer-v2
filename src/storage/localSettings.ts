@@ -59,6 +59,55 @@ export function setLocalPlayerStaticOnly(enabled: boolean): void {
   } catch { /* private mode etc. — no-op */ }
 }
 
+/** UI scale for the left sidebar. Stored as a number (1.0 = 100%);
+ *  values outside MIN/MAX clamp on read. Applied via CSS `zoom` so the
+ *  whole box model scales uniformly — fonts, padding, borders, icon
+ *  SVGs, popovers anchored to the sidebar, everything stays in
+ *  proportion. The map canvas + overlay are untouched; only the
+ *  sidebar shrinks/grows. Read once at startup and re-applied
+ *  whenever the slider moves. */
+export const UI_SCALE_KEY = 'dmr_ui_scale';
+export const UI_SCALE_MIN = 0.75;
+export const UI_SCALE_MAX = 1.5;
+export const UI_SCALE_DEFAULT = 1.0;
+
+export function getUiScale(): number {
+  try {
+    const raw = localStorage.getItem(UI_SCALE_KEY);
+    if (raw === null) return UI_SCALE_DEFAULT;
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return UI_SCALE_DEFAULT;
+    return Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, n));
+  } catch { return UI_SCALE_DEFAULT; }
+}
+
+export function setUiScale(scale: number): void {
+  try {
+    const clamped = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, scale));
+    if (clamped === UI_SCALE_DEFAULT) localStorage.removeItem(UI_SCALE_KEY);
+    else                              localStorage.setItem(UI_SCALE_KEY, String(clamped));
+  } catch { /* private mode etc. — no-op */ }
+}
+
+/** Push the stored scale into the DOM. Idempotent; safe to call on
+ *  startup AND on every slider change.
+ *
+ *  Two parts:
+ *    • CSS `zoom` on #sidebar — visually scales the contents
+ *      (fonts, padding, icons, popovers) uniformly. Non-standard
+ *      but supported in Chromium + WebKit; Firefox no-ops, which
+ *      is fine because scale 1.0 is the default everywhere.
+ *    • `--ui-scale` CSS variable on :root — the grid column width
+ *      multiplies by this in main.css. Without this the column
+ *      would stay 280 px wide while the contents shrank inside,
+ *      leaving empty space on the right of a downscaled panel
+ *      (or clipping a upscaled one). */
+export function applyUiScale(scale: number = getUiScale()): void {
+  document.documentElement.style.setProperty('--ui-scale', String(scale));
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) (sidebar.style as CSSStyleDeclaration & { zoom?: string }).zoom = String(scale);
+}
+
 /** Last MOTD version the user dismissed. Compared against
  *  CURRENT_MOTD.version on startup — when they differ (and the dialog
  *  isn't suppressed for first-install / About-open reasons) the MOTD
