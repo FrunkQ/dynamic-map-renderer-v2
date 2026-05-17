@@ -328,6 +328,14 @@ export class GMApp {
   /** MapFX sparkle popover handle — opened from the FoW panel's
    *  sparkle button. Shares the same FxPopover plumbing. */
   private _mapfxFxPopover: import('./FxPopover.ts').FxPopoverHandle | null = null;
+  /** Set true by the popover's own onChange handlers while a slider /
+   *  swatch / toggle is dispatching state updates. Refresh hooks
+   *  consult this and skip the rebuild — otherwise each slider tick
+   *  re-renders the popover DOM mid-drag, the pointer capture is lost,
+   *  and the slider stutters. Structural changes (kind switched,
+   *  polygon selected) bypass the flag because they originate
+   *  outside the popover. */
+  private _suppressPopoverRefresh = false;
   /** v2.12.x — full video bytes waiting to be broadcast as a
    *  MsgVideoBundle follow-up after the map_change that carried the
    *  snapshot. Set in loadMap when the new map is a video asset;
@@ -743,6 +751,7 @@ export class GMApp {
    *  (fog state change, map change) still nudge the popover when it's
    *  open. No-op when the popover is closed. */
   private _refreshKindSelectorUsage(): void {
+    if (this._suppressPopoverRefresh) return;
     this._mapfxFxPopover?.refresh();
   }
 
@@ -3001,8 +3010,11 @@ export class GMApp {
    *  (sparkle button next to the colour swatch). Legacy callers still
    *  fire this method when state changes; we now route to a popover
    *  refresh instead of rebuilding an inline element. No-op when the
-   *  popover isn't open. */
+   *  popover isn't open OR when the change originated inside the
+   *  popover itself (avoids the mid-drag DOM rebuild that kills
+   *  pointer capture on sliders). */
   private _rebuildShaderParamsPanel(): void {
+    if (this._suppressPopoverRefresh) return;
     this._mapfxFxPopover?.refresh();
   }
 
@@ -3108,11 +3120,18 @@ export class GMApp {
           // "next new polygon" tint), recolour the selected polygon
           // if one is active, and keep any pending paint-inherit
           // snapshot in sync so the about-to-be-painted polygon
-          // commits with the GM's latest tweak.
-          this.fogEditor.setColor(hex);
-          this.fogEditor.setBrushSettings({ color: hex });
-          if (editingPoly) this.state.setPolygonColor(editingPoly.id, hex);
-          if (this._pendingPaintInherit) this._pendingPaintInherit.color = hex;
+          // commits with the GM's latest tweak. Suppress popover
+          // refresh while dispatching so the live colour input keeps
+          // its pointer capture (no mid-drag DOM rebuild).
+          this._suppressPopoverRefresh = true;
+          try {
+            this.fogEditor.setColor(hex);
+            this.fogEditor.setBrushSettings({ color: hex });
+            if (editingPoly) this.state.setPolygonColor(editingPoly.id, hex);
+            if (this._pendingPaintInherit) this._pendingPaintInherit.color = hex;
+          } finally {
+            this._suppressPopoverRefresh = false;
+          }
         },
       );
       root.appendChild(colourRow);
@@ -3135,9 +3154,16 @@ export class GMApp {
     const edgeFadeRow = this._buildShaderSliderRow(
       edgeFadeDef, k.label, edgeFadeValue,
       (v) => {
-        if (editingPoly) this.state.setPolygonEdgeFade(editingPoly.id, v);
-        this.state.setShaderParams(this.activeOverlayKind, { edgeFade: v });
-        if (this._pendingPaintInherit) this._pendingPaintInherit.edgeFade = v;
+        // Suppress popover refresh during the drag so pointer
+        // capture survives — same protection as the colour row.
+        this._suppressPopoverRefresh = true;
+        try {
+          if (editingPoly) this.state.setPolygonEdgeFade(editingPoly.id, v);
+          this.state.setShaderParams(this.activeOverlayKind, { edgeFade: v });
+          if (this._pendingPaintInherit) this._pendingPaintInherit.edgeFade = v;
+        } finally {
+          this._suppressPopoverRefresh = false;
+        }
       },
     );
     root.appendChild(edgeFadeRow);
@@ -3154,9 +3180,16 @@ export class GMApp {
     for (const p of defs) {
       const stored = sourceMap[p.id];
       const onChange = (v: number | string) => {
-        this.state.setShaderParams(this.activeOverlayKind, { [p.id]: v });
-        if (editingPoly) this.state.setPolygonShaderParams(editingPoly.id, { [p.id]: v });
-        if (this._pendingPaintInherit) this._pendingPaintInherit.shaderParams[p.id] = v;
+        // Suppress popover refresh during the drag so the slider
+        // doesn't get rebuilt mid-stroke and lose pointer capture.
+        this._suppressPopoverRefresh = true;
+        try {
+          this.state.setShaderParams(this.activeOverlayKind, { [p.id]: v });
+          if (editingPoly) this.state.setPolygonShaderParams(editingPoly.id, { [p.id]: v });
+          if (this._pendingPaintInherit) this._pendingPaintInherit.shaderParams[p.id] = v;
+        } finally {
+          this._suppressPopoverRefresh = false;
+        }
       };
       let row: HTMLElement;
       if (p.type === 'color') {
@@ -3262,8 +3295,11 @@ export class GMApp {
   /** v2.12 — Edge Fade UI moved into the MapFX FX popover. Legacy
    *  callers still fire this on selection / kind changes; we route
    *  to a popover refresh instead of mutating an inline slider.
-   *  No-op when the popover isn't open. */
+   *  No-op when the popover isn't open OR when the change came from
+   *  the popover (same drag-capture protection as
+   *  _rebuildShaderParamsPanel). */
   private _applyEdgeFadeSlider(): void {
+    if (this._suppressPopoverRefresh) return;
     this._mapfxFxPopover?.refresh();
   }
 
