@@ -3371,15 +3371,68 @@ option.select-option--add {
   flex-direction: column;
   gap: var(--space-md);
 }
+/* v2.12.20 — Settings sections are native <details> elements now so the
+   browser owns the open/close state. The grid stays the same when open;
+   the summary stays compact and clickable when closed. */
 .settings-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  padding: var(--space-md);
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;  /* clip the body when collapsing — keeps the chevron stuck to a single rounded rect */
 }
+.settings-section > .settings-section-title {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  position: relative;
+  user-select: none;
+  background: rgba(30, 58, 95, 0.20);
+  transition: background 0.12s, color 0.12s;
+}
+.settings-section > .settings-section-title::-webkit-details-marker {
+  display: none;
+}
+.settings-section > .settings-section-title::after {
+  content: '▸';
+  position: absolute;
+  right: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  transition: transform 0.18s;
+}
+.settings-section[open] > .settings-section-title::after {
+  transform: translateY(-50%) rotate(90deg);
+}
+.settings-section > .settings-section-title:hover {
+  color: var(--text-primary);
+  background: rgba(30, 58, 95, 0.35);
+}
+.settings-section[open] {
+  /* When open, give the body room to breathe — padding on the children
+     rather than the section so the summary stays edge-to-edge. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.settings-section[open] > *:not(.settings-section-title) {
+  padding-left: var(--space-md);
+  padding-right: var(--space-md);
+}
+.settings-section[open] > .settings-section-intro {
+  padding-top: var(--space-sm);
+}
+.settings-section[open] > *:last-child:not(.settings-section-title) {
+  padding-bottom: var(--space-md);
+}
+/* Legacy class kept for backwards-compat — pre-collapsible sections
+   referenced this; nothing currently does, safe to remove later. */
 .settings-section-heading {
   font-size: var(--font-size-sm);
   color: var(--text-dim);

@@ -99,7 +99,7 @@ export class SettingsDialog {
   // ─── Storage ────────────────────────────────────────────────────────────
 
   private _buildStorageSection(): HTMLElement {
-    const sec = mkSection('Storage', 'How much of your browser’s allowance Mappadux is using. The quota is set by the browser — you can’t override it, but you can ask for persistence so the browser doesn’t evict your data under pressure.');
+    const sec = mkSection('Storage', 'How much of your browser’s allowance Mappadux is using. The quota is set by the browser — you can’t override it, but you can ask for persistence so the browser doesn’t evict your data under pressure.', { open: true });
 
     const usageLine = document.createElement('div');
     usageLine.className = 'settings-stat';
@@ -339,14 +339,22 @@ export class SettingsDialog {
 
 // ─── helpers ──────────────────────────────────────────────────────────────
 
-function mkSection(title: string, intro: string): HTMLElement {
-  const sec = document.createElement('section');
+function mkSection(title: string, intro: string, opts?: { open?: boolean }): HTMLElement {
+  // Native <details> + <summary> for the collapsible behaviour —
+  // browser owns the open/closed state, no JS event wiring needed.
+  // Section-level CSS styles the summary like the rest of the
+  // panel-title pattern (uppercase track + chevron) so settings
+  // reads consistently with the main UI panels. Callers continue
+  // to use `sec.appendChild(row)` and rows land inside the details
+  // body where the browser hides them when closed.
+  const sec = document.createElement('details');
   sec.className = 'settings-section';
+  if (opts?.open) sec.open = true;
 
-  const h = document.createElement('div');
-  h.className = 'settings-section-heading';
-  h.textContent = title;
-  sec.appendChild(h);
+  const summary = document.createElement('summary');
+  summary.className = 'settings-section-title';
+  summary.textContent = title;
+  sec.appendChild(summary);
 
   const p = document.createElement('p');
   p.className = 'settings-section-intro';
