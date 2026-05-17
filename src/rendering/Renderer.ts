@@ -1219,15 +1219,17 @@ export class Renderer {
   setBackdrop(config: BackdropConfig | null): void {
     const next = config && config.kind !== 'none' ? config : null;
     const sameKind = (this.backdropConfig?.kind ?? 'none') === (next?.kind ?? 'none');
-    const sameSpeed = (this.backdropConfig?.speed ?? 1.0) === (next?.speed ?? 1.0);
-    if (sameKind && sameSpeed) return;
+    // Same-kind updates skip the shader rebuild — speed and per-backdrop
+    // params just hot-push their values into the existing uniforms.
+    // Different-kind picks need the rebuild so the new GLSL snippet
+    // (and its uniform declarations) lands.
     const needsRebuild = !sameKind;
     this.backdropConfig = next;
     if (needsRebuild) this._buildClipPass();
-    // Push speed into the existing uniform if we kept the same kind.
     if (this.clipPass.uniforms['uSpeed']) {
       this.clipPass.uniforms['uSpeed']!.value = next?.speed ?? 1.0;
     }
+    this._pushBackdropParamsToUniforms();
     this.needsRender = true;
   }
 
@@ -1670,6 +1672,27 @@ export class Renderer {
 
     const entry = backdropById(this.backdropConfig?.kind ?? 'none');
     const speed = this.backdropConfig?.speed ?? 1.0;
+    const cfgParams = this.backdropConfig?.params ?? {};
+
+    // Per-backdrop params land here as additional uniforms (sliders/
+    // toggles → float, colour → vec3 via THREE.Color). The GLSL
+    // declarations for them are auto-injected ahead of the snippet so
+    // the snippet author doesn't have to redeclare them.
+    const paramUniforms: Record<string, { value: number | THREE.Color }> = {};
+    const paramDeclarations: string[] = [];
+    for (const p of entry.params ?? []) {
+      const uName = `u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`;
+      const stored = cfgParams[p.id];
+      if (p.type === 'color') {
+        const hex = typeof stored === 'string' && /^#[0-9a-fA-F]{6}$/.test(stored) ? stored : p.default;
+        paramUniforms[uName] = { value: new THREE.Color(hex) };
+        paramDeclarations.push(`uniform vec3 ${uName};`);
+      } else {
+        const n = typeof stored === 'number' && Number.isFinite(stored) ? stored : p.default;
+        paramUniforms[uName] = { value: n };
+        paramDeclarations.push(`uniform float ${uName};`);
+      }
+    }
 
     const pass = new ShaderPass({
       uniforms: {
@@ -1679,6 +1702,7 @@ export class Renderer {
         time:        { value: 0 },
         uSpeed:      { value: speed },
         uResolution: { value: new THREE.Vector2(this.resolution.x, this.resolution.y) },
+        ...paramUniforms,
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -1693,6 +1717,7 @@ export class Renderer {
         uniform float time;
         uniform float uSpeed;
         uniform vec2  uResolution;
+        ${paramDeclarations.join('\n        ')}
         varying vec2  vUv;
         void main() {
           if (vUv.x < uRect.x || vUv.x > uRect.z ||
@@ -1711,6 +1736,28 @@ export class Renderer {
       oldPass.dispose?.();
     }
     this.clipPass = pass;
+  }
+
+  /** Push the current `backdropConfig.params` values into the clipPass
+   *  param uniforms. Called from setBackdrop when the kind is unchanged
+   *  (so we don't need a shader rebuild). For colour params the existing
+   *  THREE.Color object is reused via `.set()` so the uniform binding
+   *  stays stable. */
+  private _pushBackdropParamsToUniforms(): void {
+    const entry = backdropById(this.backdropConfig?.kind ?? 'none');
+    const cfgParams = this.backdropConfig?.params ?? {};
+    for (const p of entry.params ?? []) {
+      const uName = `u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`;
+      const u = this.clipPass.uniforms[uName];
+      if (!u) continue;
+      const stored = cfgParams[p.id];
+      if (p.type === 'color') {
+        const hex = typeof stored === 'string' && /^#[0-9a-fA-F]{6}$/.test(stored) ? stored : p.default;
+        (u.value as THREE.Color).set(hex);
+      } else {
+        u.value = typeof stored === 'number' && Number.isFinite(stored) ? stored : p.default;
+      }
+    }
   }
 
   private renderFrame(): void {

@@ -1300,6 +1300,24 @@ option.select-option--add {
 .fx-popover-option--selected:hover {
   background: var(--accent-hover);
 }
+.fx-popover-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fx-popover-params {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+.fx-popover-params[hidden] { display: none; }
+.fx-popover-params .fog-brush-row {
+  margin: 0;
+}
 
 .marker-badge-tooltip {
   position: fixed;

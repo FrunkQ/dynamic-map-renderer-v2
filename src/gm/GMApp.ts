@@ -3981,7 +3981,12 @@ export class GMApp {
     this.viewBgFxBtn.classList.toggle('bg-fx-btn--active', kind !== 'none');
   }
 
-  /** Open the backdrop FX popover anchored under the FX button. */
+  /** Open the backdrop FX popover anchored under the FX button.
+   *
+   *  Layout: a list of backdrop options at the top; below it a params
+   *  section that auto-rebuilds whenever the selection changes. Clicking
+   *  an option commits the new backdrop kind AND keeps the popover open
+   *  so the GM can immediately tweak its tint / speed / etc. */
   private _openBgFxPopover(): void {
     // Lazy import to avoid pulling the whole renderer registry into the
     // GMApp critical bundle.
@@ -3990,6 +3995,42 @@ export class GMApp {
       const pop = document.createElement('div');
       pop.className = 'fx-popover';
       pop.setAttribute('role', 'menu');
+
+      const optionList = document.createElement('div');
+      optionList.className = 'fx-popover-options';
+      pop.appendChild(optionList);
+
+      const paramsBox = document.createElement('div');
+      paramsBox.className = 'fx-popover-params';
+      pop.appendChild(paramsBox);
+
+      const refreshParams = (kind: string) => {
+        paramsBox.innerHTML = '';
+        const entry = BACKDROPS.find((b) => b.id === kind);
+        const params = entry?.params ?? [];
+        if (params.length === 0) { paramsBox.hidden = true; return; }
+        paramsBox.hidden = false;
+        const label = entry?.label ?? kind;
+        const stored = this.state.getState().view.backdrop?.params ?? {};
+        for (const p of params) {
+          const onChange = (v: number | string) => this._setBackdropParam(p.id, v);
+          let row: HTMLElement;
+          if (p.type === 'color') {
+            const v = stored[p.id];
+            const hex = typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : p.default;
+            row = this._buildShaderColorRow(p, label, hex, onChange);
+          } else if (p.type === 'toggle') {
+            const v = stored[p.id];
+            const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
+            row = this._buildShaderToggleRow(p, label, n, onChange);
+          } else {
+            const v = stored[p.id];
+            const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
+            row = this._buildShaderSliderRow(p, label, n, onChange);
+          }
+          paramsBox.appendChild(row);
+        }
+      };
 
       const currentKind = this.state.getState().view.backdrop?.kind ?? 'none';
       for (const b of BACKDROPS) {
@@ -4001,10 +4042,16 @@ export class GMApp {
         opt.addEventListener('click', (e) => {
           e.stopPropagation();
           this._applyBackdrop(b.id);
-          this._closeBgFxPopover();
+          for (const o of optionList.querySelectorAll('.fx-popover-option')) {
+            o.classList.remove('fx-popover-option--selected');
+          }
+          opt.classList.add('fx-popover-option--selected');
+          refreshParams(b.id);
         });
-        pop.appendChild(opt);
+        optionList.appendChild(opt);
       }
+
+      refreshParams(currentKind);
 
       // Position under the FX button, in document coords so panel scroll
       // doesn't peel the popover away.
@@ -4052,7 +4099,12 @@ export class GMApp {
 
   /** Commit a backdrop choice into the active map's ViewState. The
    *  state change ripples through onStateChange → setBackdrop on the
-   *  renderer and a view_update broadcast. */
+   *  renderer and a view_update broadcast.
+   *
+   *  When swapping kinds, the previous backdrop's params are dropped on
+   *  purpose: param ids are kind-scoped and a value like "Curtain Tint"
+   *  on aurora has no meaning under embers. New kind starts at its
+   *  registered defaults. */
   private _applyBackdrop(kind: string): void {
     const v = this.state.getState().view;
     const next = { ...v };
@@ -4061,6 +4113,22 @@ export class GMApp {
     } else {
       next.backdrop = { kind };
     }
+    this.state.setView(next);
+  }
+
+  /** Patch a single backdrop param's value into the active map's
+   *  ViewState. Triggered by the popover slider / colour-picker / toggle
+   *  rows. No-op when no backdrop is currently active. */
+  private _setBackdropParam(id: string, value: number | string): void {
+    const v = this.state.getState().view;
+    if (!v.backdrop) return;
+    const next = {
+      ...v,
+      backdrop: {
+        ...v.backdrop,
+        params: { ...(v.backdrop.params ?? {}), [id]: value },
+      },
+    };
     this.state.setView(next);
   }
 

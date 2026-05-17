@@ -1137,6 +1137,12 @@ export interface BackdropConfig {
   /** Optional speed scalar 0..2; backdrop registry decides what it means.
    *  Defaults to 1.0 if unset. */
   speed?: number;
+  /** v2.12 — per-backdrop shader parameter values (sliders, toggles,
+   *  colour pickers). Keys match the matching BackdropEntry's
+   *  `params[].id`; values are numbers for slider/toggle, '#rrggbb'
+   *  hex for color. Unset / partial entries fall back to the
+   *  registered default for that param. */
+  params?: Record<string, number | string>;
 }
 
 /** A single labelled link shown in the splash/About dialog (Patreon,

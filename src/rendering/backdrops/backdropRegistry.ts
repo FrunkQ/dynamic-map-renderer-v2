@@ -30,6 +30,19 @@ export interface BackdropEntry {
   label:    string;
   /** GLSL body for the "outside uRect" branch of the clip-pass shader. */
   fragment: string;
+  /**
+   * v2.12 — optional GM-tunable shader parameters. Each entry becomes
+   * a uniform in the clip pass fragment shader using the standard
+   * `u<PascalCase>` naming (e.g. id 'tint' → uniform vec3 uTint).
+   * Sliders/toggles bind as `float`, colour params as `vec3`. The
+   * backdrop's GLSL snippet must declare matching uniforms at the top
+   * of the snippet (inside the snippet's block scope works) or use
+   * the values via Three's uniform-injection by name.
+   *
+   * Reuses the MapFX ShaderParamDef discriminated union so the same
+   * panel-row helpers render controls for both subsystems.
+   */
+  params?:  import('../../mapfx/overlayKindRegistry.ts').ShaderParamDef[];
 }
 
 export const BACKDROPS: BackdropEntry[] = [
