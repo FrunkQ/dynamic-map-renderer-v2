@@ -49,7 +49,24 @@ async function fetchFontFaceForSvg(family: string): Promise<string | null> {
       fontFaceCache.set(family, block);
       return block;
     }
-  } catch { /* fall through to Google fetch */ }
+  } catch { /* fall through */ }
+
+  // Same-origin path: if @fontsource (or any other CSS import) has
+  // already registered an @font-face for this family, the rule lives
+  // in document.styleSheets with a same-origin (Vite-hashed) URL.
+  // Pulling the bytes from there avoids hitting Google's CDN for the
+  // 12 bundled catalog fonts — they ship with the app, just need to
+  // be transcoded into a data: URI for the SVG document context to
+  // see them. Walks every accessible stylesheet, gathers EVERY
+  // matching @font-face rule (Latin / Latin-ext / Vietnamese / etc.)
+  // so the SVG keeps the full unicode-range coverage we shipped.
+  try {
+    const block = await _buildFontFaceBlockFromDocument(family);
+    if (block) {
+      fontFaceCache.set(family, block);
+      return block;
+    }
+  } catch { /* fall through to Google */ }
 
   try {
     // Fetch the Google Fonts CSS as the browser sees it — that path
@@ -94,6 +111,70 @@ async function fetchFontFaceForSvg(family: string): Promise<string | null> {
     fontFaceCache.set(family, null);
     return null;
   }
+}
+
+/** Locate every @font-face rule on the document that matches `family`,
+ *  fetch each woff2 URL same-origin, and rebuild the rule with the
+ *  bytes inlined as a data: URI. Used by the rasteriser so the SVG
+ *  document context (which can't reach document.fonts directly) can
+ *  see the same glyphs the host page renders. Returns null when no
+ *  matching rule is registered. */
+async function _buildFontFaceBlockFromDocument(family: string): Promise<string | null> {
+  // Normalise the comparison — CSS rules wrap the family in quotes,
+  // strip them and lowercase both sides for case-insensitive match.
+  const norm = (s: string) => s.replace(/['"]/g, '').trim().toLowerCase();
+  const target = norm(family);
+
+  const blocks: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    // Cross-origin stylesheet (e.g. fonts.googleapis.com) throws on
+    // cssRules access. Skip silently — that's the path we're trying
+    // to AVOID anyway.
+    let rules: CSSRule[];
+    try { rules = Array.from(sheet.cssRules); }
+    catch { continue; }
+
+    for (const rule of rules) {
+      // CSSFontFaceRule type-narrow — covers the standard rule type
+      // and the older Safari variant.
+      if (!(rule instanceof CSSFontFaceRule)) continue;
+      const ruleFamily = rule.style.getPropertyValue('font-family');
+      if (!ruleFamily) continue;
+      if (norm(ruleFamily) !== target) continue;
+
+      const src = rule.style.getPropertyValue('src');
+      if (!src) continue;
+      // Pull every url(...) entry — some @fontsource rules ship a
+      // single url(), some chain multiple formats. We only care
+      // about the .woff2 ones.
+      const urlMatch = /url\(\s*['"]?([^'")\s]+\.woff2)['"]?\s*\)/.exec(src);
+      if (!urlMatch) continue;
+      const woffUrl = urlMatch[1];
+      if (!woffUrl) continue;
+
+      try {
+        const fontRes = await fetch(woffUrl);
+        if (!fontRes.ok) continue;
+        const buf = await fontRes.arrayBuffer();
+        const b64 = arrayBufferToBase64(buf);
+        const dataUri = `data:font/woff2;base64,${b64}`;
+        // Rebuild the body: re-emit family / style / weight /
+        // unicode-range / font-display so the browser still picks
+        // the right variant per glyph, but swap src to the data URI.
+        const parts: string[] = [
+          `font-family:${ruleFamily}`,
+          `src:url(${dataUri}) format('woff2')`,
+        ];
+        const passthrough = ['font-style', 'font-weight', 'font-stretch', 'font-display', 'unicode-range'];
+        for (const prop of passthrough) {
+          const v = rule.style.getPropertyValue(prop);
+          if (v) parts.push(`${prop}:${v}`);
+        }
+        blocks.push(`@font-face{${parts.join(';')};}`);
+      } catch { /* skip this variant, try the next */ }
+    }
+  }
+  return blocks.length > 0 ? blocks.join('\n') : null;
 }
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {

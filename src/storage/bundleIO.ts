@@ -93,6 +93,13 @@ interface ImageAssetEntry {
   attributionLink?: string;
   sourceUrl?:    string;
   tags?:         string[];
+  /** Font family for source='font' rows. Earlier omitted from the
+   *  export schema, which silently dropped user-added Browse-Google-
+   *  Fonts entries on bundle round-trip (the recipient got a row
+   *  with no fontFamily, which TextMapEditor's filter then rejected).
+   *  Catalog fonts were unaffected because BUNDLED_FONTS is the
+   *  dropdown floor by name. Added 2026-05-17. */
+  fontFamily?:   string;
   addedAt:       number;
 }
 
@@ -338,6 +345,7 @@ export async function exportBundle(opts?: { password?: string }): Promise<Export
       attributionLink: a.attributionLink,
       sourceUrl:      a.sourceUrl,
       tags:           a.tags,
+      fontFamily:     a.fontFamily,
       addedAt:        a.addedAt,
     }) as ImageAssetEntry;
     if (a.blob) {
@@ -606,6 +614,7 @@ export async function importBundleText(
         attributionLink:  entry.attributionLink,
         sourceUrl:        entry.sourceUrl,
         tags:             entry.tags,
+        fontFamily:       entry.fontFamily,
         addedAt:          entry.addedAt,
       }) as ImageAsset;
       if (entry.blobB64 && entry.mimeType) {
