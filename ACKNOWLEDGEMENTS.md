@@ -167,6 +167,35 @@ Backdrop-specific tweaks (where the port diverges from the MapFX behaviour or co
 - Smooth Fog — same algorithm as the MapFX *Mist* effect (credited above), exposed here as a full-bars backdrop with GM-tunable fog colour, background, and density. `INTENSITY` and the two hardcoded colours promoted to uniforms; aspect-correct UV so cells don't squash on tall/wide bars.
 - Firestorm — kept only the GLSL fragment from the Shadertoy entry (the surrounding C/HLSL DirectX 12 reference code is irrelevant for our use). Reduced the raymarch from 128 to 48 steps with a wider step length, exposed the hot-core + smoke colours and an overall intensity.
 
+## Bundled Fonts *(Small Asset Library — Fonts category)*
+
+The Small Asset Library ships twelve typefaces locally — woff2 bytes
+included in the app bundle via the corresponding `@fontsource/*` npm
+packages, precached by the PWA service worker on first load. Every
+font is distributed under **SIL Open Font License 1.1**.
+Self-hosting (rather than streaming from Google's CDN at runtime)
+means Mappadux works fully offline at the table.
+
+| Family | Designer | Source |
+|---|---|---|
+| Cinzel | Natanael Gama | https://fonts.google.com/specimen/Cinzel |
+| IM Fell DW Pica | Igino Marini | https://fonts.google.com/specimen/IM+Fell+DW+Pica |
+| Special Elite | Astigmatic | https://fonts.google.com/specimen/Special+Elite |
+| Permanent Marker | Font Diner (Stuart Sandler) | https://fonts.google.com/specimen/Permanent+Marker |
+| Caveat | Pablo Impallari | https://fonts.google.com/specimen/Caveat |
+| Uncial Antiqua | John Vargas Beltrán | https://fonts.google.com/specimen/Uncial+Antiqua |
+| VT323 | Peter Hull | https://fonts.google.com/specimen/VT323 |
+| Press Start 2P | CodeMan38 | https://fonts.google.com/specimen/Press+Start+2P |
+| Playwrite GB J | TypeTogether | https://fonts.google.com/specimen/Playwrite+GB+J |
+| Seaweed Script | Pablo Impallari | https://fonts.google.com/specimen/Seaweed+Script |
+| Whisper | Kimberly Geswein | https://fonts.google.com/specimen/Whisper |
+| MedievalSharp | Marcelo Magalhães | https://fonts.google.com/specimen/MedievalSharp |
+
+User-added fonts (the "Browse Google Fonts" path in the Small Asset
+Library + uploaded woff2/ttf blobs) keep their existing pathways —
+Google CDN for unknown families, FontFace API for uploaded bytes.
+Only the twelve catalog families above are locally bundled.
+
 ### Under evaluation *(may be removed before v2.12 ships)*
 
 The following shader is saved in the source tree for evaluation only and is

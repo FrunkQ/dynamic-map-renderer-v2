@@ -30,6 +30,18 @@
     "workbox-window": "^7.4.0"
   },
   "dependencies": {
+    "@fontsource/caveat": "^5.2.8",
+    "@fontsource/cinzel": "^5.2.8",
+    "@fontsource/im-fell-dw-pica": "^5.2.6",
+    "@fontsource/medievalsharp": "^5.2.8",
+    "@fontsource/permanent-marker": "^5.2.7",
+    "@fontsource/playwrite-gb-j": "^5.2.7",
+    "@fontsource/press-start-2p": "^5.2.7",
+    "@fontsource/seaweed-script": "^5.2.8",
+    "@fontsource/special-elite": "^5.2.8",
+    "@fontsource/uncial-antiqua": "^5.2.7",
+    "@fontsource/vt323": "^5.2.7",
+    "@fontsource/whisper": "^5.2.8",
     "@vercel/analytics": "^1.6.1",
     "idb": "^8.0.3",
     "peerjs": "^1.5.5",

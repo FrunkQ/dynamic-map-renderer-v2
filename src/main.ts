@@ -1,3 +1,10 @@
+// Bundle the 12 catalog fonts into the app so they're available
+// offline and we never depend on Google's CDN for the built-in
+// set. See src/images/bundledFontsLoad.ts for the full rationale.
+// Side-effect import — runs at module-load time so the @font-face
+// rules land in the document before any TextMapEditor opens.
+import './images/bundledFontsLoad.ts';
+
 import { GMApp } from './gm/GMApp.ts';
 
 // Vercel Web Analytics — only injected on builds produced by Vercel's CI

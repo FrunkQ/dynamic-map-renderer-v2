@@ -4,10 +4,18 @@
  * run, after which the actual library is the source of truth and users
  * can add more Google Fonts on top.
  *
- * Fonts are loaded at runtime via the Google Fonts CSS API (no woff2 files
- * shipped in the app bundle yet) — Stream C will eventually swap to
- * bundled self-hosted faces, at which point this list still drives the
- * seed but the @font-face source changes.
+ * The 12 catalog families ship as woff2 bytes inside the app bundle via
+ * the @fontsource/* packages imported at startup in
+ * `src/images/bundledFontsLoad.ts`. They're available offline, never
+ * depend on Google's CDN at runtime, and are precached by the PWA
+ * service worker on first load. `markBundledFontsAsLocal()` adds them
+ * to the local-served set so `ensureFontsLoaded()` skips them in its
+ * Google CSS request.
+ *
+ * User-added fonts (the "Browse Google Fonts" path in the Image Asset
+ * Library, plus uploaded woff2/ttf blobs) keep their existing
+ * pathways — Google CDN for unknown families, FontFace API for
+ * uploaded bytes. Only the 12 catalog families are locally bundled.
  */
 
 export interface FontCatalogEntry {
@@ -99,15 +107,29 @@ export function ensureFontsLoaded(families: readonly string[]): void {
   _fontsLinkEl.href = href;
 }
 
-// ─── Locally-uploaded fonts ─────────────────────────────────────────────
+// ─── Locally-served fonts ───────────────────────────────────────────────
 
-/** Tracks family names we've already registered via FontFace so calls
- *  are idempotent and ensureFontsLoaded() doesn't re-fetch from Google
- *  for a font we already have locally. */
+/** Tracks family names already served from local bytes — either via the
+ *  bundled `@fontsource/*` packages imported at app startup, or via
+ *  user-uploaded woff2/ttf blobs registered through the FontFace API.
+ *  ensureFontsLoaded() filters these out of its Google CSS request so
+ *  we never re-fetch what's already in the document. */
 const _localFamilies = new Set<string>();
 
 function isLocallyRegistered(family: string): boolean {
   return _localFamilies.has(family);
+}
+
+/** Called once at startup from src/images/bundledFontsLoad.ts after
+ *  the @fontsource/* CSS imports have registered the @font-face rules.
+ *  Marks every BUNDLED_FONTS family as locally-served so the catalog
+ *  fonts skip the Google CSS request entirely. Safe to call more than
+ *  once — Set membership is idempotent. */
+export function markBundledFontsAsLocal(): void {
+  for (const f of BUNDLED_FONTS) _localFamilies.add(f.family);
+  // Drop any cached Google request key so the next ensureFontsLoaded
+  // recomputes the filtered list without the bundled families.
+  _loadedFamiliesKey = '';
 }
 
 /** Register an uploaded font file with the document so any CSS using
