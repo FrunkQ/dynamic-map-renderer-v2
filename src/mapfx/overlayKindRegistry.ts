@@ -92,6 +92,12 @@ export interface OverlayKindEntry {
   /** Optional render z-bias so kinds stack predictably. Higher = renders on
    *  top of lower. Fog is the highest so it covers MapFX effects beneath. */
   z:                 number;
+  /** Per-kind default for the Edge Fade slider. Omit to fall through to
+   *  DEFAULT_EDGE_FADE (0.10, the calibrated sweet spot for shader kinds
+   *  where soft edges blend the effect into the map). Fog overrides this
+   *  to 0: GMs typically want a hard fog boundary so the obscured area
+   *  reads as a deliberate gameplay region rather than a soft glow. */
+  defaultEdgeFade?:  number;
   /**
    * v2.12 — Custom GLSL shader for this kind on the player view.
    * Undefined → FogCompositor renders the polygons as flat colour fills
@@ -318,7 +324,7 @@ const MIST_SHADER_PARAMS: ShaderParamDef[] = [
 ];
 
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
-  fog:          { id: 'fog',          label: 'Fog of War',      iconSvg: SVG_FOG,          defaultColor: '#000000', defaultRadius: 25, blend: 'normal', animated: false, selectByInterior: true,  allowColor: true,  z: 100 },
+  fog:          { id: 'fog',          label: 'Fog of War',      iconSvg: SVG_FOG,          defaultColor: '#000000', defaultRadius: 25, blend: 'normal', animated: false, selectByInterior: true,  allowColor: true,  z: 100, defaultEdgeFade: 0 },
   fire:         { id: 'fire',         label: 'Coloured Flames', iconSvg: SVG_FLAME,        defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire',         shaderParams: FIRE_SHADER_PARAMS         },
   river:        { id: 'river',        label: 'River',           iconSvg: SVG_WATER,        defaultColor: '#5aa9d6', defaultRadius: 35, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'river',        shaderParams: RIVER_SHADER_PARAMS        },
   ocean:        { id: 'ocean',        label: 'Ocean',           iconSvg: SVG_WATER,        defaultColor: '#5fa9d6', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'ocean',        shaderParams: OCEAN_SHADER_PARAMS        },

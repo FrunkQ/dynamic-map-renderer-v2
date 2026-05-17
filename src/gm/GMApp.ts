@@ -2951,10 +2951,12 @@ export class GMApp {
       const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
       const params = inherit ? inherit.shaderParams : draft;
       // Edge-fade fall-through: explicit poly value → inheritance →
-      // kind draft → DEFAULT_EDGE_FADE (the calibrated sweet spot).
+      // kind draft → per-kind default → DEFAULT_EDGE_FADE. Fog overrides
+      // to 0 so the obscured area reads as a hard gameplay boundary.
       // typeof check is critical so an explicit 0 (GM wants hard
       // edge) doesn't get bumped up to the default.
-      const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
+      const kindDefault = k.defaultEdgeFade ?? DEFAULT_EDGE_FADE;
+      const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : kindDefault;
       const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
       const poly: FogPolygon = {
         id:        generateId(),
@@ -3144,18 +3146,19 @@ export class GMApp {
     const selectedPoly = selectedId ? fog.polygons.find((p) => p.id === selectedId) ?? null : null;
     const editingPoly = selectedPoly && selectedPoly.kind === this.activeOverlayKind ? selectedPoly : null;
     const inherit = !editingPoly ? this._pendingPaintInherit : null;
-    // Fallback when nothing's been tuned: DEFAULT_EDGE_FADE. Pre-feature
-    // polygons (no edgeFade field at all) still render as hard edges
-    // because the renderer's own fallback is 0; the slider just shows
-    // the default so dragging away from it is intuitive.
+    // Fallback when nothing's been tuned: per-kind default falling
+    // through to DEFAULT_EDGE_FADE. Fog overrides to 0 so the slider
+    // sits at hard-edge by default — that's the gameplay-correct
+    // starting point for "what can the party see".
+    const kindDefault = overlayKind(this.activeOverlayKind).defaultEdgeFade ?? DEFAULT_EDGE_FADE;
     let value: number;
     if (editingPoly) {
-      value = typeof editingPoly.edgeFade === 'number' ? editingPoly.edgeFade : DEFAULT_EDGE_FADE;
+      value = typeof editingPoly.edgeFade === 'number' ? editingPoly.edgeFade : kindDefault;
     } else if (inherit) {
       value = inherit.edgeFade;
     } else {
       const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
-      value = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
+      value = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : kindDefault;
     }
     slider.value = String(value);
   }
@@ -3342,8 +3345,10 @@ export class GMApp {
     const params = inherit ? inherit.shaderParams : draft;
     const inheritedColor = inherit?.color;
     // Same fall-through as the polygon-mode commit: poly value (no
-    // selection here) → inheritance → kind draft → DEFAULT_EDGE_FADE.
-    const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
+    // selection here) → inheritance → kind draft → per-kind default →
+    // DEFAULT_EDGE_FADE.
+    const kindDefault = k.defaultEdgeFade ?? DEFAULT_EDGE_FADE;
+    const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : kindDefault;
     const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
     const paramsCopy = Object.keys(params).length > 0 ? { shaderParams: { ...params } } : {};
     const edgeFadeCopy = edgeFade > 0 ? { edgeFade } : {};
@@ -3399,7 +3404,8 @@ export class GMApp {
       : ((k.allowColor && swatch?.value) ? swatch.value : k.defaultColor);
     const draft = fog.shaderParams?.[this.activeOverlayKind] ?? {};
     const params = inherit ? inherit.shaderParams : draft;
-    const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : DEFAULT_EDGE_FADE;
+    const kindDefault = k.defaultEdgeFade ?? DEFAULT_EDGE_FADE;
+    const draftEdgeFade = typeof draft['edgeFade'] === 'number' ? draft['edgeFade']! : kindDefault;
     const edgeFade = inherit ? inherit.edgeFade : draftEdgeFade;
     const poly: FogPolygon = {
       id:        generateId(),
