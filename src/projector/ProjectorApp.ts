@@ -93,6 +93,11 @@ export class ProjectorApp {
    *  view, so the projection bezel matches the player aesthetic. Defaults
    *  to black if no view state has been received yet. */
   private currentBackgroundColor: string         = '#000000';
+  /** v2.12.x — per-map animated backdrop the GM picked (Settings →
+   *  Backdrop FX next to bg colour). Null = solid bg only. Tracked
+   *  per ProjectorApp so _applyView can push it back into the
+   *  renderer every refresh. */
+  private currentBackdrop: import('../types.ts').BackdropConfig | null = null;
   private playerIconCache    = new Map<string, ImageBitmap>();
 
   async init(): Promise<void> {
@@ -322,6 +327,7 @@ export class ProjectorApp {
         this.currentFog     = s.fog ?? { polygons: [] };
         this.currentFilter  = s.filter ?? null;
         if (s.view?.backgroundColor) this.currentBackgroundColor = s.view.backgroundColor;
+        this.currentBackdrop = s.view?.backdrop ?? null;
         if (s.projectorViewport) this.projectorViewport = s.projectorViewport;
         if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
         if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
@@ -351,6 +357,7 @@ export class ProjectorApp {
         // previous map's filter applied. undefined/null means "no filter".
         this.currentFilter  = msg.filter ?? null;
         if (msg.view?.backgroundColor) this.currentBackgroundColor = msg.view.backgroundColor;
+        this.currentBackdrop = msg.view?.backdrop ?? null;
         if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
         if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
         if (msg.mapImageHeight     !== undefined) this.mapImageHeight     = msg.mapImageHeight;
@@ -482,6 +489,16 @@ export class ProjectorApp {
           const changed = this.currentBackgroundColor !== msg.payload.backgroundColor;
           this.currentBackgroundColor = msg.payload.backgroundColor;
           if (changed) this._applyView();
+        }
+        // v2.12.x — backdrop is per-view too. Live edits propagate
+        // without waiting for a map swap.
+        const newBackdrop = msg.payload.backdrop ?? null;
+        const backdropChanged =
+          (this.currentBackdrop?.kind ?? null) !== (newBackdrop?.kind ?? null) ||
+          (this.currentBackdrop?.speed ?? 1) !== (newBackdrop?.speed ?? 1);
+        if (backdropChanged) {
+          this.currentBackdrop = newBackdrop;
+          this._applyView();
         }
         break;
       }
@@ -635,6 +652,10 @@ export class ProjectorApp {
     this._refreshErrorStates();
     const view = this._computeViewState();
     this.renderer.setView(view);
+    // v2.12.x — per-map animated backdrop follows from the GM's view
+    // state. Projector inherits the same backdrop the GM picked so
+    // the bars area on the table screen carries the same vibe.
+    this.renderer.setBackdrop(this.currentBackdrop);
     this.markerSprites.render(this.currentMarkers, this.playerIconCache);
     this.renderer.markMarkersDirty();
   }

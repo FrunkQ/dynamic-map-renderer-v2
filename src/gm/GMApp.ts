@@ -2749,6 +2749,11 @@ export class GMApp {
       this.drawingMode = mode;
       localStorage.setItem(DRAWING_MODE_LS_KEY, mode);
       applyDrawingMode();
+      // v2.12.x — picking a drawing mode is intent to paint. Auto-engage
+      // Paint so the tool is live the moment the GM has chosen Polygon /
+      // Brush / Fill, instead of forcing them to click Paint as a
+      // separate step. Erase still requires an explicit click.
+      this._startAction('paint');
     };
     modePolyBtn?.addEventListener('click',  () => setDrawingMode('polygon'));
     modeBrushBtn?.addEventListener('click', () => setDrawingMode('brush'));

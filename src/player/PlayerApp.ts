@@ -185,6 +185,7 @@ export class PlayerApp {
         if (this.lastFilter) this.renderer.setFilter(this.lastFilter);
         if (this.lastView) {
           this.renderer.setView(this.lastView);
+          this.renderer.setBackdrop(this.lastView.backdrop ?? null);
         }
         this.markerSprites.render(this.currentMarkers, this.playerIconCache);
         this._updateMarkerOverlay();
@@ -266,6 +267,7 @@ export class PlayerApp {
         if (msg.payload.view)   this.lastView   = msg.payload.view;
         this.renderer.setFilter(msg.payload.filter);
         this.renderer.setView(msg.payload.view);
+        this.renderer.setBackdrop(msg.payload.view?.backdrop ?? null);
         void (async () => {
           if (msg.iconData?.length)         await this._decodeIconData(msg.iconData);
           if (msg.soundboardAssets?.length) this._cacheSoundboardAssets(msg.soundboardAssets);
@@ -310,6 +312,7 @@ export class PlayerApp {
               if (filter) this.renderer.setFilter(filter);
               if (view) {
                 this.renderer.setView(view);
+                this.renderer.setBackdrop(view.backdrop ?? null);
               }
             });
           })();
@@ -356,6 +359,7 @@ export class PlayerApp {
               if (filter) this.renderer.setFilter(filter);
               if (view) {
                 this.renderer.setView(view);
+                this.renderer.setBackdrop(view.backdrop ?? null);
               }
             }, preSnap, revealCanvas);
           } finally {
