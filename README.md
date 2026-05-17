@@ -27,7 +27,7 @@ Mappadux connects the GM and players over peer-to-peer, so **any phone, tablet, 
 
 - **Sets up in minutes, not hours.** Add a map, set a scale, drop a few markers — you're ready.
 - **Shows maps on any tablet / phone** for players, or **projects at true 1″ / 25 mm scale** onto an under-table screen or down-projector for in-person play.
-- **Fog of war, markers, motion trackers, atmospheric audio, and visual filters** — without hunting through menus mid-scene.
+- **Fog of war, painted shader effects, animated backdrops, markers, motion trackers, atmospheric audio, and visual filters** — without hunting through menus mid-scene.
 
 It tries to feel **immersive** too: parchment / hand-drawn / CRT-phosphor filters, smooth map transitions, positional and motion-tracker audio.
 
@@ -43,7 +43,27 @@ Players connect over peer-to-peer (PeerJS); no server infrastructure beyond stat
 
 - **Map library** — add `.png`, `.jpg`, `.jpeg`, `.webp` images by upload, paste-by-URL, or pick from your existing library. One map image asset can back multiple named maps with their own fog / markers / audio / tracker config — handy for re-using the same battlemap across encounters. Hover for thumbnail preview, rename live, **Clone Map** for instant copies (image shared, settings duplicated independently). Missing or broken asset URLs render a placeholder so fog and marker positions stay sensible until you click **⚠ Fix Missing Map**.
 - **Auto-scale on import** — Mappadux guesses each map's 1″ grid from filename hints (`[40x30]`), embedded image DPI (PNG `pHYs` / JPEG JFIF), and the greatest common factor of the image dimensions (assuming square cells). High-confidence detections apply silently and badge the map **Scaled** (yellow); best-guess matches badge **AutoScaled** (orange); ambiguous imports prompt a small radio dialog with the top candidates. Maps that have no grid (handouts, world maps, stat blocks) can be opted out with one toggle. Legacy packs get the same pass on load, so older bundles upgrade themselves automatically.
-- **Fog of War** — draw arbitrary polygons to hide areas from players; click to select and delete.
+- **Fog of War + MapFX** *(unified in v2.12)* — draw arbitrary polygons with the kind dropdown choosing what each shape becomes:
+
+  | Kind | Reads as |
+  |---|---|
+  | Fog of War | Opaque black hide-zones (the classic) |
+  | Coloured Flames | Volumetric flame orb; GM-tinted (natural orange → soulfire blue / wisp-green / eldritch purple) |
+  | Firestorm | Inferno of rising fire + smoke columns, GM-tunable hot core + smoke tints |
+  | Embers | Parallax-layered rising sparks; tint for soulfire, magma, arcane sparks |
+  | River | Flowing water with refracted bed; per-poly direction so every river bends differently |
+  | Ocean | Top-down sea with sun glints + wave height (calm → stormy) |
+  | Mist / Smoke | Drifting wisps with direction; cyber-smoke, swamp fog, sea fret |
+  | Thundercloud | Cool slate body with random lightning flashes; GM picks the flash hue |
+  | Magic Portal | Animated swirling event-horizon disc; portal hue tunable |
+  | Magical Light | Radial glow + animated swirls + sparkle particles; pick the hue |
+  | Aurora | Drifting horizontal curtain bands with dual-colour mix |
+  | Starfield | Eight-layer parallax warp; direction + glow + speed (warp-speed reads as warp-speed) |
+  | Noise | Colourable TV-static; haunted-screen, magical-interference, retro-CRT |
+
+  Each kind has its own tuning popover (intensity, scale, speed, colours, plus kind-specific knobs). Paint with click-polygon, brush, or magic-wand fill. The same polygon can be repurposed mid-session by switching its kind from the dropdown.
+
+- **Animated backdrops** *(new in v2.12)* — every backdrop-suitable MapFX kind also runs as a full-screen animated backdrop filling the letterbox / pillarbox bars around the map. Pick **Aurora** for sky-themed maps, **Ocean** for a ship floorplan with sea around the deck, **Firestorm** for siege scenes, **Thundercloud** for storms, **Noise** for cursed-tech, etc. The bars are calibrated dead space on tabletop projection setups, so backdrops add immersion without ever overlaying the map itself.
 - **Visual filters** — full-screen post-processing effects applied to the player view only:
 
   | Filter | Style |

@@ -53,11 +53,11 @@ export const FAFF_MESSAGES: readonly string[] = [
   'Aligning the firestorm. Mostly aligned. Mostly.',
   'The static is having an existential moment. One sec.',
   'Tuning the sun glints on the ocean to "Saturday brochure".',
-  'Wiring the sparkle button to the correct popover. Again.',
-  'Polishing the same shader for the seventeenth time.',
-  'Loading optional inferno mode (off by default).',
-  'Renaming smooth_fog to mist. Briefly explaining why to past me.',
-  'Compiling fragment shaders. Praying GLSL is in a good mood.',
+  'Just letting the dramatic music swell. You’ll thank me.',
+  'Re-reading the part of the rulebook nobody else has.',
+  'Quickly drawing a corridor I forgot to prep.',
+  'Sketching a tavern menu. Mostly mutton.',
+  'Picking a voice for the suspicious shopkeeper.',
 ];
 
 let _lastIndex = -1;
