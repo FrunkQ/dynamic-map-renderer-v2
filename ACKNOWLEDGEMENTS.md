@@ -96,6 +96,8 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 | Mist | Smooth Fog Shader (7ldGWf) by deusnovus (2021) — remix of [pontino's Fog Shader](https://www.shadertoy.com/view/tst3zr) | https://www.shadertoy.com/view/7ldGWf |
 | Thundercloud | thundercloud (3dcXWS) by mahalis (2019), used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — 3D noise by [Inigo Quilez (MIT)](https://www.shadertoy.com/view/Xsl3Dl), hash helpers by [David Hoskins (CC BY-SA 4.0)](https://www.shadertoy.com/view/4djSRW) | https://www.shadertoy.com/view/3dcXWS |
 | Firestorm | GPU hacks #07 - DirectX 12 (wtB3RG) by PrzemyslawZaworski (2019) — same source as the Firestorm backdrop, ported again as a polygon-masked MapFX kind | https://www.shadertoy.com/view/wtB3RG |
+| Aurora | Original — drifting curtain bands, GM-tunable colours (same algorithm as the Aurora backdrop) | Mappadux | — | — |
+| Embers | Original — parallax cell-grid sparks, GM-tunable tint (same algorithm as the Embers backdrop) | Mappadux | — | — |
 
 ### MIT-licensed shaders
 

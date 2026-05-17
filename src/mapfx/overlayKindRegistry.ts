@@ -202,6 +202,21 @@ const SVG_FIRESTORM =
   '<path d="M9 6c1 1 2 1 3-1 1 2 2 2 3 1"/>' +
   '<path d="M7 3c2 1 3 1 5-1 2 2 3 2 5 1"/>';
 
+// Three drifting horizontal arcs — the aurora curtain reading.
+const SVG_AURORA =
+  '<path d="M3 9c4 -4 14 -4 18 0"/>' +
+  '<path d="M4 13c4 -3 12 -3 16 0"/>' +
+  '<path d="M5 17c3 -2 11 -2 14 0"/>';
+
+// Rising sparks — three small particles ascending diagonally.
+const SVG_EMBERS =
+  '<circle cx="7"  cy="17" r="1.2"/>' +
+  '<circle cx="12" cy="12" r="1.4"/>' +
+  '<circle cx="17" cy="7"  r="1.0"/>' +
+  '<path d="M7 15v-2"/>' +
+  '<path d="M12 10v-3"/>' +
+  '<path d="M17 5v-2"/>';
+
 // defaultRadius is now in CSS pixels — see the type doc above. Brush stays
 // visually the same size as you zoom in / out; the resulting map polygon
 // shrinks at higher zoom which gives fine-detail painting for free.
@@ -375,6 +390,25 @@ const FIRESTORM_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'intensity', label: 'Intensity',                min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
 ];
 
+// Aurora shader params. Drifting horizontal curtain bands within the
+// polygon. uColorA = primary curtain colour (= 'colorA' in the
+// backdrop). uColorB = secondary colour the bands fade through.
+// Defaults reproduce the original aurora-green / aurora-violet pair.
+const AURORA_SHADER_PARAMS: ShaderParamDef[] = [
+  { id: 'colorA',    label: 'Curtain Colour',   type: 'color', default: '#33bf73' },
+  { id: 'colorB',    label: 'Secondary Colour', type: 'color', default: '#7340cc' },
+  { id: 'intensity', label: 'Intensity',                       min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+  { id: 'speed',     label: 'Speed',                           min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
+];
+
+// Embers shader params. Parallax cell-grid sparks rising through the
+// polygon. Tint is the per-poly colour swatch (uColor); per-cell
+// hash adds variation so the field doesn't read as one flat hue.
+const EMBERS_SHADER_PARAMS: ShaderParamDef[] = [
+  { id: 'intensity', label: 'Intensity', min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+  { id: 'speed',     label: 'Speed',     min: 0.0, max: 3.0, step: 0.05, default: 1.0 },
+];
+
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   fog:          { id: 'fog',          label: 'Fog of War',      iconSvg: SVG_FOG,          defaultColor: '#000000', defaultRadius: 25, blend: 'normal', animated: false, selectByInterior: true,  allowColor: true,  z: 100, defaultEdgeFade: 0 },
   fire:         { id: 'fire',         label: 'Coloured Flames', iconSvg: SVG_FLAME,        defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire',         shaderParams: FIRE_SHADER_PARAMS         },
@@ -394,6 +428,17 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   // for magical, green for eldritch, etc.
   thundercloud: { id: 'thundercloud', label: 'Thundercloud',    iconSvg: SVG_THUNDERCLOUD, defaultColor: '#dde4ff', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 25, shader: 'thundercloud', shaderParams: THUNDERCLOUD_SHADER_PARAMS },
   mist:         { id: 'mist',         label: 'Smoke / Mist',    iconSvg: SVG_MIST,         defaultColor: '#9aa3b5', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 22, shader: 'mist',         shaderParams: MIST_SHADER_PARAMS         },
+  // Aurora: curtain bands hanging vertically inside the polygon.
+  // Additive blend so the aurora reads as light over snow / dark
+  // terrain rather than an opaque overlay. allowColor is false —
+  // the dual-curtain colour is set via the shader params (colorA +
+  // colorB) rather than the single-swatch per-poly colour, so we
+  // grey out the swatch to avoid confusion.
+  aurora:       { id: 'aurora',       label: 'Aurora',          iconSvg: SVG_AURORA,       defaultColor: '#33bf73', defaultRadius: 80, blend: 'screen', animated: true,  selectByInterior: false, allowColor: false, z: 4,  shader: 'aurora',       shaderParams: AURORA_SHADER_PARAMS       },
+  // Embers: rising-spark population inside the polygon. Additive
+  // so the embers glow over the map. Per-poly colour swatch drives
+  // the tint (per-cell hash adds variation).
+  embers:       { id: 'embers',       label: 'Embers',          iconSvg: SVG_EMBERS,       defaultColor: '#ff8b1f', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 9,  shader: 'embers',       shaderParams: EMBERS_SHADER_PARAMS       },
 };
 
 /** Order for the kind dropdown — fog first (most-used + click-priority),
@@ -402,9 +447,9 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
  *  polygons overlap, the kind earlier in this list wins the click. */
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   'fog',
-  'fire', 'firestorm', 'river', 'ocean', 'light',
+  'fire', 'firestorm', 'embers', 'river', 'ocean', 'light',
   'mist', 'thundercloud',
-  'portal', 'starfield',
+  'aurora', 'portal', 'starfield',
 ];
 
 /** Quick lookup with a fall-back. Unknown kinds fall through to fog so

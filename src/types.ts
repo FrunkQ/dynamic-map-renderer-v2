@@ -56,7 +56,9 @@ export type OverlayKind =
   | 'starfield'
   | 'portal'
   | 'thundercloud'
-  | 'mist';
+  | 'mist'
+  | 'aurora'
+  | 'embers';
 
 /**
  * The unified polygon used by the overlay system. Every shape that renders
