@@ -3460,10 +3460,14 @@ export class GMApp {
    *  window can't out-race the microtask. Cheap, idempotent, and
    *  finally kills the "Paint stays lit after committing a polygon"
    *  report we couldn't reproduce from inspection. */
-  private _endAction(): void {
+  private _endAction(opts: { preserveFillState?: boolean } = {}): void {
     this._actionInProgress = false;
     this._pendingPaintInherit = null;
-    this._lastFillState = null;
+    // Fill paint commits opt-in to preserving _lastFillState so the
+    // Tolerance slider can keep refining the just-committed polygon
+    // after the Paint button visually clears. Other commits (brush,
+    // polygon, fill-erase) wipe it.
+    if (!opts.preserveFillState) this._lastFillState = null;
     this._clearPaintEraseActive();
     this.fogEditor.disable();
     this.fogEditor.setBrushActive(false);
@@ -3508,11 +3512,12 @@ export class GMApp {
       let polys = fog.polygons;
       for (const blob of blobs) polys = subtractFromAll(polys, blob.outer);
       this.state.setFog({ polygons: polys });
-      // Brush erase stays sticky — drag again to carve more without
-      // re-clicking Erase. Mirrors Fill erase's repeat-click flow and
-      // matches the "Brush mode is on" reading of the lit Brush button.
-      // Drop the inherit snapshot (was paint-only anyway).
-      this._pendingPaintInherit = null;
+      // Single-shot: clear the Paint/Erase button + end the action
+      // so the GM gets visible "stroke committed" feedback. Brush
+      // mode (the toggle button at the top of the panel) stays lit
+      // — that's the sticky preference, the action button is the
+      // per-commit signal. Re-click Erase to carve another stroke.
+      this._endAction();
       return;
     }
     // Paint — one new polygon per blob, holes preserved (a donut scribble
@@ -3550,13 +3555,12 @@ export class GMApp {
       createdAt: now,
     }));
     this.state.setFog({ polygons: [...fog.polygons, ...newPolys] });
-    // Brush paint stays sticky — drag again to paint another stroke
-    // without re-clicking Paint. The Brush mode button is lit and the
-    // brush is functionally engaged; the next pointer-down on the
-    // canvas starts a fresh stroke. Drop the inherit snapshot so a
-    // second stroke doesn't keep inheriting from a now-stale exemplar
-    // (selection cleared on the first commit's setFog cascade anyway).
-    this._pendingPaintInherit = null;
+    // Single-shot: clear the Paint button + end the action so the
+    // GM gets visible "stroke committed" feedback. Brush mode (the
+    // toggle button at the top of the panel) stays lit — that's
+    // the sticky preference; the action button is the per-commit
+    // signal. Re-click Paint to lay another stroke.
+    this._endAction();
   }
 
   /** v2.12 Magic Wand commit. Click in Fill mode runs flood-fill at
@@ -3609,12 +3613,16 @@ export class GMApp {
     };
     this.state.setFog({ polygons: [...fog.polygons, poly] });
     // Stash the seed so the Tolerance slider can re-flood and
-    // replace this polygon's vertices. Stays alive until another
-    // fill click or end-of-action.
+    // replace this polygon's vertices. Survives _endAction below
+    // because the Tolerance handler reads _lastFillState directly
+    // and doesn't care whether the fill action is "live" — the
+    // refinement workflow stays intact after the button clears.
     this._lastFillState = { polyId: poly.id, seedX: mapPos.x, seedY: mapPos.y, action };
-    // Fill stays in action mode -- each click is a new fill -- so we
-    // DON'T call _endAction here. The GM exits by re-clicking Paint
-    // or switching mode.
+    // Single-shot: clear the Paint button + end the action so the
+    // GM gets visible "fill committed" feedback — matches brush +
+    // polygon. preserveFillState keeps _lastFillState alive so the
+    // Tolerance slider can still refine this polygon.
+    this._endAction({ preserveFillState: true });
   }
 
   /** v2.12 — re-run the last fill at a new tolerance and replace the
