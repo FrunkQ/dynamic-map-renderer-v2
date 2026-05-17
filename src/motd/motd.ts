@@ -35,10 +35,11 @@ export interface MotdEntry {
 }
 
 export const CURRENT_MOTD: MotdEntry = {
-  version: '2.12.0',
-  title:   'Welcome to v2.12 — Immersion',
-  body:    [
-    "Animated backdrops, MapFX shaders, and per-polygon shader effects landed in this release. Pop a Coloured Flames patch on a campfire, try the new Aurora or Embers backdrops in the FX menu, and tweak the colours to match your map.",
-    "If you spot bugs or have ideas, the Discord link is in the About dialog (hamburger menu → About). Thanks for trying Mappadux at home.",
-  ],
+  // Empty version disables the MOTD popup entirely — the system stays
+  // wired up and ready to fire whenever a future release wants to
+  // surface a message. To activate: set `version` to the app version
+  // the message is about (e.g. '2.13.0') and fill in title + body.
+  version: '',
+  title:   '',
+  body:    [],
 };
