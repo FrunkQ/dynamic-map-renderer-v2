@@ -49,6 +49,7 @@ export interface FogVertex {
 export type OverlayKind =
   | 'fog'
   | 'fire'
+  | 'firestorm'
   | 'river'
   | 'ocean'
   | 'light'

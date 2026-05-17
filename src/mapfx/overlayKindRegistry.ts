@@ -195,6 +195,13 @@ const SVG_MIST =
   '<path d="M2 17h9"/>' +
   '<path d="M14 17h7"/>';
 
+// Flame body crowned with a smoke wisp — distinguishes the volumetric
+// Firestorm from the flat Coloured Flames icon.
+const SVG_FIRESTORM =
+  '<path d="M12 22a6 6 0 0 0 6-6c0-2-1-3-2-4 0 3-2 5-4 5s-4-2-4-5c-1 1-2 2-2 4a6 6 0 0 0 6 6Z"/>' +
+  '<path d="M9 6c1 1 2 1 3-1 1 2 2 2 3 1"/>' +
+  '<path d="M7 3c2 1 3 1 5-1 2 2 3 2 5 1"/>';
+
 // defaultRadius is now in CSS pixels — see the type doc above. Brush stays
 // visually the same size as you zoom in / out; the resulting map polygon
 // shrinks at higher zoom which gives fine-detail painting for free.
@@ -354,9 +361,28 @@ const MIST_SHADER_PARAMS: ShaderParamDef[] = [
   { id: 'direction', label: 'Direction', min: 0.0,  max: 6.2831853,  step: 0.087266, default: 0.0 },
 ];
 
+// Firestorm shader params. Per-polygon volumetric fire/smoke columns
+// — same algorithm + cost profile as the Firestorm backdrop, masked
+// by the polygon. uColor (the kind's main colour swatch) drives the
+// hot fire core; uSmoke fills the cool smoke region above. Marked
+// (heavy) in the label so GMs notice this is the priciest MapFX
+// shader.
+const FIRESTORM_SHADER_PARAMS: ShaderParamDef[] = [
+  // Smoke is rendered as a separate vec3 alongside the per-poly
+  // colour swatch (uColor = fire core). Default '#1a0a08' matches
+  // the backdrop's smoke tint — a deep warm black.
+  { id: 'smoke',     label: 'Smoke',     type: 'color', default: '#1a0a08' },
+  { id: 'intensity', label: 'Intensity',                min: 0.2, max: 2.0, step: 0.05, default: 1.0 },
+];
+
 export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
   fog:          { id: 'fog',          label: 'Fog of War',      iconSvg: SVG_FOG,          defaultColor: '#000000', defaultRadius: 25, blend: 'normal', animated: false, selectByInterior: true,  allowColor: true,  z: 100, defaultEdgeFade: 0 },
   fire:         { id: 'fire',         label: 'Coloured Flames', iconSvg: SVG_FLAME,        defaultColor: '#ff5a14', defaultRadius: 30, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 10, shader: 'fire',         shaderParams: FIRE_SHADER_PARAMS         },
+  // Firestorm: volumetric raymarched fire+smoke columns. Normal
+  // blend so dense columns obscure the map underneath; defaultColor
+  // sets the fire core hue. Marked '(heavy)' in the label so GMs
+  // notice this is the priciest MapFX shader.
+  firestorm:    { id: 'firestorm',    label: 'Firestorm (heavy)', iconSvg: SVG_FIRESTORM,   defaultColor: '#ffa64d', defaultRadius: 30, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 11, shader: 'firestorm',    shaderParams: FIRESTORM_SHADER_PARAMS    },
   river:        { id: 'river',        label: 'River',           iconSvg: SVG_WATER,        defaultColor: '#5aa9d6', defaultRadius: 35, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'river',        shaderParams: RIVER_SHADER_PARAMS        },
   ocean:        { id: 'ocean',        label: 'Ocean',           iconSvg: SVG_WATER,        defaultColor: '#5fa9d6', defaultRadius: 60, blend: 'normal', animated: true,  selectByInterior: false, allowColor: true,  z: 5,  shader: 'ocean',        shaderParams: OCEAN_SHADER_PARAMS        },
   light:        { id: 'light',        label: 'Magical Light',   iconSvg: SVG_LIGHT,        defaultColor: '#ffd76b', defaultRadius: 35, blend: 'screen', animated: true,  selectByInterior: false, allowColor: true,  z: 8,  shader: 'light',        shaderParams: LIGHT_SHADER_PARAMS        },
@@ -376,7 +402,7 @@ export const OVERLAY_KIND_REGISTRY: Record<OverlayKind, OverlayKindEntry> = {
  *  polygons overlap, the kind earlier in this list wins the click. */
 export const OVERLAY_KIND_ORDER: OverlayKind[] = [
   'fog',
-  'fire', 'river', 'ocean', 'light',
+  'fire', 'firestorm', 'river', 'ocean', 'light',
   'mist', 'thundercloud',
   'portal', 'starfield',
 ];
