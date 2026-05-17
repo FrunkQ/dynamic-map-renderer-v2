@@ -87,8 +87,12 @@ export interface FogPolygon {
    * (intensity, scale, …) stay on FogState.shaderParams[kind]. Renderer
    * resolves a uniform by reading poly.shaderParams[id] first, then
    * fog.shaderParams[kind][id], then the param's registry default.
+   *
+   * Value union: `number` for slider/toggle params, `'#rrggbb'` hex
+   * string for `'color'` params. The renderer + GM panel dispatch on
+   * the matching ShaderParamDef's `type`.
    */
-  shaderParams?: Record<string, number>;
+  shaderParams?: Record<string, number | string>;
   /**
    * v2.12 — universal edge-fade amount, 0..1. Applied as a Gaussian
    * blur to the polygon's alpha mask when it's rasterised. 0 = hard
@@ -112,7 +116,7 @@ export interface FogState {
    * the kind's registry defaults — so omitting the field entirely on a
    * pre-existing FogState is fine (the renderer applies defaults).
    */
-  shaderParams?: Partial<Record<OverlayKind, Record<string, number>>>;
+  shaderParams?: Partial<Record<OverlayKind, Record<string, number | string>>>;
 }
 
 // ─── Filters ─────────────────────────────────────────────────────────────────

@@ -182,7 +182,7 @@ export class GMApp {
    *  inherits the selected exemplar's colour + shaderParams ("paint
    *  another like this"). Set in _startAction('paint'), cleared in
    *  _endAction. Null when paint started with no selection. */
-  private _pendingPaintInherit: { color: string; shaderParams: Record<string, number>; edgeFade: number } | null = null;
+  private _pendingPaintInherit: { color: string; shaderParams: Record<string, number | string>; edgeFade: number } | null = null;
   /** v2.12 — kind picked in the FoW & MapFX panel for new strokes/polygons. */
   private activeOverlayKind: OverlayKind = 'fog';
   /** v2.12 — sticky Drawing Mode preference (persisted to localStorage). */
@@ -3041,18 +3041,16 @@ export class GMApp {
       //   • Mid-Paint with inheritance: show the snapshot values so the
       //     GM can see what the new polygon will get.
       //   • Otherwise: show the kind draft (next-new defaults).
-      let current: number;
-      if (editingPoly) {
-        const v = polyValues[p.id];
-        current = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
-      } else if (inherit) {
-        const v = inherit.shaderParams[p.id];
-        current = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
-      } else {
-        const v = draft[p.id];
-        current = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
-      }
-      const onChange = (v: number) => {
+      //
+      // Stored values are typed `number | string` so the colour-param
+      // branch reads a hex string while slider/toggle branches read
+      // numbers. The helpers below pick the right control per type.
+      const sourceMap: Record<string, number | string> =
+        editingPoly ? polyValues :
+        inherit     ? inherit.shaderParams :
+                      draft;
+      const stored = sourceMap[p.id];
+      const onChange = (v: number | string) => {
         // Always update the kind draft so subsequent new polygons
         // inherit the latest value. When a polygon is selected, ALSO
         // patch that polygon's own shaderParams in a single state
@@ -3063,9 +3061,17 @@ export class GMApp {
         if (editingPoly) this.state.setPolygonShaderParams(editingPoly.id, { [p.id]: v });
         if (this._pendingPaintInherit) this._pendingPaintInherit.shaderParams[p.id] = v;
       };
-      const row = (p.type === 'toggle')
-        ? this._buildShaderToggleRow(p, k.label, current, onChange)
-        : this._buildShaderSliderRow(p, k.label, current, onChange);
+      let row: HTMLElement;
+      if (p.type === 'color') {
+        const hex = typeof stored === 'string' && /^#[0-9a-fA-F]{6}$/.test(stored) ? stored : p.default;
+        row = this._buildShaderColorRow(p, k.label, hex, (v) => onChange(v));
+      } else if (p.type === 'toggle') {
+        const n = typeof stored === 'number' && Number.isFinite(stored) ? stored : p.default;
+        row = this._buildShaderToggleRow(p, k.label, n, (v) => onChange(v));
+      } else {
+        const n = typeof stored === 'number' && Number.isFinite(stored) ? stored : p.default;
+        row = this._buildShaderSliderRow(p, k.label, n, (v) => onChange(v));
+      }
       container.appendChild(row);
     }
   }
@@ -3074,7 +3080,7 @@ export class GMApp {
    *  Matches the FilterPanel's `.toggle-switch` styling. onChange
    *  fires with 1 (on) or 0 (off). */
   private _buildShaderToggleRow(
-    p: import('../mapfx/overlayKindRegistry.ts').ShaderParamDef,
+    p: import('../mapfx/overlayKindRegistry.ts').ToggleParamDef,
     kindLabel: string,
     initial: number,
     onChange: (v: number) => void,
@@ -3105,7 +3111,7 @@ export class GMApp {
    *  onChange handler is fired on every input event with the parsed
    *  numeric value. */
   private _buildShaderSliderRow(
-    p: import('../mapfx/overlayKindRegistry.ts').ShaderParamDef,
+    p: import('../mapfx/overlayKindRegistry.ts').SliderParamDef,
     kindLabel: string,
     initial: number,
     onChange: (v: number) => void,
@@ -3130,6 +3136,29 @@ export class GMApp {
     wireSliderTooltip(slider, `${p.label} — ${kindLabel}`);
     row.appendChild(labelEl);
     row.appendChild(slider);
+    return row;
+  }
+
+  /** Helper: build one labelled colour-swatch row for a shader param of
+   *  `type: 'color'`. Native `<input type="color">` so the OS picker
+   *  handles the colour wheel; we just relay the hex string upward. */
+  private _buildShaderColorRow(
+    p: import('../mapfx/overlayKindRegistry.ts').ColorParamDef,
+    kindLabel: string,
+    initial: string,
+    onChange: (v: string) => void,
+  ): HTMLElement {
+    const row = document.createElement('label');
+    row.className = 'fog-brush-row fog-brush-row--color';
+    const labelEl = document.createElement('span');
+    labelEl.textContent = p.label;
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = initial;
+    input.title = `${p.label} — ${kindLabel}`;
+    input.addEventListener('input', () => onChange(input.value));
+    row.appendChild(labelEl);
+    row.appendChild(input);
     return row;
   }
 

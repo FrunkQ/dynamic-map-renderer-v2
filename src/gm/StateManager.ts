@@ -110,7 +110,7 @@ export class StateManager {
    *  with any existing values for that kind; other kinds untouched. Goes
    *  through setFog so the change broadcasts on the same fog_update path
    *  as polygon edits. */
-  setShaderParams(kind: import('../types.ts').OverlayKind, patch: Record<string, number>): void {
+  setShaderParams(kind: import('../types.ts').OverlayKind, patch: Record<string, number | string>): void {
     const fog = this.state.fog;
     const existing = fog.shaderParams?.[kind] ?? {};
     const next: FogState = {
@@ -177,7 +177,7 @@ export class StateManager {
    *  polygon-scoped params like river direction). No-op if the polygon
    *  id isn't found. Other polygons untouched. Goes through setFog so
    *  the change broadcasts on the same fog_update path. */
-  setPolygonShaderParams(polyId: string, patch: Record<string, number>): void {
+  setPolygonShaderParams(polyId: string, patch: Record<string, number | string>): void {
     const fog = this.state.fog;
     let touched = false;
     const polygons = fog.polygons.map((p) => {

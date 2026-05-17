@@ -37,36 +37,67 @@ export type BlendMode =
   ;
 
 /**
- * Per-kind shader parameter declaration (v2.12). Mirrors the filter
- * `SliderParam` shape so the GM-panel renderer can build identical sliders
- * for both. Each param becomes a `u<PascalCase>` uniform in the kind's
- * fragment shader (e.g. id 'intensity' → uniform float uIntensity).
+ * Per-kind / per-backdrop shader parameter declaration (v2.12).
+ * Discriminated by `type`:
  *
- * Every param is per-polygon — stored on FogPolygon.shaderParams. The
- * matching kind-level entry on FogState.shaderParams[kind] holds the
- * "draft" / last-used values which new polygons inherit at paint time
- * and which the panel sliders fall back to when no polygon is selected.
- * This gives the GM:
- *   • Sliders that always edit the currently-selected polygon.
- *   • New polygons that inherit the previously-tuned look.
- *   • Reselecting a polygon snaps the sliders back to its own values.
+ *   • slider — numeric range (default). Carries `min`/`max`/`step`. The
+ *     value is a float; the matching uniform is `uniform float u<Id>`.
+ *   • toggle — styled on/off switch. Value travels as 0 or 1 so the
+ *     shader reads it as a plain float (`uniform float u<Id>`).
+ *   • color  — colour swatch. Value is a '#rrggbb' hex string; the
+ *     renderer hands it to the shader as `uniform vec3 u<Id>`.
+ *
+ * Each param becomes a `u<PascalCase>` uniform in the kind's fragment
+ * shader (e.g. id 'intensity' → uniform float uIntensity; id 'tint' →
+ * uniform vec3 uTint).
+ *
+ * For MapFX kinds, every param is per-polygon — stored on
+ * FogPolygon.shaderParams. The matching kind-level entry on
+ * FogState.shaderParams[kind] holds the "draft" / last-used values
+ * which new polygons inherit at paint time and which the panel sliders
+ * fall back to when no polygon is selected.
  */
-export interface ShaderParamDef {
-  id:      string;
-  label:   string;
+interface BaseShaderParamDef {
+  id:    string;
+  label: string;
+}
+
+export interface SliderParamDef extends BaseShaderParamDef {
+  type?:   'slider';
   min:     number;
   max:     number;
   step:    number;
   default: number;
-  /**
-   * UI rendering hint. 'slider' (default) shows a continuous range
-   * input; 'toggle' shows a styled on/off switch. Toggle params
-   * still carry numeric uniform values to the shader (0 or 1) so
-   * GLSL code reads them as plain floats. min/max/step are ignored
-   * for toggles; default 0 = OFF, 1 = ON.
-   */
-  type?:   'slider' | 'toggle';
 }
+
+export interface ToggleParamDef extends BaseShaderParamDef {
+  type:    'toggle';
+  /** 0 = OFF, 1 = ON. The shader receives this as a float uniform. */
+  default: number;
+  /** Permitted for compatibility with the historical ShaderParamDef
+   *  shape but ignored by the UI for toggles. */
+  min?:    number;
+  max?:    number;
+  step?:   number;
+}
+
+export interface ColorParamDef extends BaseShaderParamDef {
+  type:    'color';
+  /** '#rrggbb' hex string. Pushed to the shader as a `vec3` uniform. */
+  default: string;
+}
+
+export type ShaderParamDef = SliderParamDef | ToggleParamDef | ColorParamDef;
+
+/** Run-time type guards. Param values are stored as `number | string` in
+ *  the broadcast/state shape; these dispatch a single branch in the panel
+ *  + renderer rather than ad-hoc `typeof === 'string'` everywhere. */
+export const isColorParam = (p: ShaderParamDef): p is ColorParamDef =>
+  p.type === 'color';
+export const isToggleParam = (p: ShaderParamDef): p is ToggleParamDef =>
+  p.type === 'toggle';
+export const isSliderParam = (p: ShaderParamDef): p is SliderParamDef =>
+  p.type === undefined || p.type === 'slider';
 
 export interface OverlayKindEntry {
   id:                OverlayKind;

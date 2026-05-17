@@ -1027,9 +1027,16 @@ export class Renderer {
       }
       if (!entry) {
         // First sighting of this polygon — build material + mesh.
-        const paramUniforms: Record<string, { value: number }> = {};
+        // Slider/toggle params land as float uniforms; color params
+        // land as THREE.Color so the GLSL side reads `uniform vec3`.
+        const paramUniforms: Record<string, { value: number | THREE.Color }> = {};
         for (const p of k.shaderParams ?? []) {
-          paramUniforms[`u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`] = { value: p.default };
+          const uName = `u${p.id.charAt(0).toUpperCase()}${p.id.slice(1)}`;
+          if (p.type === 'color') {
+            paramUniforms[uName] = { value: new THREE.Color(p.default) };
+          } else {
+            paramUniforms[uName] = { value: p.default };
+          }
         }
         const baseUniforms: Record<string, { value: unknown }> = {
           uMask:    { value: maskEntry.texture },
@@ -1123,7 +1130,16 @@ export class Renderer {
         const u = entry.material.uniforms[uName];
         if (!u) continue;
         const raw = polyValues[p.id];
-        u.value = typeof raw === 'number' && Number.isFinite(raw) ? raw : p.default;
+        if (p.type === 'color') {
+          // Reuse the existing THREE.Color object so the uniform
+          // binding stays valid (Color is a vec3-compatible source
+          // for Three's uniform pipeline). Falls back to the param
+          // default when the poly hasn't set this one yet.
+          const hex = typeof raw === 'string' ? raw : p.default;
+          (u.value as THREE.Color).set(hex);
+        } else {
+          u.value = typeof raw === 'number' && Number.isFinite(raw) ? raw : p.default;
+        }
       }
     }
   }
