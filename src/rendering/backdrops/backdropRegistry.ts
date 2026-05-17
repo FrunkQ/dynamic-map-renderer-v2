@@ -71,19 +71,29 @@ export interface BackdropEntry {
   textures?: Record<string, import('three').Texture>;
 }
 
+const NONE_BACKDROP: BackdropEntry = {
+  id: 'none', label: 'None (solid colour)',
+  fragment: 'gl_FragColor = vec4(uBgColor, 1.0);',
+};
+
+// All available backdrops. 'None' stays pinned to the top of the
+// dropdown (special "no effect" entry); the rest sort alphabetically
+// by label so a growing list stays scannable.
 export const BACKDROPS: BackdropEntry[] = [
-  { id: 'none', label: 'None (solid colour)', fragment: 'gl_FragColor = vec4(uBgColor, 1.0);' },
-  STARFIELD_BACKDROP,
-  AURORA_BACKDROP,
-  EMBERS_BACKDROP,
-  MIST_BACKDROP,
-  FIRESTORM_BACKDROP,
-  PORTAL_BACKDROP,
-  NOISE_BACKDROP,
-  THUNDERCLOUD_BACKDROP,
-  FIRE_BACKDROP,
-  LIGHT_BACKDROP,
-  OCEAN_BACKDROP,
+  NONE_BACKDROP,
+  ...[
+    STARFIELD_BACKDROP,
+    AURORA_BACKDROP,
+    EMBERS_BACKDROP,
+    MIST_BACKDROP,
+    FIRESTORM_BACKDROP,
+    PORTAL_BACKDROP,
+    NOISE_BACKDROP,
+    THUNDERCLOUD_BACKDROP,
+    FIRE_BACKDROP,
+    LIGHT_BACKDROP,
+    OCEAN_BACKDROP,
+  ].sort((a, b) => a.label.localeCompare(b.label)),
 ];
 
 /** Backwards-compat alias map for backdrop kind ids that have been
