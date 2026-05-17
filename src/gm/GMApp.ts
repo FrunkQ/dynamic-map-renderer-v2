@@ -316,7 +316,8 @@ export class GMApp {
   private transitionParamsContainer!: HTMLElement;
   private filterSelect!:            HTMLSelectElement;
   private filterParamsContainer!:   HTMLElement;
-  private viewBgColour!:           HTMLInputElement;
+  // viewBgColour swatch removed in v2.12 — bg colour lives in the
+  // backdrop popover's Background row now.
   private viewBgFxBtn!:            HTMLButtonElement;
   /** Sparkle button on the FoW panel (right of #fog-colour). Opens
    *  the same FxPopover style as the Backdrop FX button, populated
@@ -336,6 +337,10 @@ export class GMApp {
    *  polygon selected) bypass the flag because they originate
    *  outside the popover. */
   private _suppressPopoverRefresh = false;
+  // No backdrop-side suppress flag needed: the syncView path (which
+  // runs on every state change) doesn't refresh the bg popover, so
+  // bg slider drags don't lose pointer capture mid-stroke. If a
+  // future refresh hook gets added there, mirror the MapFX pattern.
   /** v2.12.x — full video bytes waiting to be broadcast as a
    *  MsgVideoBundle follow-up after the map_change that carried the
    *  snapshot. Set in loadMap when the new map is a video asset;
@@ -762,6 +767,26 @@ export class GMApp {
     const el = document.getElementById('mapfx-kind-display');
     if (!el) return;
     el.textContent = overlayKind(this.activeOverlayKind).label;
+  }
+
+  /** v2.12 — sibling to _updateActiveKindDisplay for the Backdrop
+   *  side. Shows the active backdrop's label on the Map panel so the
+   *  GM can see at a glance whether anything is filling the bars
+   *  without opening the popover. */
+  private _updateActiveBgDisplay(): void {
+    const el = document.getElementById('view-bg-display');
+    if (!el) return;
+    const kind = this.state.getState().view.backdrop?.kind ?? 'none';
+    if (kind === 'none') {
+      el.textContent = 'None';
+      return;
+    }
+    // Lazy-resolve label from the backdrop registry (already loaded
+    // if a backdrop has ever been picked; the import is cached).
+    void import('../rendering/backdrops/backdropRegistry.ts').then(({ BACKDROPS }) => {
+      const entry = BACKDROPS.find((b) => b.id === kind);
+      el.textContent = entry?.label ?? kind;
+    });
   }
 
   /** Off-screen viewport indicators — small edge-pinned pills with a
@@ -2256,7 +2281,6 @@ export class GMApp {
     this.transitionParamsContainer  = q('#transition-params');
     this.filterSelect               = q<HTMLSelectElement>('#filter-select');
     this.filterParamsContainer = q('#filter-params');
-    this.viewBgColour          = q<HTMLInputElement>('#view-bg-colour');
     this.viewBgFxBtn           = q<HTMLButtonElement>('#view-bg-fx-btn');
     this.mapFxBtn              = q<HTMLButtonElement>('#mapfx-fx-btn');
     this.roomCodeEl            = q('#room-code');
@@ -3894,11 +3918,11 @@ export class GMApp {
       await this.loadBundleFromFile(file);
     });
 
-    // Background colour (still a direct colour picker — not part of viewport editor)
-    this.viewBgColour.addEventListener('input', () => {
-      const v = this.state.getState().view;
-      this.state.setView({ ...v, backgroundColor: this.viewBgColour.value });
-    });
+    // Background colour: inline #view-bg-colour swatch removed in
+    // v2.12. The bg colour is now edited via the Backdrop popover's
+    // Background row (see _populateBgFxPopover). Same state path
+    // (state.setView({ ..., backgroundColor })), just no inline DOM
+    // input to bind to.
 
     // FX button — opens a small popover of animated-backdrop options. Lives
     // here next to the colour picker because backdrop is the same kind of
@@ -4107,79 +4131,104 @@ export class GMApp {
 
   /** Open the backdrop FX popover anchored under the FX button.
    *
-   *  Layout: a list of backdrop options at the top; below it a params
-   *  section that auto-rebuilds whenever the selection changes. Clicking
-   *  an option commits the new backdrop kind AND keeps the popover open
-   *  so the GM can immediately tweak its tint / speed / etc.
+   *  Layout mirrors the MapFX popover for full consistency:
+   *    • <select> dropdown for the backdrop kind (compact, scales as
+   *      backdrops are added without growing the popover vertically).
+   *    • Background Colour row (always present, even when backdrop is
+   *      'none' — the bg colour is the pack-level setting that fills
+   *      the bars when no backdrop is active).
+   *    • Active backdrop's params (slider / toggle / color rows).
    *
-   *  Built on the shared FxPopover component (src/gm/FxPopover.ts) so
-   *  the visual + dismissal behaviour matches the MapFX sparkle button. */
+   *  Drag-capture protection: the popover's slider / colour / toggle
+   *  onChange paths flip _suppressBgPopoverRefresh so the structural
+   *  refresh hooks skip the rebuild mid-drag. */
   private _openBgFxPopover(): void {
     void import('../rendering/backdrops/backdropRegistry.ts').then(async ({ BACKDROPS }) => {
       if (this._bgFxPopover) return;
       const { openFxPopover } = await import('./FxPopover.ts');
       this._bgFxPopover = openFxPopover({
         anchor: this.viewBgFxBtn,
-        populate: (root) => {
-          const optionList = document.createElement('div');
-          optionList.className = 'fx-popover-options';
-          root.appendChild(optionList);
-
-          const paramsBox = document.createElement('div');
-          paramsBox.className = 'fx-popover-params';
-          root.appendChild(paramsBox);
-
-          const refreshParams = (kind: string) => {
-            paramsBox.innerHTML = '';
-            const entry = BACKDROPS.find((b) => b.id === kind);
-            const params = entry?.params ?? [];
-            if (params.length === 0) { paramsBox.hidden = true; return; }
-            paramsBox.hidden = false;
-            const label = entry?.label ?? kind;
-            const stored = this.state.getState().view.backdrop?.params ?? {};
-            for (const p of params) {
-              const onChange = (v: number | string) => this._setBackdropParam(p.id, v);
-              let row: HTMLElement;
-              if (p.type === 'color') {
-                const v = stored[p.id];
-                const hex = typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : p.default;
-                row = this._buildShaderColorRow(p, label, hex, onChange);
-              } else if (p.type === 'toggle') {
-                const v = stored[p.id];
-                const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
-                row = this._buildShaderToggleRow(p, label, n, onChange);
-              } else {
-                const v = stored[p.id];
-                const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
-                row = this._buildShaderSliderRow(p, label, n, onChange);
-              }
-              paramsBox.appendChild(row);
-            }
-          };
-
-          const currentKind = this.state.getState().view.backdrop?.kind ?? 'none';
-          for (const b of BACKDROPS) {
-            const opt = document.createElement('button');
-            opt.type = 'button';
-            opt.className = 'fx-popover-option';
-            if (b.id === currentKind) opt.classList.add('fx-popover-option--selected');
-            opt.textContent = b.label;
-            opt.addEventListener('click', (e) => {
-              e.stopPropagation();
-              this._applyBackdrop(b.id);
-              for (const o of optionList.querySelectorAll('.fx-popover-option')) {
-                o.classList.remove('fx-popover-option--selected');
-              }
-              opt.classList.add('fx-popover-option--selected');
-              refreshParams(b.id);
-            });
-            optionList.appendChild(opt);
-          }
-          refreshParams(currentKind);
-        },
+        populate: (root) => { this._populateBgFxPopover(root, BACKDROPS); },
         onClose: () => { this._bgFxPopover = null; },
       });
     });
+  }
+
+  /** Fill the backdrop popover with the kind dropdown + bg colour row
+   *  + active backdrop's params. Pulled into its own method so
+   *  populate() and refresh() share one builder. */
+  private _populateBgFxPopover(
+    root: HTMLElement,
+    BACKDROPS: import('../rendering/backdrops/backdropRegistry.ts').BackdropEntry[],
+  ): void {
+    const view = this.state.getState().view;
+    const currentKind = view.backdrop?.kind ?? 'none';
+    const entry = BACKDROPS.find((b) => b.id === currentKind);
+
+    // ─── Kind dropdown ───────────────────────────────────────────────
+    const kindSelect = document.createElement('select');
+    kindSelect.className = 'fx-popover-kind-select';
+    for (const b of BACKDROPS) {
+      const opt = document.createElement('option');
+      opt.value = b.id;
+      opt.textContent = b.label;
+      if (b.id === currentKind) opt.selected = true;
+      kindSelect.appendChild(opt);
+    }
+    kindSelect.addEventListener('change', () => {
+      this._applyBackdrop(kindSelect.value);
+      this._bgFxPopover?.refresh();
+    });
+    root.appendChild(kindSelect);
+
+    // ─── Background Colour (always available) ────────────────────────
+    // The pack-level bg colour fills the bars when no backdrop is
+    // active, and serves as the base over which any backdrop renders
+    // its additive / alpha-composited output.
+    const bgDef: import('../mapfx/overlayKindRegistry.ts').ColorParamDef = {
+      id: 'background', label: 'Background', type: 'color', default: '#000000',
+    };
+    const bgRow = this._buildShaderColorRow(
+      bgDef, 'Backdrop', view.backgroundColor || '#000000',
+      (hex) => {
+        // setView writes through to onStateChange which applies the
+        // colour to the renderer + broadcasts. syncView updates the
+        // panel label but doesn't rebuild the popover, so the live
+        // drag keeps pointer capture without extra protection.
+        this.state.setView({ ...this.state.getState().view, backgroundColor: hex });
+      },
+    );
+    root.appendChild(bgRow);
+
+    // ─── Active backdrop's params (if any) ───────────────────────────
+    const params = entry?.params ?? [];
+    if (params.length === 0) return;
+    const label = entry?.label ?? currentKind;
+    const stored = view.backdrop?.params ?? {};
+    for (const p of params) {
+      const onChange = (v: number | string) => {
+        // setView (inside _setBackdropParam) writes through to
+        // onStateChange which pushes the param value into the clip-
+        // pass uniform; syncView updates the panel label but
+        // doesn't rebuild the popover, so the drag survives.
+        this._setBackdropParam(p.id, v);
+      };
+      let row: HTMLElement;
+      if (p.type === 'color') {
+        const v = stored[p.id];
+        const hex = typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : p.default;
+        row = this._buildShaderColorRow(p, label, hex, onChange);
+      } else if (p.type === 'toggle') {
+        const v = stored[p.id];
+        const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
+        row = this._buildShaderToggleRow(p, label, n, onChange);
+      } else {
+        const v = stored[p.id];
+        const n = typeof v === 'number' && Number.isFinite(v) ? v : p.default;
+        row = this._buildShaderSliderRow(p, label, n, onChange);
+      }
+      root.appendChild(row);
+    }
   }
 
   // _closeBgFxPopover removed — callers now use `this._bgFxPopover?.close()`
@@ -4222,7 +4271,11 @@ export class GMApp {
 
   private syncView(state: SessionState): void {
     this.viewportEditor.setView(state.view);
-    this.viewBgColour.value = state.view.backgroundColor;
+    // Inline #view-bg-colour swatch was removed in v2.12; the
+    // backdrop popover's Background row picks up the colour when
+    // opened. Update the always-visible kind label on the Map panel
+    // instead.
+    this._updateActiveBgDisplay();
     this._refreshBgFxButtonState();
     if (state.projectorViewport) this.projectorEditor.setViewport(state.projectorViewport);
     this._refreshRectOverlays();

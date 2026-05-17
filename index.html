@@ -92,10 +92,10 @@
         </div>
         <button id="fix-missing-map-btn" class="btn btn--danger btn--sm btn--full" hidden>⚠ Fix Missing Map</button>
         <div class="param-row param-row--bg">
-          <label for="view-bg-colour">Backdrop</label>
+          <label>Backdrop</label>
           <div class="bg-controls">
-            <input type="color" id="view-bg-colour" value="#000000" title="Solid colour shown behind the map and around its edges (letterbox / pillarbox fill). Defaults to the map's top-left pixel on first load so the bars blend with the artwork." />
-            <button type="button" id="view-bg-fx-btn" class="icon-btn bg-fx-btn" title="Pick an animated effect for the letterbox / pillarbox bars around the map (per-map setting). The effect only paints the dead bars — never overlays the map itself, so calibrated tabletop projection stays clean. Transparent pixels in the map still show the solid background colour, not the backdrop." aria-label="Backdrop effect" aria-haspopup="true" aria-expanded="false">
+            <span class="mapfx-kind-label" id="view-bg-display" title="Active backdrop — click the sparkle button to pick + tune backdrop, background colour, and any backdrop-specific params.">None</span>
+            <button type="button" id="view-bg-fx-btn" class="icon-btn bg-fx-btn" title="Pick + tune the backdrop: which animated effect fills the letterbox / pillarbox bars (Starfield, Aurora, Embers, etc.), the solid background colour, and the backdrop's own params (colour, intensity, speed, etc.)." aria-label="Backdrop effect" aria-haspopup="true" aria-expanded="false">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 3 L13.5 10.5 L21 12 L13.5 13.5 L12 21 L10.5 13.5 L3 12 L10.5 10.5 Z" />
               </svg>
