@@ -98,6 +98,7 @@ used under the [Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unport
 | Firestorm | GPU hacks #07 - DirectX 12 (wtB3RG) by PrzemyslawZaworski (2019) — same source as the Firestorm backdrop, ported again as a polygon-masked MapFX kind | https://www.shadertoy.com/view/wtB3RG |
 | Aurora | Original — drifting curtain bands, GM-tunable colours (same algorithm as the Aurora backdrop) | Mappadux | — | — |
 | Embers | Original — parallax cell-grid sparks, GM-tunable tint (same algorithm as the Embers backdrop) | Mappadux | — | — |
+| Noise | Original — colourable TV-static, single hash per fragment. Cheap; default white tint reads as classic monochrome static. | Mappadux | — | — |
 
 ### MIT-licensed shaders
 
@@ -138,21 +139,33 @@ Modifications made to "A river" (Pierco fork):
 ## Animated Backdrops
 
 The animated backdrops that fill the letterbox / pillarbox bars
-around the map. Same attribution rules as MapFX — Mappadux remains
-free, attribution stays.
+around the map. As of v2.12 every shareable MapFX kind also runs
+as a backdrop via the same shader source — one fragment.glsl, two
+rendering paths. Credits are inherited from the MapFX side; the
+attributions listed here cover the dual-use cases.
 
-| Backdrop | Name | Author | Licence | Source |
-|----------|------|--------|---------|--------|
-| Starfield | StarField practice (tllfRX) — adapted as backdrop | Deadtotem (2020) | CC BY-NC-SA 3.0 | https://www.shadertoy.com/view/tllfRX |
-| Aurora | Original — drifting curtain bands, GM-tunable colours | Mappadux | — | — |
-| Embers | Original — parallax cell-grid sparks, GM-tunable tint | Mappadux | — | — |
-| Smooth Fog | Smooth Fog Shader (7ldGWf) — remix of [pontino's Fog Shader](https://www.shadertoy.com/view/tst3zr) | deusnovus (2021) | CC BY-NC-SA 3.0 | https://www.shadertoy.com/view/7ldGWf |
-| Firestorm | GPU hacks #07 - DirectX 12 (wtB3RG) — ported the GLSL portion only, 128-step raymarch reduced to 48 steps for browser cost | PrzemyslawZaworski (2019) | CC BY-NC-SA 3.0 | https://www.shadertoy.com/view/wtB3RG |
+| Backdrop | MapFX source kind | Author | Licence |
+|----------|-------------------|--------|---------|
+| Aurora | aurora | Mappadux original | — |
+| Coloured Flames | fire | nimitz (2014) — see MapFX section above | CC BY-NC-SA 3.0 |
+| Embers | embers | Mappadux original | — |
+| Firestorm | firestorm | PrzemyslawZaworski (2019) — GLSL fragment ported, raymarch reduced from 128 to 48 steps | CC BY-NC-SA 3.0 |
+| Magic Portal | portal | Delincoter (2021) — see MapFX section above | CC BY-NC-SA 3.0 |
+| Magical Light | light | Mappadux original | — |
+| Mist / Smoke | mist | deusnovus (2021) — see MapFX section above; `smooth_fog` backdrop id retired in v2.12, aliased to `mist` for backwards compat | CC BY-NC-SA 3.0 |
+| Noise | noise | Mappadux original — TV-static, single hash per fragment | — |
+| Ocean | ocean | afl_ext (2017-2024) — see MapFX section above | MIT |
+| Starfield | starfield | Deadtotem (2020) — see MapFX section above | CC BY-NC-SA 3.0 |
+| Thundercloud | thundercloud | mahalis (2019) — see MapFX section above; noise primitive by Inigo Quilez (MIT); hash helpers by David Hoskins (CC BY-SA 4.0) | CC BY-NC 4.0 |
 
-Modifications:
+Modifications shared by every backdrop port:
+- Original MapFX shader's `void main()` keeps the polygon-mask shell. A `vec4 fxEffect(vec2 uv)` function below the helpers carries the visible algorithm. The backdrop wrapper (src/rendering/backdrops/fromMapFx.ts) lifts the marker-delimited block (uniforms + helpers + fxEffect) into the clip-pass and composites the result over `uBgColor` using the kind's blend mode (additive for 'screen' kinds, alpha-composite for 'normal' kinds).
+- Texture passthrough (uNoise for Fire / Light, uBed for River) shares the MapFX shaderRegistry cache so loading happens once regardless of which subsystem mounts the shader first.
+
+Backdrop-specific tweaks (where the port diverges from the MapFX behaviour or convention):
 - Aurora / Embers — written in-house for Mappadux.
 - Smooth Fog — same algorithm as the MapFX *Mist* effect (credited above), exposed here as a full-bars backdrop with GM-tunable fog colour, background, and density. `INTENSITY` and the two hardcoded colours promoted to uniforms; aspect-correct UV so cells don't squash on tall/wide bars.
-- Firestorm — kept only the GLSL fragment from the Shadertoy entry (the surrounding C/HLSL DirectX 12 reference code is irrelevant for our use). Reduced the raymarch from 128 to 48 steps with a wider step length, exposed the hot-core + smoke colours and an overall intensity. Marked "(heavy)" in the dropdown so the GM knows it's the most expensive backdrop.
+- Firestorm — kept only the GLSL fragment from the Shadertoy entry (the surrounding C/HLSL DirectX 12 reference code is irrelevant for our use). Reduced the raymarch from 128 to 48 steps with a wider step length, exposed the hot-core + smoke colours and an overall intensity.
 
 ### Under evaluation *(may be removed before v2.12 ships)*
 

@@ -47,6 +47,17 @@ export const FAFF_MESSAGES: readonly string[] = [
   'Softening edges so the polygons don’t look so… polygonal.',
   'Choosing between "ocean" and "very rough ocean".',
   'Auditioning shaders for the next encounter.',
+  // ── v2.12.x release batch (unified shaders + popover UI) ─────────────────
+  'Persuading the Aurora that violet really is its colour.',
+  'Convincing the embers to rise slightly more dramatically.',
+  'Aligning the firestorm. Mostly aligned. Mostly.',
+  'The static is having an existential moment. One sec.',
+  'Tuning the sun glints on the ocean to "Saturday brochure".',
+  'Wiring the sparkle button to the correct popover. Again.',
+  'Polishing the same shader for the seventeenth time.',
+  'Loading optional inferno mode (off by default).',
+  'Renaming smooth_fog to mist. Briefly explaining why to past me.',
+  'Compiling fragment shaders. Praying GLSL is in a good mood.',
 ];
 
 let _lastIndex = -1;

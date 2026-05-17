@@ -1,5 +1,92 @@
 # Changelog
 
+## v2.12.x — 2026-05-17
+
+### Backdrops + MapFX unification + UI consolidation
+
+Major refactor and feature expansion since 2.12.0. The Backdrop and
+MapFX subsystems now share a single shader source per effect, and
+the GM tunes both via the same compact sparkle-button popover
+pattern. New shaders added, all old ones expanded.
+
+**Unified shader architecture.** Each shareable effect lives in
+`src/mapfx/shaders/<id>/fragment.glsl` with a `BEGIN backdrop-
+shareable` marker block. The MapFX path keeps its polygon-mask
+wrapper at the bottom; the new `src/rendering/backdrops/fromMapFx
+.ts` wrapper lifts the marker block into the clip-pass and
+composites the result over `uBgColor` using the kind's blend mode.
+Texture passthrough (uNoise) shares the MapFX shader registry
+cache. End result: one place to tweak any effect — no more drift
+between the polygon-painted version and the bars version.
+
+**Every backdrop-suitable MapFX kind is now also a backdrop.**
+Eleven backdrops available (alphabetised): Aurora, Coloured Flames,
+Embers, Firestorm, Magic Portal, Magical Light, Mist / Smoke,
+Noise, Ocean, Starfield, Thundercloud. Picking any of them from
+the Map panel's sparkle button fills the bars with the same visual
+the GM paints on the map. The MapFX-only kinds are Fog of War
+(just a flat fill) and River (its directional flow needs the
+larger map view to read).
+
+- **Noise** — new MapFX kind + Backdrop. Colourable TV-static,
+  cheap (single hash per fragment), reads as scintillation /
+  haunted-screen / magical interference depending on tint.
+- **Aurora / Embers** — new MapFX kinds added alongside the
+  backdrop variants that landed earlier in 2.12. Same algorithms;
+  GM paints aurora curtains or rising sparks as regions on the
+  map.
+- **Firestorm Scale** — new slider amplifies the volumetric
+  raymarch coverage so the GM can dial inferno-level density that
+  fills the canvas.
+- **Starfield Glow** — slider exposed on both MapFX + Backdrop;
+  0 collapses haloed orbs to crisp pinpoint stars, 1 keeps the
+  original Shadertoy look.
+
+**Backdrop dropdown alphabetised** for scannability now that the
+list has grown to 11. 'None (solid colour)' stays pinned at the
+top.
+
+**Sparkle-popover UI on both sides.** The GM panel rows for FoW
+and Map both compressed to `[active name] [✦ sparkle]`. The
+sparkle opens a popover hosting the kind dropdown + Colour (or
+Background) row + Edge Fade + the active effect's params. Old
+inline kind dropdown and inline colour swatch removed — single
+source of truth, single editing surface. The same `FxPopover`
+component drives both popovers.
+
+**Per-kind in-use indicator.** Green '●' prefix + accent colour
+on every kind that has at least one polygon on the current map's
+fog state. Visible inside the popover dropdown.
+
+**Slider drag-capture protection.** Each popover's onChange paths
+flip a suppress flag so the structural refresh hooks skip the
+DOM rebuild mid-drag — sliders no longer stutter or drop pointer
+capture.
+
+**Textmap transparent paper option.** Tick "Transparent" next to
+the Paper colour to rasterise the textmap with a clear alpha
+channel; the underlying GM canvas shows through any gaps in the
+body. (Note: making backdrop effects specifically visible behind
+a transparent map requires a follow-up renderer change; the
+rasterised PNG with alpha is the foundation.)
+
+**FX param dump helper** at `window.mappaduxDumpFx()` for capturing
+the GM's tuned per-kind drafts + active backdrop params as paste-
+friendly JSON. Cached on `window._mppFxLast`.
+
+**MOTD popup.** Edit `src/motd/motd.ts` (version + title + body)
+to surface a one-off message on first launch after a version
+bump. Auto-suppressed during first-install when the About dialog
+auto-opens.
+
+**Bug fixes.** Fog of War defaults to hard edge (Edge Fade 0).
+Firestorm Speed slider now actually does something (was dead
+because the shader ignored `uSpeed`). MapFX panel active-kind
+label refreshes on backdrop change. Various smaller UI tweaks.
+
+**Acknowledgements expanded** with the new shaders + the dual-mode
+attributions.
+
 ## v2.12.0 — 2026-05-14
 
 ### Immersion: unified overlay system + nine MapFX shaders
