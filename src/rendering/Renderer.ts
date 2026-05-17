@@ -1703,6 +1703,17 @@ export class Renderer {
       }
     }
 
+    // Texture uniforms — for shaders that sample uNoise / uBed (fire,
+    // light, etc.). The wrapper passes these through from the MapFX
+    // shader's texture pool. Add a `uniform sampler2D <name>;` line
+    // to the fragment template for each so the GLSL can sample.
+    const textureUniforms: Record<string, { value: THREE.Texture | null }> = {};
+    const textureDeclarations: string[] = [];
+    for (const [name, tex] of Object.entries(entry.textures ?? {})) {
+      textureUniforms[name] = { value: tex };
+      textureDeclarations.push(`uniform sampler2D ${name};`);
+    }
+
     const pass = new ShaderPass({
       uniforms: {
         tDiffuse:    { value: null },
@@ -1716,6 +1727,7 @@ export class Renderer {
         // identically to its MapFX-rendered counterpart.
         uAspect:     { value: this.resolution.x / Math.max(this.resolution.y, 1) },
         ...paramUniforms,
+        ...textureUniforms,
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -1732,6 +1744,7 @@ export class Renderer {
         uniform vec2  uResolution;
         uniform float uAspect;
         ${paramDeclarations.join('\n        ')}
+        ${textureDeclarations.join('\n        ')}
         varying vec2  vUv;
         ${entry.helpers ?? ''}
         void main() {

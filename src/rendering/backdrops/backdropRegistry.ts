@@ -27,6 +27,7 @@ import { FIRESTORM_BACKDROP } from './firestorm.ts';
 import { PORTAL_BACKDROP }       from './portal.ts';
 import { NOISE_BACKDROP }        from './noise.ts';
 import { THUNDERCLOUD_BACKDROP } from './thundercloud.ts';
+import { FIRE_BACKDROP }         from './fire.ts';
 
 export interface BackdropEntry {
   /** Stable id stored on the pack's ThemeConfig.backdrop.kind. */
@@ -58,6 +59,14 @@ export interface BackdropEntry {
    * injected automatically by the clip-pass builder.
    */
   helpers?: string;
+  /**
+   * v2.12 — texture assets the shader samples (uNoise, uBed, etc.).
+   * Loaded once and bound to the clip-pass uniforms by name. Match
+   * the MapFX convention (file prefix → uniform name) so the same
+   * shader source works in both subsystems without per-mode texture
+   * wiring. Empty / undefined for shaders that don't need textures.
+   */
+  textures?: Record<string, import('three').Texture>;
 }
 
 export const BACKDROPS: BackdropEntry[] = [
@@ -70,6 +79,7 @@ export const BACKDROPS: BackdropEntry[] = [
   PORTAL_BACKDROP,
   NOISE_BACKDROP,
   THUNDERCLOUD_BACKDROP,
+  FIRE_BACKDROP,
 ];
 
 /** Backwards-compat alias map for backdrop kind ids that have been

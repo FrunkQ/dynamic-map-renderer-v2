@@ -56,10 +56,21 @@ export function loadKindShader(shaderId: string): KindShader | null {
   const fragment = fragmentGlobs[fKey];
   if (!vertex || !fragment) return null;
 
-  // Find any image assets in the same folder and bind them by uniform
-  // name. Filename-prefix convention:
-  //   • noise.*  →  uNoise   (data texture; sampled numerically)
-  //   • bed.*    →  uBed     (colour texture; sRGB-encoded source)
+  const textures = getKindTextures(shaderId);
+  // Detect whether the shader wants the underlying map texture passed
+  // in. Renderer wires uMap + uMapUv per-plane when this is true.
+  const wantsMap = /uniform\s+sampler2D\s+uMap\b/.test(fragment);
+  return { vertex, fragment, textures, wantsMap };
+}
+
+/** Resolve texture assets for a shader by uniform name. Convention:
+ *    • noise.*  →  uNoise   (data texture; sampled numerically)
+ *    • bed.*    →  uBed     (colour texture; sRGB-encoded source)
+ *
+ *  Exposed so the Backdrop wrapper (src/rendering/backdrops/fromMapFx
+ *  .ts) shares the same loaders + cache when deriving a backdrop
+ *  from a MapFX kind. */
+export function getKindTextures(shaderId: string): Record<string, THREE.Texture> {
   const textures: Record<string, THREE.Texture> = {};
   for (const [key, url] of Object.entries(textureGlobs)) {
     if (!key.startsWith(`./${shaderId}/`)) continue;
@@ -67,8 +78,5 @@ export function loadKindShader(shaderId: string): KindShader | null {
     if (file.startsWith('noise')) textures['uNoise'] = _loadTexture(url, THREE.LinearSRGBColorSpace);
     else if (file.startsWith('bed')) textures['uBed'] = _loadTexture(url, THREE.SRGBColorSpace);
   }
-  // Detect whether the shader wants the underlying map texture passed
-  // in. Renderer wires uMap + uMapUv per-plane when this is true.
-  const wantsMap = /uniform\s+sampler2D\s+uMap\b/.test(fragment);
-  return { vertex, fragment, textures, wantsMap };
+  return textures;
 }

@@ -26,6 +26,7 @@
 
 import type { BackdropEntry } from './backdropRegistry.ts';
 import type { OverlayKindEntry, BlendMode } from '../../mapfx/overlayKindRegistry.ts';
+import { getKindTextures } from '../../mapfx/shaders/shaderRegistry.ts';
 
 const BEGIN_MARKER = '// === BEGIN backdrop-shareable ===';
 const END_MARKER   = '// === END backdrop-shareable ===';
@@ -49,9 +50,11 @@ function extractFxBlock(shaderText: string, kindId: string): string {
     );
   }
   const inner = shaderText.slice(a + BEGIN_MARKER.length, b);
-  // Drop every `uniform <type> <name>;` line. Helpers, constants,
-  // function bodies, and comments pass through verbatim.
-  const uniformLine = /^\s*uniform\s+\w+\s+\w+\s*;/;
+  // Drop every `uniform <type> <name>;` line, including
+  // `uniform sampler2D` declarations — the clip-pass declares all
+  // of them (built-ins + param uniforms + texture samplers) on its
+  // own, so the lifted block only needs the helpers + fxEffect.
+  const uniformLine = /^\s*uniform\s+[\w\d]+\s+\w+\s*;/;
   return inner
     .split('\n')
     .filter((line) => !uniformLine.test(line))
@@ -119,11 +122,17 @@ export function buildBackdropFromMapFx(opts: BuildBackdropFromMapFxOpts): Backdr
     ...(opts.kind.shaderParams ?? []),
   ];
 
+  // Texture assets the shader samples (uNoise, uBed, etc.). Loaded
+  // through the same helper the MapFX side uses so both subsystems
+  // share the texture cache + colour-space settings.
+  const textures = getKindTextures(opts.kindId);
+
   return {
     id:       opts.kindId,
     label:    opts.label ?? opts.kind.label,
     fragment,
     helpers,
     params,
+    ...(Object.keys(textures).length > 0 ? { textures } : {}),
   };
 }
