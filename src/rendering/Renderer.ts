@@ -1686,7 +1686,7 @@ export class Renderer {
     // skipped — GLSL forbids re-declaring the same uniform twice in
     // one shader. This is how 'speed' becomes a tunable slider while
     // keeping the legacy uSpeed built-in usable by snippets.
-    const BUILT_IN_UNIFORMS = new Set(['uSpeed', 'uBgColor', 'uRect', 'uResolution']);
+    const BUILT_IN_UNIFORMS = new Set(['uSpeed', 'uBgColor', 'uRect', 'uResolution', 'uAspect']);
     const paramUniforms: Record<string, { value: number | THREE.Color }> = {};
     const paramDeclarations: string[] = [];
     for (const p of entry.params ?? []) {
@@ -1711,6 +1711,10 @@ export class Renderer {
         time:        { value: 0 },
         uSpeed:      { value: speed },
         uResolution: { value: new THREE.Vector2(this.resolution.x, this.resolution.y) },
+        // uAspect: canvas aspect (x/y). Auto-updated on resize so any
+        // backdrop-shareable MapFX shader code can reference it
+        // identically to its MapFX-rendered counterpart.
+        uAspect:     { value: this.resolution.x / Math.max(this.resolution.y, 1) },
         ...paramUniforms,
       },
       vertexShader: /* glsl */`
@@ -1726,6 +1730,7 @@ export class Renderer {
         uniform float time;
         uniform float uSpeed;
         uniform vec2  uResolution;
+        uniform float uAspect;
         ${paramDeclarations.join('\n        ')}
         varying vec2  vUv;
         ${entry.helpers ?? ''}
@@ -1946,6 +1951,9 @@ export class Renderer {
     }
     if (this.clipPass.uniforms['uResolution']) {
       this.clipPass.uniforms['uResolution']!.value.set(pw, ph);
+    }
+    if (this.clipPass.uniforms['uAspect']) {
+      this.clipPass.uniforms['uAspect']!.value = pw / Math.max(ph, 1);
     }
 
     this.refreshCamera();
