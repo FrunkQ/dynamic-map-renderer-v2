@@ -29,6 +29,7 @@ import { NOISE_BACKDROP }        from './noise.ts';
 import { THUNDERCLOUD_BACKDROP } from './thundercloud.ts';
 import { FIRE_BACKDROP }         from './fire.ts';
 import { LIGHT_BACKDROP }        from './light.ts';
+import { OCEAN_BACKDROP }        from './ocean.ts';
 
 export interface BackdropEntry {
   /** Stable id stored on the pack's ThemeConfig.backdrop.kind. */
@@ -82,6 +83,7 @@ export const BACKDROPS: BackdropEntry[] = [
   THUNDERCLOUD_BACKDROP,
   FIRE_BACKDROP,
   LIGHT_BACKDROP,
+  OCEAN_BACKDROP,
 ];
 
 /** Backwards-compat alias map for backdrop kind ids that have been
