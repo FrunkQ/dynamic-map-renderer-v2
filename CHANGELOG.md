@@ -1,5 +1,33 @@
 # Changelog
 
+## v2.13.1 — 2026-05-17
+
+### Text Map editor — font dropdown + new-text inheritance
+
+Two handout-editor bug fixes flagged during v2.13 testing.
+
+**Font dropdown floor is now the 12 bundled catalog families.** The
+dropdown previously relied on the ImageAssetStore as source of
+truth, with a 3-string fallback (Cinzel / Georgia / Times New
+Roman) when the store was empty. Any deployment whose IDB pre-
+dated a catalog addition — or that had run Delete All Data between
+seedings — silently lost fonts from the dropdown, and the set
+differed across machines depending on when the seed had last
+landed. Switched the floor to BASE_FONTS, built from BUNDLED_FONTS
+directly + the two system serifs, so the 12 catalog families are
+always present regardless of store state. User-added Image-Library
+fonts append below. The Google Fonts CSS request also pre-loads
+the full floor so previews render even when the seed missed.
+
+**New text elements inherit the full font style.** Earlier only
+the session-wide last-picked font family + colour carried over;
+size and alignment had to be re-set on every new box. Now `+ Text`
+inherits fontFamily / fontScale / color / textAlign from the
+currently-selected text element (if any), or the most recent text
+element on the page, or the session-wide scalars, or page defaults
+— in that priority order. Bold / italic / underline live inline
+in the html body and still can't carry to an empty new element.
+
 ## v2.13.0 — 2026-05-17
 
 ### Transparency, persistence, UI scale
