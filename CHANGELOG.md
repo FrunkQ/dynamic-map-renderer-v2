@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.14.1 — 2026-05-18
+
+### Marker resize — upper cap removed
+
+The on-canvas marker resize handle used to clamp at 8× base size,
+inherited from when there was an explicit slider with that range.
+With the slider gone the cap was just an arbitrary ceiling, and a GM
+prepping a Mothership session ran into it trying to stretch a
+ventilation-system token across the map.
+
+Cap is gone. The handle now scales freely; markers can legitimately
+end up larger than the screen for room-scale hazards, oversized
+vehicles, or environmental overlays. Lower bound stays in place (a
+small floor so the marker remains grabbable). The sprite canvas has
+its own internal pixel-budget ceiling so memory stays sane at
+extreme sizes — markers just get a touch softer when stretched well
+beyond their texture footprint.
+
 ## v2.14.0 — 2026-05-17
 
 ### New onboarding pack + smaller fixes

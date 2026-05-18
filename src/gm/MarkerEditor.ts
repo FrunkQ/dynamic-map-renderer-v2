@@ -287,9 +287,11 @@ export class MarkerEditor {
     const centerCssY = rect.top  + center.y * (rect.height / this.layer.canvas.height);
     const dist = Math.hypot(clientX - centerCssX, clientY - centerCssY);
     const ratio = dist / this._overlayResize.initialDist;
-    // Min 0.1 — users want to be able to drop tiny markers (pickups,
-    // ambient details) without a slider. Max stays 8 for huge creatures.
-    const newSize = Math.max(0.1, Math.min(8, this._overlayResize.initialSize * ratio));
+    // Min 0.05 so the marker stays grabbable; no upper cap — users may
+    // legitimately want a token larger than the screen (room-scale
+    // hazards, oversized vehicles, etc.). The sprite canvas has its own
+    // MAX_PX ceiling so memory stays sane at extreme sizes.
+    const newSize = Math.max(0.05, this._overlayResize.initialSize * ratio);
     this.markers = this.markers.map((m) =>
       m.id !== this._overlayResize!.id ? m : { ...m, size: newSize },
     );
