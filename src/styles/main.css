@@ -411,6 +411,20 @@ body.projector-view .marker-overlay {
   cursor: nwse-resize;
 }
 
+/* v2.14.3 — Show Grid icon. Below the move handle, inside the rect's
+   top-left area. Active state (grid on) flips to the orange chrome
+   colour so it reads as "engaged". */
+.marker-handle--rect-show-grid {
+  top: 30px;
+  left: 0;
+  cursor: pointer;
+}
+.marker-handle--rect-show-grid--on {
+  background: rgba(255, 140, 0, 0.92);
+  border-color: #fff;
+  color: #fff;
+}
+
 /* v2.14.3 — view-broadcast eye icon. Sits just outside the rect, above
    the top-left move handle. Mirrors the panel-header bypass toggle.
    Red tint when broadcast is OFF (matching the marker "hidden" badge). */

@@ -754,6 +754,11 @@ export class GMApp {
     const projMaxAvailable = projSelected && this._isActiveMapCalibrated();
     const projBroadcastEl = document.querySelector<HTMLInputElement>('#projection-broadcast-toggle');
     const projBroadcast: 'on' | 'off' = projBroadcastEl?.checked === false ? 'off' : 'on';
+    // v2.14.3 — Show Grid icon on the Scaled View rect, only on calibrated
+    // maps (a 1" grid is meaningless without a known pixels-per-square).
+    const projGridState: 'on' | 'off' | undefined = this._isActiveMapCalibrated()
+      ? ((this.state.snapshot().projectorViewport?.gridEnabled) ? 'on' : 'off')
+      : undefined;
     this._markerOverlay.updateRect('projector', projBounds
       ? {
           ...projBounds,
@@ -761,6 +766,7 @@ export class GMApp {
           selected: projSelected,
           // v2.14.3 — eye icon also on the projector / Scaled View rect.
           viewBroadcast: projBroadcast,
+          ...(projGridState ? { showGrid: projGridState } : {}),
           ...(projMaxAvailable ? {
             maximise: this._projectorMaxRestore ? 'maximised' : 'normal',
           } : {}),
@@ -1030,6 +1036,23 @@ export class GMApp {
    * mode-button logic will quietly keep it on 'full' until the map is
    * calibrated.
    */
+  /**
+   * v2.14.3 — Show Grid icon click on the Scaled View rect. Mirrors
+   * the side-panel "Show grid" toggle by flipping the projector
+   * viewport's gridEnabled flag and pushing it through the same
+   * broadcast path. No-op on the player rect (no player-side grid
+   * in v2.14.3 — see #13 carry-over).
+   */
+  private _handleRectShowGrid(kind: 'player' | 'projector'): void {
+    if (kind !== 'player' && kind !== 'projector') return;
+    if (kind === 'player') return;
+    const cb = document.querySelector<HTMLInputElement>('#projection-grid-toggle');
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
+    this._refreshRectOverlays();
+  }
+
   /**
    * v2.14.3 — eye icon click on a viewport rect. Toggles the same
    * broadcast bypass that the panel-header switch controls; firing
@@ -2468,7 +2491,11 @@ export class GMApp {
       this.projectorEditor.setViewport(next);
       this.host.broadcast({ type: 'projector_viewport_update', payload: next });
     };
-    gridToggle?.addEventListener  ('change', () => broadcastVp({ gridEnabled:   gridToggle.checked   }));
+    gridToggle?.addEventListener  ('change', () => {
+      broadcastVp({ gridEnabled: gridToggle.checked });
+      // v2.14.3 — keep the rect-chrome Show Grid icon in sync.
+      this._refreshRectOverlays();
+    });
     gridColour?.addEventListener  ('input',  () => broadcastVp({ gridColor:     gridColour.value     }));
     // "Disable Filters" — checked = filters disabled = filterEnabled false.
     filterToggle?.addEventListener('change', () => broadcastVp({ filterEnabled: !filterToggle.checked }));
@@ -4542,6 +4569,7 @@ export class GMApp {
         onRectMaximise:      (kind) => this._handleRectMaximise(kind),
         onRectRatioLock:     (kind) => this._handleRectRatioLock(kind),
         onRectViewBroadcast: (kind) => this._handleRectViewBroadcast(kind),
+        onRectShowGrid:      (kind) => this._handleRectShowGrid(kind),
         // v2.12 unified — selector-icon click selects an overlay polygon
         // (non-fog kinds; fog uses interior click via FogEditor).
         onMapFXSelect:    (id) => this._selectOverlayPolygon(id),

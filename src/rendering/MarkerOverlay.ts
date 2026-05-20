@@ -138,6 +138,11 @@ export interface RectOverlayItem {
    *  shows the faff placeholder). Click toggles the same state, so
    *  the eye and the header switch stay in sync. */
   viewBroadcast?: 'on' | 'off';
+  /** v2.14.3 — Show Grid icon (Scaled View only for v2.14.3; Player
+   *  View grid in a later release). 'on' = grid overlay active;
+   *  'off' = grid hidden. Undefined = icon not shown (e.g. map not
+   *  calibrated so a 1" grid would be meaningless). */
+  showGrid?: 'on' | 'off';
 }
 
 export type RectMoveHandler   = (kind: RectKind, clientX: number, clientY: number, phase: 'start' | 'move' | 'end') => void;
@@ -177,6 +182,8 @@ export interface OverlayHandlers {
   onRectRatioLock?:   RectClickHandler;
   /** v2.14.3 — Click on the view-broadcast eye icon (any rect). */
   onRectViewBroadcast?: RectClickHandler;
+  /** v2.14.3 — Click on the Show Grid icon (Scaled View). */
+  onRectShowGrid?:      RectClickHandler;
 }
 
 // ── Badge icon SVG fragments (Lucide-inspired strokes) ───────────────────────
@@ -236,11 +243,13 @@ interface RectElements {
   aspectBtn:     HTMLDivElement | null;
   ratioLockBtn:  HTMLDivElement | null;
   viewBroadcastBtn: HTMLDivElement | null;
+  showGridBtn:   HTMLDivElement | null;
   /** Cached state strings for idempotent DOM updates. */
   lastMaximise:  'normal' | 'maximised' | null;
   lastAspect:    'apply'  | 'undo'      | null;
   lastRatioLock: 'locked' | 'unlocked'  | null;
   lastBroadcast: 'on'     | 'off'       | null;
+  lastShowGrid:  'on'     | 'off'       | null;
 }
 
 /**
@@ -454,8 +463,9 @@ export class MarkerOverlay {
     return {
       root, moveHandle,
       resizeHandle: null, maximiseBtn: null, aspectBtn: null, ratioLockBtn: null,
-      viewBroadcastBtn: null,
+      viewBroadcastBtn: null, showGridBtn: null,
       lastMaximise: null, lastAspect: null, lastRatioLock: null, lastBroadcast: null,
+      lastShowGrid: null,
     };
   }
 
@@ -527,6 +537,33 @@ export class MarkerOverlay {
         : `<span style="font: 700 8px/1 system-ui,sans-serif; letter-spacing:-0.5px;">16:9</span>`;
     }
 
+    // v2.14.3 — Show Grid icon (Scaled View). Active state changes
+    // colour. Only emitted by the GMApp when the map is calibrated.
+    const wantShowGrid = item.showGrid !== undefined;
+    this._toggleRectAux(r, 'showGridBtn', wantShowGrid, () => {
+      const el = document.createElement('div');
+      el.className = 'marker-handle marker-handle--rect-show-grid';
+      this._bindRectClick(el, kind, 'show-grid');
+      return el;
+    });
+    if (r.showGridBtn && wantShowGrid && item.showGrid !== r.lastShowGrid) {
+      r.lastShowGrid = item.showGrid!;
+      const on = item.showGrid === 'on';
+      r.showGridBtn.title = on
+        ? '1" Grid Overlay: ON. Click to hide.'
+        : '1" Grid Overlay: off. Click to show a calibrated 1"/25 mm grid on the Scaled View.';
+      r.showGridBtn.classList.toggle('marker-handle--rect-show-grid--on', on);
+      r.showGridBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="1"/>
+          <line x1="9"  y1="3"  x2="9"  y2="21"/>
+          <line x1="15" y1="3"  x2="15" y2="21"/>
+          <line x1="3"  y1="9"  x2="21" y2="9"/>
+          <line x1="3"  y1="15" x2="21" y2="15"/>
+        </svg>`;
+    }
+
     // v2.14.3 — view-broadcast eye icon. Mirrors the panel-header bypass
     // toggle; clicking either keeps both in sync.
     const wantBroadcast = item.viewBroadcast !== undefined;
@@ -591,7 +628,7 @@ export class MarkerOverlay {
 
   private _toggleRectAux(
     r: RectElements,
-    key: 'resizeHandle' | 'maximiseBtn' | 'aspectBtn' | 'ratioLockBtn' | 'viewBroadcastBtn',
+    key: 'resizeHandle' | 'maximiseBtn' | 'aspectBtn' | 'ratioLockBtn' | 'viewBroadcastBtn' | 'showGridBtn',
     want: boolean,
     factory: () => HTMLDivElement,
   ): void {
@@ -606,6 +643,7 @@ export class MarkerOverlay {
       if (key === 'aspectBtn')        r.lastAspect    = null;
       if (key === 'ratioLockBtn')     r.lastRatioLock = null;
       if (key === 'viewBroadcastBtn') r.lastBroadcast = null;
+      if (key === 'showGridBtn')      r.lastShowGrid  = null;
     }
   }
 
@@ -633,7 +671,7 @@ export class MarkerOverlay {
     });
   }
 
-  private _bindRectClick(btn: HTMLDivElement, kind: RectKind, action: 'maximise' | 'aspect' | 'ratio-lock' | 'view-broadcast'): void {
+  private _bindRectClick(btn: HTMLDivElement, kind: RectKind, action: 'maximise' | 'aspect' | 'ratio-lock' | 'view-broadcast' | 'show-grid'): void {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -641,6 +679,7 @@ export class MarkerOverlay {
       if (action === 'aspect')         this.handlers.onRectAspectLock?.(kind);
       if (action === 'ratio-lock')     this.handlers.onRectRatioLock?.(kind);
       if (action === 'view-broadcast') this.handlers.onRectViewBroadcast?.(kind);
+      if (action === 'show-grid')      this.handlers.onRectShowGrid?.(kind);
     });
     btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
   }
