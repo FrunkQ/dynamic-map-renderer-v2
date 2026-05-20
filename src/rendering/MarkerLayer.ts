@@ -79,6 +79,12 @@ function _hexWithAlpha(hex: string, alpha: number): string {
  */
 function buildBadges(m: Marker): OverlayBadge[] {
   const out: OverlayBadge[] = [];
+  // v2.14.2 — locked markers (background props, ambient sources, decor)
+  // declutter their badge row by only showing the indicators that are
+  // currently ACTIVE. So a locked-and-hidden prop drops the eye; a
+  // locked-and-muted source drops the speaker. Live (unlocked) markers
+  // always show the full row so the GM can flip any of them at a click.
+  const lockedShowOnlyOn = !!m.locked;
   out.push({
     kind:  'visibility',
     on:    !m.hidden,
@@ -120,7 +126,7 @@ function buildBadges(m: Marker): OverlayBadge[] {
         : 'Motion tracker — scanning. Expanding ring sweeps periodically; any motion source within range shows as a return blob + ping. Click to disable.',
     });
   }
-  return out;
+  return lockedShowOnlyOn ? out.filter((b) => b.on) : out;
 }
 
 /**
@@ -417,7 +423,11 @@ export class MarkerLayer {
         iconHalfHeightPx: halfHBuf * pxToCssY,
         label: {
           text:    m.label ?? '',
-          visible: !!m.label && (isGM || !!m.showLabel) && !m.hidden,
+          // GM:     showLabelOnGM (default true) — survives hidden, fades when locked.
+          // Player: showLabel (default false) AND not hidden.
+          visible: !!m.label && (isGM
+            ? (m.showLabelOnGM !== false)
+            : (!!m.showLabel && !m.hidden)),
         },
         ...(isGM && !m.locked
           ? { moveHandle: { visible: true, interactive: true } }

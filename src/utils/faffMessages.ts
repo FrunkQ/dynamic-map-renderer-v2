@@ -58,6 +58,17 @@ export const FAFF_MESSAGES: readonly string[] = [
   'Quickly drawing a corridor I forgot to prep.',
   'Sketching a tavern menu. Mostly mutton.',
   'Picking a voice for the suspicious shopkeeper.',
+  // ── v2.14.2 release batch ────────────────────────────────────────────────
+  'Calibrating the calibrator.',
+  'Counting squares. Some of them are squarer than others.',
+  'Sticky button engaged. Painting fog like I mean it.',
+  'Lining up the projector against a ruler. The ruler is winning.',
+  'Hiding a token name on the player map so they don\'t see the boss.',
+  'Locking the brazier into place. It is a very good brazier.',
+  'Checking whether 75 DPI counts as "lo-fi".',
+  'Asking the windows nicely to close themselves later.',
+  'Welcoming a new beta tester. Hi! Maps may behave oddly.',
+  'Re-naming everything to "Scaled" because it sounded clever.',
 ];
 
 let _lastIndex = -1;

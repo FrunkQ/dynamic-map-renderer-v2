@@ -12,13 +12,22 @@
 
 import type { MotdEntry } from '../motd/motd.ts';
 
-export function showMotdDialog(entry: MotdEntry): Promise<void> {
+export interface MotdDialogOptions {
+  /** Visual variant. 'info' (default) is the neutral release-note look;
+   *  'warn' adds a yellow warning bar — used for the beta-channel MOTD
+   *  so the "features may appear and disappear" message reads as a
+   *  caution, not a celebration. */
+  variant?: 'info' | 'warn';
+}
+
+export function showMotdDialog(entry: MotdEntry, opts: MotdDialogOptions = {}): Promise<void> {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay confirm-overlay motd-overlay';
 
     const dialog = document.createElement('div');
-    dialog.className = 'modal-dialog modal-dialog--sm confirm-dialog motd-dialog';
+    const variantClass = opts.variant === 'warn' ? ' motd-dialog--warn' : '';
+    dialog.className = `modal-dialog modal-dialog--sm confirm-dialog motd-dialog${variantClass}`;
     overlay.appendChild(dialog);
 
     // Header — title + close ×.

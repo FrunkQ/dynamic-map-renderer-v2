@@ -109,6 +109,17 @@ export class ProjectorApp {
     this.setupLabelEl    = this.controlsEl.querySelector<HTMLElement>('.projector-setup-label')!;
     this.rendererCanvas  = document.getElementById('renderer-canvas') as HTMLCanvasElement;
 
+    // v2.14.2 — self-close when the GM window broadcasts its closing
+    // signal. Same-origin only; remote viewers don't share the channel.
+    try {
+      const lifecycle = new BroadcastChannel('mappadux:lifecycle');
+      lifecycle.onmessage = (e) => {
+        if (e?.data?.kind === 'gm-closing') {
+          try { window.close(); } catch { /* no-op */ }
+        }
+      };
+    } catch { /* BroadcastChannel unavailable — window stays open */ }
+
     // 1" grid overlay — sits above the renderer, below the black-out.
     this.gridCanvas = document.createElement('canvas');
     this.gridCanvas.className = 'projector-grid';

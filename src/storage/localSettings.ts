@@ -67,7 +67,7 @@ export function setLocalPlayerStaticOnly(enabled: boolean): void {
  *  sidebar shrinks/grows. Read once at startup and re-applied
  *  whenever the slider moves. */
 export const UI_SCALE_KEY = 'dmr_ui_scale';
-export const UI_SCALE_MIN = 0.75;
+export const UI_SCALE_MIN = 0.5;
 export const UI_SCALE_MAX = 1.5;
 export const UI_SCALE_DEFAULT = 1.0;
 
@@ -124,6 +124,39 @@ export function getLastSeenMotdVersion(): string | null {
 export function setLastSeenMotdVersion(version: string): void {
   try { localStorage.setItem(MOTD_SEEN_VERSION_KEY, version); }
   catch { /* private mode etc. — no-op */ }
+}
+
+/** v2.14.2 — beta MOTD acknowledgement. Independent of the production
+ *  MOTD-seen version so a release-cycle MOTD on www doesn't accidentally
+ *  suppress the beta warning (or vice versa). Beta MOTD is content-stable
+ *  ("welcome, beta is volatile, maps stay compatible-ish"), so a single
+ *  boolean dismissed-flag is enough — we don't version it per-release. */
+export const BETA_MOTD_DISMISSED_KEY = 'mappadux:beta_motd_dismissed';
+
+export function isBetaMotdDismissed(): boolean {
+  try { return localStorage.getItem(BETA_MOTD_DISMISSED_KEY) === '1'; }
+  catch { return false; }
+}
+
+export function setBetaMotdDismissed(): void {
+  try { localStorage.setItem(BETA_MOTD_DISMISSED_KEY, '1'); }
+  catch { /* private mode etc. — no-op */ }
+}
+
+/** Heuristic — are we running on the beta channel (Vercel preview /
+ *  beta branch) rather than production (www.mappadux.com) or local
+ *  dev? Production hostnames are the canonical site; localhost / file:
+ *  are dev. Everything else (Vercel preview URLs, branch deploys, any
+ *  custom subdomain) is treated as beta. Used by the beta MOTD only —
+ *  don't reach for this for product behaviour. */
+export function isBetaHost(): boolean {
+  try {
+    const h = (typeof location !== 'undefined' ? location.hostname : '').toLowerCase();
+    if (!h) return false;
+    if (h === 'www.mappadux.com' || h === 'mappadux.com') return false;
+    if (h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || h === '::1') return false;
+    return true;
+  } catch { return false; }
 }
 
 /** Known API key entries kept in localStorage. Used by Settings to list +

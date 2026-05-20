@@ -43,3 +43,19 @@ export const CURRENT_MOTD: MotdEntry = {
   title:   '',
   body:    [],
 };
+
+/** v2.14.2 — beta-channel welcome / warning. Shown ONCE per browser
+ *  on a beta host (see `isBetaHost` + `isBetaMotdDismissed` in
+ *  localSettings). Stays static across beta releases — the message
+ *  is the same regardless of which patch they happen to land on.
+ *  Independent of `CURRENT_MOTD` so production release-note MOTDs
+ *  don't suppress this and vice versa. */
+export const BETA_MOTD: MotdEntry = {
+  version: 'beta',
+  title:   'Welcome to Mappadux beta',
+  body:    [
+    'You are running the beta channel. Feel free to try things out — you can import your existing maps and they should load just fine.',
+    'Bear in mind features may appear and disappear at random as ideas get tried out. Maps should stay compatible across builds, but no guarantees — that is the nature of beta.',
+    'The stable release lives at www.mappadux.com if you want a quieter ride.',
+  ],
+};

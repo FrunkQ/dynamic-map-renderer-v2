@@ -183,6 +183,12 @@ export interface Marker {
   // Visibility
   hidden:    boolean; // hides from players; GM sees with ghost opacity
   showLabel: boolean; // show name text on the player map (default false)
+  /** v2.14.2 — show the marker's name on the GM map, independent of
+   *  showLabel and of the `hidden` flag. Defaults true so GMs can
+   *  track positions of hidden-from-player markers; locked markers
+   *  fade their name to dim chrome to keep background-prop names
+   *  quiet. Optional for backward compatibility (load coerces). */
+  showLabelOnGM?: boolean;
 
   // Audio fields (used when roles.audio is set)
   audioTrackId:     string | null;
@@ -217,6 +223,7 @@ export function defaultMarker(id: string, x = 0.5, y = 0.5): Marker {
     rotation:         0,
     hidden:           false,
     showLabel:        false,
+    showLabelOnGM:    true,
     audioTrackId:     null,
     audioLoop:        true,
     audioMuted:       false,

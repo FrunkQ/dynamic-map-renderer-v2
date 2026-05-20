@@ -186,7 +186,7 @@ The workspace is **GM-only** — players and projectors always render at the rec
 
 ---
 
-## Projection View
+## Scaled View
 
 A second on-table mode that renders the active map at **true table scale** — for use with an under-table screen, a down-projector, or any other surface where a 1″ creature on the map needs to physically project as 1″. Miniatures occupy real-world inches.
 
@@ -200,7 +200,7 @@ When no projector is active, the panel shows just the dropdown and a brief intro
 
 **Direct manipulation** *(v2.11)* — Same chrome as the Player View rect: click the **move handle** at the top-left of the green rect to select + drag the projection. Selection adds a **maximise / restore** button on the right edge that toggles between calibrated `scaled` mode and `full` map mode. Resize / aspect-lock aren't shown — projector size is locked to your calibration so you can't accidentally rescale at the table.
 
-**Broadcast toggle** — the visual-bypass switch in the **Projection View** panel header swaps the projector to a "GM is faffing" placeholder while keeping the underlying state streaming. Replaces the older dedicated Blackout button.
+**Broadcast toggle** — the visual-bypass switch in the **Scaled View** panel header swaps the projector to a "GM is faffing" placeholder while keeping the underlying state streaming. Replaces the older dedicated Blackout button.
 
 **Full Map** — Show the entire map fit-to-window on the projector, ignoring calibration. Handy for showing scope before zooming into a calibrated battlemap. When the active map isn't calibrated, this is the only available projection mode — Scaled View greys out with a "Scaled View (Unavailable)" label and a warning explaining that calibration unlocks it.
 
@@ -214,7 +214,11 @@ When no projector is active, the panel shows just the dropdown and a brief intro
 
 **Recalibrate this Map…** — Re-runs map calibration without leaving the panel. Live changes propagate immediately to the projector and any monitors.
 
-**Calibrate this Map** *(at the asset level, in the Map Library)* — Drag two endpoints across a known distance on the map and tell it how many 1″ / 25 mm squares it represents. Saves both the calculated `pixelsPerSquare` and the original endpoints so re-editing picks up where you left off.
+**Calibrate this Map** *(at the asset level, in the Map Library)* — Three ways to dial in the map's pixels-per-square, pick whichever matches what you know:
+
+- **Ruler line** — Drag the two crosshairs across a known distance on the map and tell it how many 1″ / 25 mm squares the line spans. Saves both the calculated `pixelsPerSquare` and the original endpoints so re-editing picks up where you left off.
+- **Whole-map H × V** — Type how many squares the full map is, horizontally and vertically. Filling only one side auto-fills the other at 1:1 (square grid). When both H and V resolve to a common map DPI the feedback flips green and labels the match ("matches 100 (VTT) DPI").
+- **DPI dropdown** *(v2.14.2)* — Pick from the common map DPIs (60, 70 VTT, 75, 100 VTT, 140 VTT, 150, 300). H and V back-fill from the map's actual pixel dimensions. The 70 / 100 / 140 entries are the standard "VTT" exports — handy when you know the source app's preset.
 
 > Tip: the projector window's setup label and fullscreen icon fade out after 10 s of mouse inactivity so they don't intrude during play. Move the mouse to bring them back.
 
@@ -238,7 +242,11 @@ Place icons on the map to represent characters, objects, or points of interest.
 
 **Properties** — Edit the icon, colour, and size. Toggle **Hide from players** to make a marker invisible to players while it remains visible (ghosted) to you. Toggle **Locked** to make a marker panel-access-only — the on-canvas handles ignore clicks on locked markers.
 
-**Show Name** — When on, the marker's label is visible on the player screen. Off by default.
+**Show Name on player map** — When on, the marker's label is visible on the player screen. Off by default.
+
+**Show Name on GM map** *(v2.14.2)* — When on, the marker's label is visible on the GM map regardless of whether the marker is hidden from players. Lets you track where each NPC / trap / clue sits even when invisible to the table. Defaults ON; fades to dim chrome when the marker is locked so background-prop labels stay quiet.
+
+Locked markers also auto-declutter their status badge row from v2.14.2: only the indicators that are currently **on** appear (a locked-and-hidden marker drops the eye, a locked-and-muted source drops the speaker). Live markers always show the full row so you can flip any of them at a click.
 
 **Clone Marker** — Creates an exact copy of the selected marker, offset slightly and labelled " - copy".
 

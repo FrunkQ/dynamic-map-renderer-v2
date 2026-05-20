@@ -359,6 +359,7 @@ export class GMApp {
   // selected marker (MarkerOverlay) replaces it.
   private markerHiddenToggle!:     HTMLInputElement;
   private markerShowLabelToggle!:  HTMLInputElement;
+  private markerShowLabelGmToggle!: HTMLInputElement;
   private markerLockedToggle!:     HTMLInputElement;
   private currentMapBlob:          ArrayBuffer | null = null;
   private activeFilterId        = '';
@@ -1196,6 +1197,19 @@ export class GMApp {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') void this.state.flushSave();
     });
+
+    // v2.14.2 — broadcast a `gm-closing` signal to spawned player /
+    // projector / calibrate windows on pagehide so they self-close.
+    // Uses a dedicated channel so we don't pollute the gameplay
+    // state-sync channels. Popups listen on the same channel and
+    // call window.close() — works even though we open them with
+    // noopener (no Window ref to close from the opener side).
+    try {
+      const lifecycle = new BroadcastChannel('mappadux:lifecycle');
+      window.addEventListener('pagehide', () => {
+        try { lifecycle.postMessage({ kind: 'gm-closing' }); } catch { /* channel may already be closed */ }
+      });
+    } catch { /* BroadcastChannel unavailable — popups stay open on GM close, acceptable fallback */ }
 
     await seedAudioAssets();
     await migrateLegacyMaps();
@@ -2312,9 +2326,10 @@ export class GMApp {
     });
     this.markerIconBtn         = q<HTMLButtonElement>('#marker-icon-btn');
     this.markerColorInput      = q<HTMLInputElement>('#marker-color');
-    this.markerHiddenToggle    = q<HTMLInputElement>('#marker-hidden');
-    this.markerShowLabelToggle = q<HTMLInputElement>('#marker-show-label');
-    this.markerLockedToggle    = q<HTMLInputElement>('#marker-locked');
+    this.markerHiddenToggle      = q<HTMLInputElement>('#marker-hidden');
+    this.markerShowLabelToggle   = q<HTMLInputElement>('#marker-show-label');
+    this.markerShowLabelGmToggle = q<HTMLInputElement>('#marker-show-label-gm');
+    this.markerLockedToggle      = q<HTMLInputElement>('#marker-locked');
   }
 
   private bindRenderer(): void {
@@ -3022,7 +3037,7 @@ export class GMApp {
       };
       this.state.setFog({ polygons: [...fog.polygons, poly] });
     }
-    this._endAction();
+    this._endActionAndRearm(action);
   }
 
   /** v2.12 — selection → panel sync. Called when the GM clicks a polygon
@@ -3448,6 +3463,21 @@ export class GMApp {
     }
   }
 
+  /** v2.14.2 — commit-and-rearm. After a polygon / brush stroke /
+   *  fill commit, the GM almost always wants to lay another. Pre-2.14
+   *  the button stayed sticky but visually went out-of-sync. v2.14
+   *  fixed the visual bug by going single-shot (button cleared after
+   *  every commit). v2.14.2 restores sticky behaviour the right way:
+   *  the action ends cleanly (selection / brush / fill state reset),
+   *  then re-arms the same action in the same tick so the button
+   *  stays lit and the next pointer-down starts a fresh stroke.
+   *  Re-clicking the action button or switching Drawing Mode is the
+   *  explicit exit. */
+  private _endActionAndRearm(action: 'paint' | 'erase', opts: { preserveFillState?: boolean } = {}): void {
+    this._endAction(opts);
+    this._startAction(action);
+  }
+
   /** v2.12 — exit the current Paint/Erase action. Called by the action
    *  buttons (re-click to cancel), by the Drawing Mode switch, and
    *  automatically by polygon-complete + brush-commit handlers.
@@ -3516,12 +3546,10 @@ export class GMApp {
       let polys = fog.polygons;
       for (const blob of blobs) polys = subtractFromAll(polys, blob.outer);
       this.state.setFog({ polygons: polys });
-      // Single-shot: clear the Paint/Erase button + end the action
-      // so the GM gets visible "stroke committed" feedback. Brush
-      // mode (the toggle button at the top of the panel) stays lit
-      // — that's the sticky preference, the action button is the
-      // per-commit signal. Re-click Erase to carve another stroke.
-      this._endAction();
+      // v2.14.2 sticky: re-arm the same action so the GM can drag
+      // again without re-clicking Erase. Click Erase or switch
+      // Drawing Mode to exit.
+      this._endActionAndRearm('erase');
       return;
     }
     // Paint — one new polygon per blob, holes preserved (a donut scribble
@@ -3559,12 +3587,10 @@ export class GMApp {
       createdAt: now,
     }));
     this.state.setFog({ polygons: [...fog.polygons, ...newPolys] });
-    // Single-shot: clear the Paint button + end the action so the
-    // GM gets visible "stroke committed" feedback. Brush mode (the
-    // toggle button at the top of the panel) stays lit — that's
-    // the sticky preference; the action button is the per-commit
-    // signal. Re-click Paint to lay another stroke.
-    this._endAction();
+    // v2.14.2 sticky: re-arm the same action so the GM can drag
+    // again without re-clicking Paint. Click Paint or switch
+    // Drawing Mode to exit.
+    this._endActionAndRearm('paint');
   }
 
   /** v2.12 Magic Wand commit. Click in Fill mode runs flood-fill at
@@ -3590,9 +3616,10 @@ export class GMApp {
       const result = subtractFromAll(fog.polygons, polyVerts);
       this.state.setFog({ polygons: result });
       // Erase doesn't have a "last fill" to mutate via tolerance —
-      // each erase commits.
+      // each erase commits. v2.14.2 sticky: re-arm so the GM can
+      // click again without re-clicking Erase.
       this._lastFillState = null;
-      this._endAction();
+      this._endActionAndRearm('erase');
       return;
     }
     // Paint — inheritance + draft + default chain like the other commits.
@@ -3622,11 +3649,12 @@ export class GMApp {
     // and doesn't care whether the fill action is "live" — the
     // refinement workflow stays intact after the button clears.
     this._lastFillState = { polyId: poly.id, seedX: mapPos.x, seedY: mapPos.y, action };
-    // Single-shot: clear the Paint button + end the action so the
-    // GM gets visible "fill committed" feedback — matches brush +
-    // polygon. preserveFillState keeps _lastFillState alive so the
-    // Tolerance slider can still refine this polygon.
-    this._endAction({ preserveFillState: true });
+    // v2.14.2 sticky: re-arm the same action so the GM can click
+    // again to fill another region. preserveFillState keeps
+    // _lastFillState alive across the re-arm so the Tolerance
+    // slider can still refine the just-placed polygon until the
+    // next fill click replaces it.
+    this._endActionAndRearm('paint', { preserveFillState: true });
   }
 
   /** v2.12 — re-run the last fill at a new tolerance and replace the
@@ -4578,6 +4606,9 @@ export class GMApp {
     this.markerShowLabelToggle.addEventListener('change', () => {
       this.updateSelectedMarker({ showLabel: this.markerShowLabelToggle.checked });
     });
+    this.markerShowLabelGmToggle.addEventListener('change', () => {
+      this.updateSelectedMarker({ showLabelOnGM: this.markerShowLabelGmToggle.checked });
+    });
 
     this.markerLockedToggle.addEventListener('change', () => {
       this.updateSelectedMarker({ locked: this.markerLockedToggle.checked });
@@ -5293,10 +5324,23 @@ export class GMApp {
    *      MOTD modal; on dismiss, record the current version as seen
    *      so it doesn't reappear until the next bump. */
   private async _maybeShowMotd(): Promise<void> {
-    const { CURRENT_MOTD } = await import('../motd/motd.ts');
+    const { CURRENT_MOTD, BETA_MOTD } = await import('../motd/motd.ts');
+    const settings = await import('../storage/localSettings.ts');
+
+    // v2.14.2 — beta-channel announcement. Shown once per browser on a
+    // beta host. Doesn't compete with the per-release MOTD: beta MOTD
+    // fires only on beta hosts; the release MOTD fires regardless of
+    // host. If both want to show, the beta one wins this session (its
+    // job is to set context for everything else the user sees).
+    if (settings.isBetaHost() && !settings.isBetaMotdDismissed() && !this._didSeedDefault && !this._aboutOpen) {
+      const { showMotdDialog } = await import('./MotdDialog.ts');
+      await showMotdDialog(BETA_MOTD, { variant: 'warn' });
+      settings.setBetaMotdDismissed();
+      return;
+    }
+
     if (!CURRENT_MOTD.version) return;
-    const { getLastSeenMotdVersion, setLastSeenMotdVersion } =
-      await import('../storage/localSettings.ts');
+    const { getLastSeenMotdVersion, setLastSeenMotdVersion } = settings;
     if (this._didSeedDefault) {
       // First-install path — About is about to auto-open (or was just
       // dismissed). Don't bombard with a second popup; mark the MOTD
@@ -5482,9 +5526,10 @@ export class GMApp {
 
     if (sel) {
       this.markerColorInput.value     = sel.color;
-      this.markerHiddenToggle.checked    = sel.hidden;
-      this.markerShowLabelToggle.checked = sel.showLabel ?? false;
-      this.markerLockedToggle.checked    = sel.locked ?? false;
+      this.markerHiddenToggle.checked      = sel.hidden;
+      this.markerShowLabelToggle.checked   = sel.showLabel ?? false;
+      this.markerShowLabelGmToggle.checked = sel.showLabelOnGM ?? true;
+      this.markerLockedToggle.checked      = sel.locked ?? false;
 
       // Update icon button display — rendered at 96×96 px for the
       // new double-height preview button (.marker-icon-btn--lg). The

@@ -108,6 +108,19 @@ export class PlayerApp {
     const fsBtn = document.getElementById('player-fullscreen-btn');
     if (fsBtn) bindFullscreenButton(fsBtn);
 
+    // v2.14.2 — listen for the GM's "I am closing" lifecycle signal so
+    // this spawned popup self-closes when the main Mappadux window
+    // shuts down. Same-origin BroadcastChannel; only fires on local
+    // popups (network player tabs don't share the channel).
+    try {
+      const lifecycle = new BroadcastChannel('mappadux:lifecycle');
+      lifecycle.onmessage = (e) => {
+        if (e?.data?.kind === 'gm-closing') {
+          try { window.close(); } catch { /* no-op */ }
+        }
+      };
+    } catch { /* BroadcastChannel unavailable — popup stays open, harmless */ }
+
     this.renderer = new Renderer(
       document.querySelector<HTMLCanvasElement>('#renderer-canvas')!,
       { preserveDrawingBuffer: true },

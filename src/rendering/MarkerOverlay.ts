@@ -757,6 +757,9 @@ export class MarkerOverlay {
     if (el.label.textContent !== item.label!.text) {
       el.label.textContent = item.label!.text;
     }
+    // v2.14.2 — fade GM-side name when the marker is locked so background-
+    // prop labels stay quiet; live (unlocked) names keep full contrast.
+    el.label.classList.toggle('marker-label--locked', !!item.locked);
   }
 
   private _applyMoveHandle(el: MarkerElements, item: OverlayItem): void {

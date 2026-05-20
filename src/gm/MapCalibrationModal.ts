@@ -120,6 +120,19 @@ export class MapCalibrationModal {
               <span>squares</span>
               <span class="calibration-grid-feedback" aria-live="polite"></span>
             </div>
+            <div class="calibration-by-dpi">
+              <span>or DPI is</span>
+              <select class="calibration-dpi-select" title="Common map DPIs. VTT entries are typical for maps made for virtual tabletop apps; the others are common print/display resolutions.">
+                <option value="">—</option>
+                <option value="60">60</option>
+                <option value="70">70 (VTT)</option>
+                <option value="75">75</option>
+                <option value="100">100 (VTT)</option>
+                <option value="140">140 (VTT)</option>
+                <option value="150">150</option>
+                <option value="300">300</option>
+              </select>
+            </div>
           </div>
           <span class="calibration-current">${asset.pixelsPerSquare
             ? `Current: ${asset.pixelsPerSquare.toFixed(1)} map-px per square`
@@ -302,11 +315,32 @@ export class MapCalibrationModal {
 
     // ─── By-grid path: live feedback + save-time precedence ───────────────
     // The user can skip the ruler entirely if they know the map's grid
-    // dimensions (e.g. "this map is 25 × 30"). When both inputs are filled
-    // with positive integers, the save path prefers them over the ruler.
+    // dimensions (e.g. "this map is 25 × 30"), or — v2.14.2 — pick a
+    // DPI from the common-VTT/print list. All three controls (H/V, DPI,
+    // and the ruler line) drive `pixelsPerSquare`; H/V ↔ DPI are
+    // self-reactive so you can think in whichever frame is easier.
     const gridHInput   = overlay.querySelector<HTMLInputElement>('.calibration-grid-h')!;
     const gridVInput   = overlay.querySelector<HTMLInputElement>('.calibration-grid-v')!;
     const gridFeedback = overlay.querySelector<HTMLSpanElement>('.calibration-grid-feedback')!;
+    const dpiSelect    = overlay.querySelector<HTMLSelectElement>('.calibration-dpi-select')!;
+
+    // Common DPIs from the dropdown — keep in sync with the <option>s
+    // above. Used by both the dropdown→H/V flow and the H/V→green-
+    // highlight match feedback.
+    const COMMON_DPIS: ReadonlyArray<{ dpi: number; label: string }> = [
+      { dpi: 60,  label: '60'         },
+      { dpi: 70,  label: '70 (VTT)'   },
+      { dpi: 75,  label: '75'         },
+      { dpi: 100, label: '100 (VTT)'  },
+      { dpi: 140, label: '140 (VTT)'  },
+      { dpi: 150, label: '150'        },
+      { dpi: 300, label: '300'        },
+    ];
+    const matchCommonDpi = (pps: number): { dpi: number; label: string } | null => {
+      // Tolerance: half-pixel slop so an honest 100.4 still flags as "100 (VTT)".
+      for (const c of COMMON_DPIS) if (Math.abs(pps - c.dpi) < 0.6) return c;
+      return null;
+    };
 
     type GridSolve = {
       ok: boolean;
@@ -335,6 +369,15 @@ export class MapCalibrationModal {
       return { ok, pps, hPps, vPps, hClean, vClean, matched };
     };
 
+    // v2.14.2 — reflect the live pps into the DPI dropdown so the GM
+    // can see "ah, this maps to 100 (VTT)" without doing the maths.
+    // Set to the exact match when one exists, else blank.
+    const syncDpiSelectFromPps = (pps: number | null) => {
+      if (pps === null || !Number.isFinite(pps)) { dpiSelect.value = ''; return; }
+      const match = matchCommonDpi(pps);
+      dpiSelect.value = match ? String(match.dpi) : '';
+    };
+
     const updateGridFeedback = () => {
       const g = solveGrid();
       gridFeedback.classList.remove('is-ok', 'is-warn');
@@ -346,6 +389,7 @@ export class MapCalibrationModal {
         } else {
           gridFeedback.textContent = '';
         }
+        syncDpiSelectFromPps(null);
         return;
       }
       // Both filled — judge cleanliness and match.
@@ -353,16 +397,56 @@ export class MapCalibrationModal {
       if (!g.hClean) messages.push(`H not whole (${g.hPps!.toFixed(2)})`);
       if (!g.vClean) messages.push(`V not whole (${g.vPps!.toFixed(2)})`);
       if (!g.matched) messages.push(`H≠V (${g.hPps!.toFixed(1)} vs ${g.vPps!.toFixed(1)})`);
+      // v2.14.2 — common-DPI match flips the row green even when there's
+      // no warning to suppress; it's a positive "this looks right" cue.
+      const dpiMatch = matchCommonDpi(g.pps!);
       if (messages.length === 0) {
-        gridFeedback.textContent = `✓ ${g.pps!.toFixed(0)} px/sq`;
+        gridFeedback.textContent = dpiMatch
+          ? `✓ ${g.pps!.toFixed(0)} px/sq · matches ${dpiMatch.label} DPI`
+          : `✓ ${g.pps!.toFixed(0)} px/sq`;
         gridFeedback.classList.add('is-ok');
       } else {
         gridFeedback.textContent = `⚠ ${messages.join(', ')}`;
         gridFeedback.classList.add('is-warn');
       }
+      syncDpiSelectFromPps(g.pps);
     };
-    gridHInput.addEventListener('input', updateGridFeedback);
-    gridVInput.addEventListener('input', updateGridFeedback);
+    // v2.14.2 — when the user fills one of H / V and leaves the other
+    // empty, auto-fill the empty side assuming a square (1:1) pixel
+    // grid. Eliminates the "fill one box, other defaults to 0" edge
+    // that produced the <line> attribute -Infinity errors in v2.14,
+    // and also gives the GM a sensible default for typical maps where
+    // squares are actually square. The user can still overwrite the
+    // auto-filled value before saving.
+    const autoFillCounterpart = (source: 'h' | 'v') => {
+      const srcInput   = source === 'h' ? gridHInput : gridVInput;
+      const otherInput = source === 'h' ? gridVInput : gridHInput;
+      const srcRaw = srcInput.value.trim();
+      if (srcRaw === '' || otherInput.value.trim() !== '') return;
+      const srcN = parseInt(srcRaw, 10);
+      if (!Number.isFinite(srcN) || srcN <= 0) return;
+      // Assume square pixels: srcPps = imgX / srcN.  otherN = imgY / srcPps.
+      // Collapses to: otherN = srcN * (imgY / imgX).
+      const ratio = source === 'h' ? (this.imgH / this.imgW) : (this.imgW / this.imgH);
+      const otherN = Math.max(1, Math.round(srcN * ratio));
+      otherInput.value = String(otherN);
+    };
+    gridHInput.addEventListener('input', () => { autoFillCounterpart('h'); updateGridFeedback(); });
+    gridVInput.addEventListener('input', () => { autoFillCounterpart('v'); updateGridFeedback(); });
+
+    // v2.14.2 — picking a DPI back-fills H × V using the map's actual
+    // pixel dimensions. Round to the nearest integer; if the map's
+    // aspect doesn't divide cleanly by the picked DPI, updateGridFeedback
+    // will warn "H not whole" etc. so the GM knows the assumption
+    // doesn't quite fit (and can switch to the ruler or another DPI).
+    dpiSelect.addEventListener('change', () => {
+      const dpi = parseFloat(dpiSelect.value);
+      if (!Number.isFinite(dpi) || dpi <= 0) return;
+      gridHInput.value = String(Math.max(1, Math.round(this.imgW / dpi)));
+      gridVInput.value = String(Math.max(1, Math.round(this.imgH / dpi)));
+      updateGridFeedback();
+    });
+
     updateGridFeedback();
 
     overlay.querySelector<HTMLButtonElement>('.calibration-cancel')?.addEventListener('click', () => this.close());

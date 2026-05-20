@@ -263,6 +263,12 @@ body.projector-view .marker-overlay {
   pointer-events: none;
   user-select: none;
 }
+/* v2.14.2 — locked markers fade their GM-side name so background-prop
+   labels (lit braziers, room numbers, ambient sound sources) stay
+   readable but quiet. Live markers keep full contrast. */
+.marker-label--locked {
+  opacity: 0.55;
+}
 
 /* Common base for all clickable marker handles (move, badges, resize, rotate).
    Touch-friendly minimum size; mid-tone dark fill so they read on any map. */
@@ -3720,6 +3726,18 @@ option.select-option--add {
   padding: 12px 18px 16px;
   border-top: 1px solid var(--border);
 }
+/* v2.14.2 — warning-variant MOTD (beta channel announcement).
+   Yellow accent on header + left border so it reads as caution, not
+   release-note. */
+.motd-dialog--warn { border: 1px solid var(--warn, #facc15); }
+.motd-dialog--warn .confirm-header {
+  background: rgba(250, 204, 21, 0.08);
+  border-bottom-color: var(--warn, #facc15);
+}
+.motd-dialog--warn .modal-title::before {
+  content: '⚠ ';
+  color: var(--warn, #facc15);
+}
 
 .modal-tabs {
   display: flex;
@@ -3911,6 +3929,12 @@ option.select-option--add {
   color: var(--text);
 }
 .upload-drop-label { margin: 0; pointer-events: none; }
+.upload-storage-hint {
+  margin: var(--space-xs) 0 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  font-style: italic;
+}
 
 .weblinks-hint {
   font-size: var(--font-size-sm);
@@ -4071,6 +4095,18 @@ option.select-option--add {
 }
 .calibration-grid-feedback.is-ok   { color: var(--ok); }
 .calibration-grid-feedback.is-warn { color: var(--warn); }
+.calibration-by-dpi {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.85rem; color: var(--text-dim);
+}
+.calibration-by-dpi select {
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+}
 .calibration-current { font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono); }
 .calibration-actions { margin-left: auto; display: flex; gap: var(--space-sm); }
 

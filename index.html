@@ -271,6 +271,14 @@
             </label>
           </div>
 
+          <div class="param-row param-row--toggle">
+            <label for="marker-show-label-gm" title="Show the marker's name on the GM map. Survives the marker being hidden from players, so you can keep track of where each NPC / trap / clue is even when invisible to the table. Fades when the marker is locked to keep background-prop names quiet.">Show Name on GM map</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="marker-show-label-gm" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
           <p class="map-section-label map-section-label--gap">Marker Sounds</p>
           <div class="marker-role-btns marker-audio-role-btns">
             <button class="marker-role-btn" data-role="default">None</button>
@@ -404,7 +412,7 @@
 
     <section class="panel" id="projection-panel">
       <div class="panel-header">
-        <button type="button" class="panel-title" aria-expanded="false">Projection View</button>
+        <button type="button" class="panel-title" aria-expanded="false">Scaled View</button>
         <span class="panel-toggle-icon" aria-hidden="true" title="Visual bypass"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
         <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Broadcast to projector. Off = show placeholder (the GM is faffing)">
           <input type="checkbox" id="projection-broadcast-toggle" checked />
@@ -421,7 +429,7 @@
 
         <!-- Default-state intro: shown when no projector is connected. -->
         <p id="projection-intro" class="view-hint view-hint--gap">
-          Projector view is for on-table battlemaps using an under-table screen or down projector. It scales calibrated maps to 1&Prime;/25&nbsp;mm squares so miniatures occupy real inches on the surface. Pick a calibrated projector above to begin, or add a new one.
+          Scaled view is for on-table battlemaps using an under-table screen or down projector. It scales calibrated maps to 1&Prime;/25&nbsp;mm squares so miniatures occupy real inches on the surface. Pick a calibrated projector above to begin, or add a new one.
         </p>
 
         <!-- Active controls — shown only when a primary projector is connected. -->
@@ -566,6 +574,7 @@ https://example.com/sound2.wav"></textarea>
             <p class="upload-drop-label">Drop an audio file here<br>or click to browse</p>
             <input type="file" id="upload-file-input" accept="audio/*" hidden />
           </div>
+          <p class="upload-storage-hint">Uploaded sounds are saved locally inside your map pack &mdash; they travel with your bundle export and stay available offline.</p>
           <div id="upload-file-info" class="upload-file-info" hidden>
             <div class="modal-search-row">
               <input type="text" id="upload-name-input" class="modal-search-input" placeholder="Sound name…" />
@@ -644,6 +653,7 @@ https://example.com/map2.jpg"></textarea>
             <p class="upload-drop-label">Drop a map image or video here<br>or click to browse</p>
             <input type="file" id="map-upload-file-input" accept=".png,.jpg,.jpeg,.webp,.webm,.mp4" hidden />
           </div>
+          <p class="upload-storage-hint">Uploaded maps are saved locally inside your map pack &mdash; they travel with your bundle export and stay available offline.</p>
           <div id="map-upload-file-info" class="upload-file-info" hidden>
             <div class="modal-search-row">
               <input type="text" id="map-upload-name-input" class="modal-search-input" placeholder="Map name…" />

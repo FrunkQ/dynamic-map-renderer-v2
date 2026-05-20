@@ -1,5 +1,71 @@
 # Changelog
 
+## v2.14.2 — 2026-05-20
+
+### Multi-fix beta release — calibration UX, sticky paint, GM-side names, lifecycle
+
+**Map calibration rebuilt around a self-reactive H/V + DPI pair.**
+The calibration modal grew a third row: **DPI dropdown** with the
+common values (60, 70 VTT, 75, 100 VTT, 140 VTT, 150, 300). Picking
+a DPI back-fills H and V from the map's actual pixel dimensions.
+Typing in only H or only V auto-fills the empty side at 1:1 (square
+grid), which incidentally kills the `<line> attribute x1: Expected
+length, "-Infinity"` console error that the empty-default-zero state
+used to throw. When H × V works out to one of the common DPIs the
+feedback flips green and labels the match ("matches 100 (VTT) DPI"),
+so a quick "does this look right?" reads at a glance. The ruler
+line stays the manual fallback — line ↔ H/V/DPI master-follower
+sync is the v2.14.3 piece.
+
+**Fog Paint / Erase is sticky again, the right way.** Pre-v2.14
+the action button stayed lit after a commit but the underlying
+action sometimes wasn't actually armed — clicking the lit button
+did nothing for one tick. v2.14 went single-shot (button cleared
+after every commit) which fixed the inconsistency but broke the
+"keep dropping polys" flow. v2.14.2 re-arms cleanly: every commit
+runs `_endAction` (full state reset) then `_startAction` (re-arm)
+in the same tick, so the button stays lit, the editor is in the
+correct state for the next stroke, and clicking the button or
+switching Drawing Mode is the explicit exit. Polygon, brush, and
+fill modes all behave consistently.
+
+**Marker names on the GM map, independent of player visibility.**
+New per-marker toggle **Show Name on GM map** (default ON) sits
+alongside the existing Show Name on player map (default off). The
+GM-side name survives the marker being hidden from players — useful
+for tracking where each NPC / trap / clue sits even when invisible
+to the table. Locked markers fade their name to dim chrome so
+background-prop labels stay quiet.
+
+**Locked-marker badge cluster decluttered.** Locked markers now
+only display the eye / speaker / sensor badges when the
+corresponding feature is **on**. A locked-and-hidden prop drops the
+eye; a locked-and-muted source drops the speaker. Live (unlocked)
+markers always show the full row.
+
+**Projection View renamed to Scaled View** across the UI (panel
+title, HELP heading, README) — terminology change ahead of the
+v2.15 work where Scaled View takes on more roles than just
+projector output.
+
+**UI scale slider floor lowered to 50%** (from 75%) for users on
+small screens or who want more map real-estate.
+
+**Asset library Upload tabs gain a storage hint.** Both Map and
+Audio Upload tabs now spell out that uploads are saved locally in
+the map pack and travel with bundle exports / work offline.
+
+**Beta channel welcome MOTD.** First launch on a beta host (not
+www.mappadux.com or localhost) now shows a warning-style modal
+explaining that features may come and go, but maps should stay
+compatible. Dismissed once per browser.
+
+**Spawned windows close with the GM.** Closing the main Mappadux
+GM window now broadcasts a `gm-closing` signal on a dedicated
+`mappadux:lifecycle` BroadcastChannel; Player, Scaled View, and
+Calibration popups listen on it and self-close. Same-origin only;
+remote players over P2P aren't affected.
+
 ## v2.14.1 — 2026-05-18
 
 ### Marker resize — upper cap removed
