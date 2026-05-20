@@ -93,14 +93,21 @@ void main() {
     float linesPerHeight = max(1.0, uRulingSpacing);
     float cellY = 1.0 / linesPerHeight;                 // vUv-Y per cell
     float cellX = cellY / max(0.001, aspect);           // square cells in screen
-    // Half-line thickness as a fraction of the smaller cell dim, so the
-    // line stays visible at all spacings without dominating tight grids.
-    float halfFracY = clamp(cellY * 0.06, 0.0008, 0.012);
+    // Half-line thickness as a fraction of the cell, so the line stays
+    // visible at all spacings without dominating tight grids. v2.14.7
+    // — bumped slightly so lines actually read as lines, not whiskers.
+    float halfFracY = clamp(cellY * 0.10, 0.0015, 0.020);
     float halfFracX = halfFracY / max(0.001, aspect);   // px-square in screen
     float distY = abs(mod(vUv.y + cellY * 0.5, cellY) - cellY * 0.5);
     float distX = abs(mod(vUv.x + cellX * 0.5, cellX) - cellX * 0.5);
-    float maskY = smoothstep(halfFracY, 0.0, distY);
-    float maskX = smoothstep(halfFracX, 0.0, distX);
+    // v2.14.7 — defensive smoothstep ordering. Previous form was
+    // smoothstep(halfFrac, 0.0, dist) which has edge0 > edge1; the
+    // GLSL spec marks this as undefined and some drivers/browsers
+    // produced an inverted mask (lines transparent, spaces filled).
+    // 1.0 - smoothstep(0, half, dist) is unambiguous: 1 ON the line
+    // (dist = 0), 0 at or past half-line distance.
+    float maskY = 1.0 - smoothstep(0.0, halfFracY, distY);
+    float maskX = 1.0 - smoothstep(0.0, halfFracX, distX);
     float lineMask = 0.0;
     bool isLined = uRulingStyle > 0.5 && uRulingStyle < 1.5;
     bool isGrid  = uRulingStyle > 1.5 && uRulingStyle < 2.5;

@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.14.7 — 2026-05-20
+
+### Contemporary Paper ruling inversion (real fix this time)
+
+The v2.14.6 "fix" still produced an inverted mask in Alex's beta
+testing — gridlines stayed transparent, the spaces between them
+filled with the ruling colour. Root cause: my smoothstep calls had
+edge0 > edge1, which the GLSL ES 1.0 spec marks as **undefined
+behaviour**. Different drivers / browsers compute it differently;
+on Alex's setup the result came out inverted.
+
+v2.14.7 uses the unambiguous form `1.0 - smoothstep(0.0, halfLine,
+dist)` — edge0 < edge1, well-defined everywhere. Mask is now
+reliably 1 ON the line and 0 off it, regardless of GPU driver.
+
+Also nudged the line thickness up a touch (`halfFracY = cellY * 0.10`
+clamped to 0.0015–0.020 of vUv-Y, up from 0.06 / 0.012) so the lines
+actually read as lines rather than whiskers at the default settings.
+
 ## v2.14.6 — 2026-05-20
 
 ### Bug hunt round 2
