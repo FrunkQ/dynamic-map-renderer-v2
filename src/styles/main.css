@@ -511,10 +511,36 @@ body.projector-view .marker-overlay {
   width: 100%;
   height: 100%;
   z-index: 4;
-  /* The editor hit-tests on a parent wrapper and only consumes events that
-     land inside the rect, so the canvas itself stays click-transparent. */
+  /* v2.14.3 — canvas stays pointer-events:none permanently; the move
+     handle below is the only interactive element, so pan/zoom and
+     other GM-canvas interactions pass through everywhere else. */
   pointer-events: none;
 }
+/* v2.14.3 — Scaled View rect move handle. Screen-space sibling of the
+   projector-viewport canvas; positioned via transform from the editor
+   each redraw. Sits at the rect's top-left corner, half-overlapping. */
+.projector-rect-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(34, 197, 94, 0.92);
+  border: 1px solid #fff;
+  border-radius: 4px;
+  color: #fff;
+  cursor: grab;
+  z-index: 5;
+  pointer-events: auto;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.projector-rect-handle:active { cursor: grabbing; }
+.projector-rect-handle[hidden] { display: none; }
 .projector-status {
   font-size: 0.75rem;
   color: var(--text-secondary);

@@ -56,12 +56,16 @@ export class ProjectorViewportEditor {
 
   private onChangeFn: ChangeCallback | null = null;
 
-  private editMode = false;
-
   /** Optional Renderer reference — when wired, mapBounds tracks the live
    *  GM camera transform (so the projector rectangle pans/zooms with the
    *  workspace). Identity-equivalent without a renderer. */
   private renderer: Renderer | null = null;
+
+  /** v2.14.3 — screen-space move handle. The rect outline lives on the
+   *  canvas (pointer-events:none) so other GM canvas interactions stay
+   *  unaffected; only this handle is pointer-events:auto. Always present
+   *  when the rect is active; no edit-mode toggle. */
+  private moveHandle: HTMLButtonElement;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -72,20 +76,24 @@ export class ProjectorViewportEditor {
     this.syncSize();
     window.addEventListener('resize', () => { this.syncSize(); this.redraw(); });
 
-    // Standard pointer handlers on the canvas itself. The canvas is
-    // pointer-events: none in CSS by default, so these never fire — they
-    // only become live when setEditMode(true) flips pointer-events to auto.
-    this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
-    this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
-    this.canvas.addEventListener('pointerup',   (e) => this.onPointerUp(e));
-    this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
-  }
-
-  setEditMode(on: boolean): void {
-    this.editMode = on;
-    this.canvas.style.pointerEvents = on ? 'auto' : 'none';
-    this.canvas.style.cursor = on ? 'grab' : '';
-    this.redraw();
+    this.moveHandle = document.createElement('button');
+    this.moveHandle.type = 'button';
+    this.moveHandle.className = 'projector-rect-handle';
+    this.moveHandle.title = 'Drag to move the Scaled View across the map';
+    this.moveHandle.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="5 9 2 12 5 15"/>
+        <polyline points="9 5 12 2 15 5"/>
+        <polyline points="15 19 12 22 9 19"/>
+        <polyline points="19 9 22 12 19 15"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <line x1="12" y1="2" x2="12" y2="22"/>
+      </svg>
+    `;
+    this.moveHandle.hidden = true;
+    canvas.parentElement?.insertBefore(this.moveHandle, canvas.nextSibling);
+    this.moveHandle.addEventListener('pointerdown', (e) => this.onHandlePointerDown(e));
   }
 
   setMapAspect(aspect: number, hasMap: boolean): void {
@@ -247,18 +255,12 @@ export class ProjectorViewportEditor {
     ctx.clearRect(0, 0, this.drawW, this.drawH);
     const rect = this.rectInCanvas();
     if (!rect) {
+      this.moveHandle.hidden = true;
       this.stopAnimation();
       return;
     }
 
     ctx.save();
-
-    if (this.editMode) {
-      // Faint green tint fill so the rect is easy to spot on busy maps.
-      // Green keeps it visually distinct from the player viewport's orange tint.
-      ctx.fillStyle = 'rgba(34, 197, 94, 0.10)';
-      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-    }
 
     // Orange base ring (always drawn)
     ctx.lineWidth      = 2;
@@ -276,29 +278,39 @@ export class ProjectorViewportEditor {
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
     ctx.restore();
+
+    // v2.14.3 — keep the move handle parked at the rect's top-left
+    // corner. translate(rect.x, rect.y) gives a clean alignment; the
+    // CSS margin shifts it half-overlapping the corner for easy grab.
+    this.moveHandle.hidden = false;
+    this.moveHandle.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
   }
 
   // ─── Pointer interaction ─────────────────────────────────────────────────
 
-  private onPointerDown(e: PointerEvent): void {
-    if (!this.editMode || !this.isActive()) return;
-    const rect = this.rectInCanvas();
-    if (!rect) return;
-    const r = this.canvas.getBoundingClientRect();
-    const px = e.clientX - r.left;
-    const py = e.clientY - r.top;
-    // Drag from anywhere inside the canvas during edit mode — easier to find
-    // and matches the player viewport editor's "drag the rect" feel.
-    if (px < rect.x || px > rect.x + rect.w || py < rect.y || py > rect.y + rect.h) return;
+  private onHandlePointerDown(e: PointerEvent): void {
+    if (!this.isActive()) return;
     e.preventDefault();
-    this.canvas.setPointerCapture(e.pointerId);
-    this.canvas.style.cursor = 'grabbing';
+    e.stopPropagation();
+    this.moveHandle.setPointerCapture(e.pointerId);
+    this.moveHandle.style.cursor = 'grabbing';
     this.dragging = true;
-    this.dragStart = { x: px, y: py };
+    const r = this.canvas.getBoundingClientRect();
+    this.dragStart = { x: e.clientX - r.left, y: e.clientY - r.top };
     this.dragStartCenter = { x: this.viewport.centerX, y: this.viewport.centerY };
+    const move = (ev: PointerEvent) => this.onHandlePointerMove(ev);
+    const up = (ev: PointerEvent) => {
+      this.moveHandle.removeEventListener('pointermove', move);
+      this.moveHandle.removeEventListener('pointerup',     up);
+      this.moveHandle.removeEventListener('pointercancel', up);
+      this.onHandlePointerUp(ev);
+    };
+    this.moveHandle.addEventListener('pointermove', move);
+    this.moveHandle.addEventListener('pointerup',     up);
+    this.moveHandle.addEventListener('pointercancel', up);
   }
 
-  private onPointerMove(e: PointerEvent): void {
+  private onHandlePointerMove(e: PointerEvent): void {
     if (!this.dragging || !this.dragStart || !this.dragStartCenter) return;
     const r = this.canvas.getBoundingClientRect();
     const px = e.clientX - r.left;
@@ -315,10 +327,10 @@ export class ProjectorViewportEditor {
     if (this.onChangeFn) this.onChangeFn(this.viewport);
   }
 
-  private onPointerUp(e: PointerEvent): void {
+  private onHandlePointerUp(e: PointerEvent): void {
     if (!this.dragging) return;
-    this.canvas.releasePointerCapture(e.pointerId);
-    this.canvas.style.cursor = this.editMode ? 'grab' : '';
+    try { this.moveHandle.releasePointerCapture(e.pointerId); } catch { /* no-op */ }
+    this.moveHandle.style.cursor = '';
     this.dragging = false;
     this.dragStart = null;
     this.dragStartCenter = null;

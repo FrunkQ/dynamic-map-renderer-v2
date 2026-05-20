@@ -2351,45 +2351,11 @@ export class GMApp {
       this._refreshRectOverlays();
     });
 
-    // Edit Projection View toggle (mirrors the player viewport edit-mode flow).
-    const defaultActions = document.getElementById('projection-default-actions')!;
-    const editActions    = document.getElementById('edit-projection-actions')!;
-    let preEditViewport: ProjectorViewport | null = null;
-
-    // Click outside the edit canvas / OK-Cancel buttons implicitly commits —
-    // matches the user's mental model that touching any other control means
-    // "I'm done with the move". Attached on enter, detached on exit.
-    const autoCommit = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest('#projector-viewport-canvas')) return; // dragging the rect
-      if (t.closest('#edit-projection-actions'))   return; // OK / Cancel
-      exitEdit(true);
-    };
-
-    const enterEdit = () => {
-      preEditViewport = this.state.snapshot().projectorViewport ?? null;
-      defaultActions.hidden = true;
-      editActions.hidden    = false;
-      this.projectorEditor.setEditMode(true);
-      // Defer one tick so the click that triggered enterEdit doesn't itself
-      // bubble up and immediately satisfy the auto-commit predicate.
-      setTimeout(() => document.addEventListener('click', autoCommit, true), 0);
-    };
-    const exitEdit = (commit: boolean) => {
-      document.removeEventListener('click', autoCommit, true);
-      if (!commit && preEditViewport) {
-        this.state.setProjectorViewport(preEditViewport);
-        this.projectorEditor.setViewport(preEditViewport);
-        this.host.broadcast({ type: 'projector_viewport_update', payload: preEditViewport });
-      }
-      preEditViewport = null;
-      defaultActions.hidden = false;
-      editActions.hidden    = true;
-      this.projectorEditor.setEditMode(false);
-    };
-    document.getElementById('edit-projection-btn')?.addEventListener('click',   enterEdit);
-    document.getElementById('projection-ok-btn')?.addEventListener('click',     () => exitEdit(true));
-    document.getElementById('projection-cancel-btn')?.addEventListener('click', () => exitEdit(false));
+    // v2.14.3 — Move Projection View button + edit-mode flow retired.
+    // The projector rect now has its own green move handle on the GM
+    // canvas (managed inside ProjectorViewportEditor); drag from there
+    // to reposition. The Open Scaled View Monitor button takes the
+    // prominent slot in the side panel.
 
     // Full-Map toggle — switches between scaled and full-map projection.
     // The retired Blackout button's job (hide what's on the projector) is

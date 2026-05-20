@@ -438,10 +438,13 @@
           <p id="projection-map-cal-warning" class="view-warn" hidden>⚠ Active map is not calibrated — Full Map view enabled &mdash; calibrate map to change.</p>
 
           <div id="projection-default-actions" class="viewport-actions">
-            <button id="edit-projection-btn"     class="btn btn--primary btn--full" title="Drag the projector viewport rectangle around the GM canvas to choose which slice of the map the projector shows at true 1″/25 mm scale.">Move Projection View</button>
-            <!-- Blackout button retired in v2.11/A8.3 — the panel's
-                 broadcast switch (faff placeholder) covers the same
-                 "hide what players see" need with a friendlier UX. -->
+            <!-- v2.14.3 — Move Projection View button retired. The
+                 scaled view rect now has a green move handle at its
+                 top-left corner on the GM canvas; drag from there to
+                 reposition. The Open Scaled View Monitor button takes
+                 the prominent slot — spawning an extra mirror window
+                 is the common follow-up action. -->
+            <button id="projection-monitor-btn" class="btn btn--primary btn--full view-hint--gap" title="Open an additional projector window that mirrors the primary's crop with a bezel frame. Use when you want a second screen showing the same calibrated view (e.g. a tablet on the same LAN that's not the main table screen).">+ Open Scaled View Monitor&hellip;</button>
             <button id="projection-fullmap-btn" class="btn btn--ghost btn--sm btn--full" title="Project the entire map fit-to-window, ignoring calibration. Useful for handouts, world maps, or any image you want everyone to see at once instead of at table-scale.">Full Map</button>
             <div class="param-row param-row--toggle">
               <label for="projection-filter-toggle" title="When on, the GM's visual filter (parchment, hand-drawn, CRT, etc.) does NOT apply to the projector — useful when projecting battlemaps that should stay unfiltered at the table while players still see the filtered view on their own screens.">Disable Filters</label>
@@ -449,13 +452,6 @@
                 <input type="checkbox" id="projection-filter-toggle" />
                 <span class="toggle-slider"></span>
               </label>
-            </div>
-          </div>
-          <div id="edit-projection-actions" class="viewport-actions" hidden>
-            <p class="view-hint view-hint--editing">Drag the rectangle to pan · Size is locked to projector calibration</p>
-            <div class="btn-row">
-              <button id="projection-ok-btn"     class="btn btn--primary btn--sm">OK</button>
-              <button id="projection-cancel-btn" class="btn btn--ghost   btn--sm">Cancel</button>
             </div>
           </div>
 
@@ -480,8 +476,7 @@
             <input type="color" id="projection-grid-colour" value="#ffffff" title="Grid line colour. White reads well on dark maps; pick a contrasting colour for light or busy artwork." />
           </div>
 
-          <button id="projection-monitor-btn"   class="btn btn--ghost btn--sm btn--full view-hint--gap" title="Open an additional projector window that mirrors the primary's crop with a bezel frame. Use when you want a second screen showing the same calibrated view (e.g. a tablet on the same LAN that's not the main table screen).">+ Open Projector Monitor&hellip;</button>
-          <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full" title="Re-run the calibration flow for the active map — adjust pixels-per-square if the projected scale looks off compared to physical miniatures.">Recalibrate this Map&hellip;</button>
+          <button id="projection-recal-map-btn" class="btn btn--ghost btn--sm btn--full view-hint--gap" title="Re-run the calibration flow for the active map — adjust pixels-per-square if the projected scale looks off compared to physical miniatures.">Recalibrate this Map&hellip;</button>
 
           <p id="projector-status" class="projector-status">No projector connected.</p>
         </div>
