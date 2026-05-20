@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.14.4 — 2026-05-20
+
+### Viewport cluster polish, new filter, Hold-Screen QR
+
+A third same-day patch wrapping up viewport-chrome polish + a new
+filter + the hold-screen recruitment QR.
+
+**16:9 button moved to the bottom-right viewport cluster.** Was
+top-row (next to maximise); now it lives below the ratio-lock,
+above the resize handle. Resize → ratio-lock → 16:9 all in the
+same area on the Player View rect. Colour states: default chrome
+when not at 16:9, **green** when at 16:9, **ghosted green** when
+at 16:9 + ratio-lock engaged (the snap is moot), **greyed** when
+not at 16:9 + ratio-lock engaged (the snap would fight the lock).
+
+**Contemporary Paper filter.** New visual filter — sibling to
+Parchment Fantasy but pitched at present-day handouts. Axes:
+paper tint + grain + brightness, ruling (blank / lined / graph
+blue / graph black) with spacing and opacity sliders, ink-blots,
+smudge, crumple, torn edges. All procedural — no bundled paper
+texture file.
+
+**"Not connected, yet?" panel on the player hold screen.** When
+the GM mutes the player view, the faff-overlay placeholder now
+carries a framed QR + URL panel below the random message. The
+currently-connected player's `window.location.href` IS the URL
+latecomers would scan, so it works without any new P2P
+plumbing. Turns the GM's second screen / any already-connected
+player's hold screen into a recruitment poster for late joiners.
+
 ## v2.14.3 — 2026-05-20
 
 ### Viewport chrome cluster + calibration master-follower
