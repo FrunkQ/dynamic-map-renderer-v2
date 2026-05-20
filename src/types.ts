@@ -878,11 +878,55 @@ export interface StoredMap {
  *                 body HTML + aspect + font; renderer rasterises it to a
  *                 canvas at display time. Always locallyStored.
  */
+/**
+ * v2.14.3 — Map Compositor (v2.15 headline) data model foundation.
+ * A composite map is built from N child map assets arranged on a
+ * shared canvas. Two modes:
+ *
+ *   • Modular   — children sit side-by-side (tile-set layouts:
+ *                 Dwarven Forge, Heroquest, sci-fi corridor packs).
+ *                 First tile down sets the master square size;
+ *                 subsequent scaled tiles re-scale to align.
+ *
+ *   • Layered   — children stack on top of one another (roof /
+ *                 interior, day / night, before / after). Only 2
+ *                 layers; z-order via the "push to back" affordance
+ *                 in the editor.
+ *
+ * Editor + renderer come in a later release; the type lives here
+ * now so storage / bundle export / migration code can be staged
+ * without churn later. Until the editor lands, no caller writes
+ * compositeTiles, and code paths that read it should fall back to
+ * the single-asset behaviour (mapAssetId continues to drive).
+ */
+export interface CompositeTile {
+  /** Stable per-tile id, unique within the composite. */
+  id:           string;
+  /** Map asset rendered for this tile. Must resolve to an existing
+   *  MapAsset; missing assets show the standard "Fix Missing Map"
+   *  placeholder. */
+  mapAssetId:   string;
+  /** Centre x in the composite's normalised 0..1 space. */
+  x:            number;
+  /** Centre y in the composite's normalised 0..1 space. */
+  y:            number;
+  /** Rotation in degrees (0..360). Modular mode snaps to common
+   *  angles via the editor; layered mode normally stays at 0. */
+  rotation:     number;
+  /** Optional uniform scale multiplier (1.0 = native size). Modular
+   *  mode auto-scales scaled-grid tiles to match the master tile's
+   *  square size; this captures that result and any user override. */
+  scale?:       number;
+  /** Layered-mode only — z-order. Lower draws under higher. Defaults
+   *  to insertion order. */
+  layer?:       number;
+}
+
 export interface MapAsset {
   id:            string;
   /** Display name — derived from the original file or URL, user-renameable. */
   filename:      string;
-  source:        'upload' | 'web-link' | 'text-map';
+  source:        'upload' | 'web-link' | 'text-map' | 'composite-map';
   /** True when the blob is in IDB (and travels in bundle exports). For
    *  text-map assets this is always true (the body lives in `textMap`). */
   locallyStored: boolean;
@@ -948,6 +992,18 @@ export interface MapAsset {
    * background colour to produce a canvas-rendered image at display time.
    */
   textMap?:      TextMapConfig;
+  /**
+   * v2.14.3 — composite-map tile list. Present iff source='composite-map'.
+   * The renderer composites these tiles into a single output canvas; see
+   * CompositeTile for the per-tile shape. Modular vs layered behaviour
+   * is captured by `compositeMode`. Empty during the brief moment between
+   * "user picked New Composite Map" and "user dropped the first tile";
+   * the editor blocks save when the list is empty.
+   */
+  compositeTiles?: CompositeTile[];
+  /** v2.14.3 — composite-map mode. 'modular' = side-by-side tile
+   *  layout; 'layered' = stacked. Drives editor + renderer behaviour. */
+  compositeMode?:  'modular' | 'layered';
   addedAt:       number;
 }
 
