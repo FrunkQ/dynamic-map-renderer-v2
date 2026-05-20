@@ -1,5 +1,66 @@
 # Changelog
 
+## v2.14.3 — 2026-05-20
+
+### Viewport chrome cluster + calibration master-follower
+
+A follow-up release the same day as v2.14.2, focused on direct-
+manipulation chrome on the Player and Scaled View rects plus the
+last piece of the calibration UX rework.
+
+**Calibration is now line ↔ H/V ↔ DPI master-follower.** v2.14.2
+made H/V and DPI bidirectional; v2.14.3 brings the ruler line into
+the same loop. Drag the line and the H, V, and DPI inputs back-
+fill; type H/V or pick a DPI and the line auto-positions
+horizontally across the map middle with length N × pps. Last-
+touched of {line, H/V, DPI} is the master; the other two follow.
+N (the "this line is X squares" input) stays at the user's value
+(default 10) — it's independent, just scales what the line
+represents.
+
+**Move Projection View button retired; rect carries its own move
+handle.** The scaled view's projector rect on the GM canvas now
+has a small green move handle pinned to its top-left corner. Drag
+from there to reposition. The previous edit-mode flow (OK/Cancel
+buttons, click-outside auto-commit, full-canvas pointer capture)
+is gone. The canvas stays `pointer-events: none` so pan/zoom,
+marker selection, and fog painting pass through everywhere except
+the handle itself. The side panel's `+ Open Projector Monitor…`
+button is renamed `+ Open Scaled View Monitor…` and takes the
+prominent slot the move button used to occupy.
+
+**Aspect-ratio lock toggle on the Player View rect.** Padlock-
+rectangle icon at the bottom-right of the rect chrome, above the
+resize handle. Engaged = the resize handle preserves the rect's
+current W:H ratio (one axis drives, the other follows the
+constraint). Off = free resize. State persists per map in
+`ViewState.aspectLocked` and broadcasts via the existing view
+sync path. Distinct from the existing one-shot 16:9 snap button.
+
+**View-broadcast eye icon on both rects.** Top-left of each
+viewport rect (just above the move handle, outside the rect) now
+carries an eye icon that mirrors the panel-header bypass toggle.
+Eye open = the view is being broadcast; eye closed (red) = the
+view shows the faff placeholder. Click either the eye or the
+header switch and both update.
+
+**Show Grid icon on the Scaled View rect.** New grid icon below
+the move handle, only emitted when the active map is calibrated.
+Clicking flips the `gridEnabled` projector-viewport flag through
+the same broadcast path as the side-panel `Show grid` toggle, so
+both stay in sync. The Player View grid (resizes with the map on
+window resize) is a separate piece of work — needs new player-
+side rendering.
+
+**Map Compositor data-model scaffold.** Type-only foundation for
+the v2.15 headline feature: `CompositeTile` interface,
+`MapAsset.source` gains `'composite-map'`, and `compositeTiles[]`
++ `compositeMode` ('modular' | 'layered') optional fields land on
+`MapAsset`. No editor, renderer, or dropdown entry yet — just the
+shape so storage / bundle export / migration code can be staged
+without churn when the editor lands. All fields are additive and
+optional; existing assets load unchanged.
+
 ## v2.14.2 — 2026-05-20
 
 ### Multi-fix beta release — calibration UX, sticky paint, GM-side names, lifecycle
