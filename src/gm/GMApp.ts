@@ -726,12 +726,17 @@ export class GMApp {
     // Player rect — always shown when a map is loaded. Selection-gated
     // chrome (resize / aspect / maximise) shows only while selected.
     const playerBounds = this.viewportEditor?.getRectBounds() ?? null;
+    const playerBroadcastEl = document.querySelector<HTMLInputElement>('#player-broadcast-toggle');
+    const playerBroadcast: 'on' | 'off' = playerBroadcastEl?.checked === false ? 'off' : 'on';
     this._markerOverlay.updateRect('player', playerBounds
       ? {
           ...playerBounds,
           color:      '#ff8c00',
           selected:   playerSelected,
           showResize: playerSelected,
+          // v2.14.3 — eye icon shows regardless of selection; the
+          // broadcast state matters at a glance.
+          viewBroadcast: playerBroadcast,
           ...(playerSelected ? {
             aspectLock:      this._playerAspectUndo ? 'undo' : 'apply',
             maximise:        this._playerMaxRestore ? 'maximised' : 'normal',
@@ -747,11 +752,15 @@ export class GMApp {
     // otherwise per A8.3).
     const projBounds = this.projectorEditor?.getRectBounds() ?? null;
     const projMaxAvailable = projSelected && this._isActiveMapCalibrated();
+    const projBroadcastEl = document.querySelector<HTMLInputElement>('#projection-broadcast-toggle');
+    const projBroadcast: 'on' | 'off' = projBroadcastEl?.checked === false ? 'off' : 'on';
     this._markerOverlay.updateRect('projector', projBounds
       ? {
           ...projBounds,
           color:    '#22c55e',
           selected: projSelected,
+          // v2.14.3 — eye icon also on the projector / Scaled View rect.
+          viewBroadcast: projBroadcast,
           ...(projMaxAvailable ? {
             maximise: this._projectorMaxRestore ? 'maximised' : 'normal',
           } : {}),
@@ -1021,6 +1030,22 @@ export class GMApp {
    * mode-button logic will quietly keep it on 'full' until the map is
    * calibrated.
    */
+  /**
+   * v2.14.3 — eye icon click on a viewport rect. Toggles the same
+   * broadcast bypass that the panel-header switch controls; firing
+   * the checkbox's 'change' event keeps the existing wiring (faff
+   * placeholder broadcast) intact and ensures the panel UI updates
+   * to match.
+   */
+  private _handleRectViewBroadcast(kind: 'player' | 'projector'): void {
+    const id = kind === 'player' ? '#player-broadcast-toggle' : '#projection-broadcast-toggle';
+    const cb = document.querySelector<HTMLInputElement>(id);
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
+    this._refreshRectOverlays();
+  }
+
   /**
    * v2.14.3 — toggle the Player View aspect-ratio lock. Locks the
    * current W:H so subsequent resize-handle drags preserve it. State
@@ -4123,6 +4148,10 @@ export class GMApp {
       const show = !toggle.checked;
       const message = show ? randomFaffMessage() : '';
       this.host.broadcast({ type: 'view_placeholder', target, show, message });
+      // v2.14.3 — refresh the rect overlay so the eye icon mirrors
+      // the new broadcast state (panel-header toggle ↔ rect eye stay
+      // in sync in both directions).
+      this._refreshRectOverlays();
     });
   }
 
@@ -4509,9 +4538,10 @@ export class GMApp {
         onDeleteClick:    (id) => this._deleteMarker(id),
         onRectMoveDrag:   (kind, clientX, clientY, phase) => this._handleRectMoveDrag(kind, clientX, clientY, phase),
         onRectResizeDrag: (kind, clientX, clientY, phase) => this._handleRectResizeDrag(kind, clientX, clientY, phase),
-        onRectAspectLock: (kind) => this._handleRectAspect(kind),
-        onRectMaximise:   (kind) => this._handleRectMaximise(kind),
-        onRectRatioLock:  (kind) => this._handleRectRatioLock(kind),
+        onRectAspectLock:    (kind) => this._handleRectAspect(kind),
+        onRectMaximise:      (kind) => this._handleRectMaximise(kind),
+        onRectRatioLock:     (kind) => this._handleRectRatioLock(kind),
+        onRectViewBroadcast: (kind) => this._handleRectViewBroadcast(kind),
         // v2.12 unified — selector-icon click selects an overlay polygon
         // (non-fog kinds; fog uses interior click via FogEditor).
         onMapFXSelect:    (id) => this._selectOverlayPolygon(id),

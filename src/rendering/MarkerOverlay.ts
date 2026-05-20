@@ -133,6 +133,11 @@ export interface RectOverlayItem {
    *  Independent of `aspectLock` above (which is the one-shot 16:9
    *  snap). */
   aspectRatioLock?: 'locked' | 'unlocked';
+  /** v2.14.3 — view-broadcast indicator. Mirrors the panel-header
+   *  bypass toggle ('on' = view IS broadcast / seen; 'off' = view
+   *  shows the faff placeholder). Click toggles the same state, so
+   *  the eye and the header switch stay in sync. */
+  viewBroadcast?: 'on' | 'off';
 }
 
 export type RectMoveHandler   = (kind: RectKind, clientX: number, clientY: number, phase: 'start' | 'move' | 'end') => void;
@@ -170,6 +175,8 @@ export interface OverlayHandlers {
   /** v2.14.3 — Click on the aspect-ratio LOCK toggle (player only).
    *  Distinct from `onRectAspectLock` which is the 16:9 snap. */
   onRectRatioLock?:   RectClickHandler;
+  /** v2.14.3 — Click on the view-broadcast eye icon (any rect). */
+  onRectViewBroadcast?: RectClickHandler;
 }
 
 // ── Badge icon SVG fragments (Lucide-inspired strokes) ───────────────────────
@@ -228,10 +235,12 @@ interface RectElements {
   maximiseBtn:   HTMLDivElement | null;
   aspectBtn:     HTMLDivElement | null;
   ratioLockBtn:  HTMLDivElement | null;
+  viewBroadcastBtn: HTMLDivElement | null;
   /** Cached state strings for idempotent DOM updates. */
-  lastMaximise: 'normal'   | 'maximised' | null;
-  lastAspect:   'apply'    | 'undo'      | null;
-  lastRatioLock:'locked'   | 'unlocked'  | null;
+  lastMaximise:  'normal' | 'maximised' | null;
+  lastAspect:    'apply'  | 'undo'      | null;
+  lastRatioLock: 'locked' | 'unlocked'  | null;
+  lastBroadcast: 'on'     | 'off'       | null;
 }
 
 /**
@@ -445,7 +454,8 @@ export class MarkerOverlay {
     return {
       root, moveHandle,
       resizeHandle: null, maximiseBtn: null, aspectBtn: null, ratioLockBtn: null,
-      lastMaximise: null, lastAspect: null, lastRatioLock: null,
+      viewBroadcastBtn: null,
+      lastMaximise: null, lastAspect: null, lastRatioLock: null, lastBroadcast: null,
     };
   }
 
@@ -517,6 +527,37 @@ export class MarkerOverlay {
         : `<span style="font: 700 8px/1 system-ui,sans-serif; letter-spacing:-0.5px;">16:9</span>`;
     }
 
+    // v2.14.3 — view-broadcast eye icon. Mirrors the panel-header bypass
+    // toggle; clicking either keeps both in sync.
+    const wantBroadcast = item.viewBroadcast !== undefined;
+    this._toggleRectAux(r, 'viewBroadcastBtn', wantBroadcast, () => {
+      const el = document.createElement('div');
+      el.className = 'marker-handle marker-handle--rect-view-broadcast';
+      this._bindRectClick(el, kind, 'view-broadcast');
+      return el;
+    });
+    if (r.viewBroadcastBtn && wantBroadcast && item.viewBroadcast !== r.lastBroadcast) {
+      r.lastBroadcast = item.viewBroadcast!;
+      const on = item.viewBroadcast === 'on';
+      r.viewBroadcastBtn.title = on
+        ? 'View is being broadcast (eye open). Click to mute — players see the faff placeholder.'
+        : 'View is muted (eye closed). Players see the faff placeholder. Click to resume broadcast.';
+      r.viewBroadcastBtn.classList.toggle('marker-handle--rect-view-broadcast--off', !on);
+      r.viewBroadcastBtn.innerHTML = on
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+             <circle cx="12" cy="12" r="3"/>
+           </svg>`
+        : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+             <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+             <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+             <line x1="2" y1="2" x2="22" y2="22"/>
+           </svg>`;
+    }
+
     // v2.14.3 — continuous aspect-ratio lock toggle. Locks the rect's
     // current W:H so the resize handle preserves it on drag.
     const wantRatioLock = item.aspectRatioLock !== undefined;
@@ -550,7 +591,7 @@ export class MarkerOverlay {
 
   private _toggleRectAux(
     r: RectElements,
-    key: 'resizeHandle' | 'maximiseBtn' | 'aspectBtn' | 'ratioLockBtn',
+    key: 'resizeHandle' | 'maximiseBtn' | 'aspectBtn' | 'ratioLockBtn' | 'viewBroadcastBtn',
     want: boolean,
     factory: () => HTMLDivElement,
   ): void {
@@ -561,9 +602,10 @@ export class MarkerOverlay {
     } else if (!want && r[key]) {
       r[key]!.remove();
       r[key] = null;
-      if (key === 'maximiseBtn')  r.lastMaximise  = null;
-      if (key === 'aspectBtn')    r.lastAspect    = null;
-      if (key === 'ratioLockBtn') r.lastRatioLock = null;
+      if (key === 'maximiseBtn')      r.lastMaximise  = null;
+      if (key === 'aspectBtn')        r.lastAspect    = null;
+      if (key === 'ratioLockBtn')     r.lastRatioLock = null;
+      if (key === 'viewBroadcastBtn') r.lastBroadcast = null;
     }
   }
 
@@ -591,13 +633,14 @@ export class MarkerOverlay {
     });
   }
 
-  private _bindRectClick(btn: HTMLDivElement, kind: RectKind, action: 'maximise' | 'aspect' | 'ratio-lock'): void {
+  private _bindRectClick(btn: HTMLDivElement, kind: RectKind, action: 'maximise' | 'aspect' | 'ratio-lock' | 'view-broadcast'): void {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (action === 'maximise')   this.handlers.onRectMaximise?.(kind);
-      if (action === 'aspect')     this.handlers.onRectAspectLock?.(kind);
-      if (action === 'ratio-lock') this.handlers.onRectRatioLock?.(kind);
+      if (action === 'maximise')       this.handlers.onRectMaximise?.(kind);
+      if (action === 'aspect')         this.handlers.onRectAspectLock?.(kind);
+      if (action === 'ratio-lock')     this.handlers.onRectRatioLock?.(kind);
+      if (action === 'view-broadcast') this.handlers.onRectViewBroadcast?.(kind);
     });
     btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
   }
