@@ -1,5 +1,53 @@
 # Changelog
 
+## v2.14.6 — 2026-05-20
+
+### Bug hunt round 2
+
+Another fix-everything-Alex-spotted pass from the v2.14.5 retest.
+
+**Fill is single-shot, not sticky.** Flood-fill is destructive enough
+that the GM wants a "committed" cue (Paint button cleared) before
+the next click. Polygon and Brush stay sticky. Tolerance-refinement
+state still survives the clear, so the slider keeps tweaking the
+just-placed fill until another action.
+
+**Uncalibrated projector now shows its rect on the GM canvas.** When
+a projector is connected and the active map is uncalibrated, the
+projector renders the whole map in fit-to-window 'full' mode. The
+GM-side rect used to require calibration to draw at all; now it
+renders as the full map outline whenever the projector is in 'full'
+mode, so the GM can see "this is what's projecting" regardless.
+
+**Contemporary Paper — Ruling overhaul.**
+  - The mask was inverted: gridlines stayed transparent and the
+    spaces between them got filled. Grid showed as dot
+    intersections (the only spots where both axes' fills met),
+    Lined showed as filled stripes. Distance-to-nearest-gridline
+    is now 0 ON the line and grows toward cell middles, so
+    `smoothstep(halfLine, 0, dist)` produces the correct
+    "lit on the line, dark off it" pattern.
+  - **Dots** is now its own picker option (intersection points
+    only). Grid / Lined / Dots are all distinct.
+  - **Spacing** is now normalised: the slider is "Lines (per
+    height)" — Player and Scaled View show identical ruling
+    regardless of canvas resolution. Cells stay square in screen
+    space via aspect-ratio derivation.
+  - Paper grain is also vUv-based now (was resolution-locked),
+    matching ruling for cross-view consistency.
+
+### Known carry-over
+
+- **Other filters with resolution-dependent looks** — many of the
+  shipped filters (rain, scanlines, mist, etc.) use the
+  `resolution` uniform, so they render with different visual scale
+  on a Player window and a Scaled View window of different sizes.
+  This is intentional for some (scanlines look natural at any
+  physical resolution) but probably not for others. Per-filter
+  triage on Alex's report.
+- Player View Show Grid icon (#13), Grid on monitors — still
+  pending from v2.14.5.
+
 ## v2.14.5 — 2026-05-20
 
 ### General bug hunt from beta testing

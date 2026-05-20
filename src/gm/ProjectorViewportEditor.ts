@@ -150,12 +150,15 @@ export class ProjectorViewportEditor {
     this.onChangeFn = fn;
   }
 
-  /** Whether all the inputs needed to draw the rectangle are available. */
+  /** Whether all the inputs needed to draw the rectangle are available.
+   *  v2.14.6 — in 'full' mode the projector renders the entire map
+   *  fit-to-window (the default for uncalibrated maps), so the rect
+   *  is the whole map outline and we don't need mapPixelsPerSquare.
+   *  Calibrated 'scaled' mode still requires it. */
   isActive(): boolean {
-    return this.hasMap
-      && !!this.connection
-      && this.mapPixelsPerSquare !== null
-      && this.mapPixelsPerSquare > 0;
+    if (!this.hasMap || !this.connection) return false;
+    if (this.viewport.mode === 'full') return true;
+    return this.mapPixelsPerSquare !== null && this.mapPixelsPerSquare > 0;
   }
 
   private syncSize(): void {
@@ -177,6 +180,12 @@ export class ProjectorViewportEditor {
     if (!this.isActive()) return null;
     const conn = this.connection!;
     const mb = this.liveMapBounds();
+    // v2.14.6 — full-map mode: the projector renders the entire map
+    // fit-to-window. The GM-side rect is therefore the full map outline,
+    // no calibration arithmetic needed.
+    if (this.viewport.mode === 'full') {
+      return { x: mb.x, y: mb.y, w: mb.w, h: mb.h };
+    }
     // Compute projector viewport size in MAP pixels.
     //   feet-per-projector-canvas-w = canvasW / projector-px-per-square
     //   map-pixels = feet-per-projector-canvas-w * map-px-per-square

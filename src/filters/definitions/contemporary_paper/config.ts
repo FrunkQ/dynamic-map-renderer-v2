@@ -41,7 +41,8 @@ const definition: FilterDefinition = {
     { type: 'slider', id: 'brightness',    label: 'Brightness',         min: 0.5,  max: 1.5,  step: 0.05, default: 1.0,  group: 'paper' },
 
     // Ruling — numeric select so the value injects as a float uniform.
-    //   0 = blank   1 = lined (horizontal rules)   2 = grid (both axes)
+    //   0 = blank   1 = lined (horizontal rules)
+    //   2 = grid (crossing lines)   3 = dots (intersection points)
     // Colour is its own picker below — no need for "graph-blue" /
     // "graph-black" preset variants on the style picker.
     { type: 'select', id: 'rulingStyle',   label: 'Ruling',
@@ -49,11 +50,16 @@ const definition: FilterDefinition = {
         { value: 0, label: 'Blank' },
         { value: 1, label: 'Lined' },
         { value: 2, label: 'Grid'  },
+        { value: 3, label: 'Dots'  },
       ],
       default: 0, group: 'ruling',
     },
     { type: 'color',  id: 'rulingColor',   label: 'Line Colour',        default: '#6688cc', group: 'ruling' },
-    { type: 'slider', id: 'rulingSpacing', label: 'Line Spacing',       min: 12,   max: 80,   step: 1,    default: 28,   group: 'ruling' },
+    // Lines per visible height. Cells are kept square in screen space
+    // regardless of map aspect, so the X spacing tracks: N horizontal
+    // lines + (N * aspect) vertical lines. Normalised this way the
+    // filter looks identical between Player and Scaled View.
+    { type: 'slider', id: 'rulingSpacing', label: 'Lines (per height)', min: 5,    max: 80,   step: 1,    default: 22,   group: 'ruling' },
     { type: 'slider', id: 'rulingOpacity', label: 'Line Opacity',       min: 0,    max: 1,    step: 0.01, default: 0.85, group: 'ruling' },
 
     // Marks

@@ -3708,10 +3708,12 @@ export class GMApp {
       const result = subtractFromAll(fog.polygons, polyVerts);
       this.state.setFog({ polygons: result });
       // Erase doesn't have a "last fill" to mutate via tolerance —
-      // each erase commits. v2.14.2 sticky: re-arm so the GM can
-      // click again without re-clicking Erase.
+      // each erase commits. v2.14.6 — Fill (paint and erase) is
+      // single-shot, not sticky: flood-fill is destructive enough
+      // that the GM wants to see a button-cleared "committed" cue
+      // and re-engage deliberately for the next fill.
       this._lastFillState = null;
-      this._endActionAndRearm('erase');
+      this._endAction();
       return;
     }
     // Paint — inheritance + draft + default chain like the other commits.
@@ -3741,12 +3743,12 @@ export class GMApp {
     // and doesn't care whether the fill action is "live" — the
     // refinement workflow stays intact after the button clears.
     this._lastFillState = { polyId: poly.id, seedX: mapPos.x, seedY: mapPos.y, action };
-    // v2.14.2 sticky: re-arm the same action so the GM can click
-    // again to fill another region. preserveFillState keeps
-    // _lastFillState alive across the re-arm so the Tolerance
-    // slider can still refine the just-placed polygon until the
-    // next fill click replaces it.
-    this._endActionAndRearm('paint', { preserveFillState: true });
+    // v2.14.6 — Fill is single-shot, not sticky. preserveFillState
+    // keeps _lastFillState alive across the clear so the Tolerance
+    // slider can still refine the just-placed polygon, but the
+    // Paint button visibly un-greens to confirm "fill committed".
+    // Click Paint again to fill another region.
+    this._endAction({ preserveFillState: true });
   }
 
   /** v2.12 — re-run the last fill at a new tolerance and replace the

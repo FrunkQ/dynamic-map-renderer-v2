@@ -69,33 +69,49 @@ void main() {
   col = tinted;
 
   // ── 2. Procedural paper grain ────────────────────────────────────────
+  // v2.14.6 — vUv-based so grain looks consistent between Player and
+  // Scaled View. uPaperScale scales the noise frequency; higher = finer.
   if (uPaperGrain > 0.001) {
-    float g = fbm2(vUv * resolution / max(8.0, 64.0 / max(uPaperScale, 0.5)));
+    float g = fbm2(vUv * max(0.5, uPaperScale) * 200.0);
     float grain = (g - 0.5) * 2.0;
     col += grain * uPaperGrain * 0.08;
   }
 
   // ── 3. Ruling overlay ────────────────────────────────────────────────
-  // Spacing is in physical pixels so the lines look consistent across
-  // resolutions. Lined = horizontal-only rules; Grid = both axes.
-  // Colour is whatever the user picked. Line width grows mildly with
-  // spacing so wider grids don't look like razor-thin scratches.
+  // Lines/grid/dots laid out in normalised vUv space so the filter
+  // renders identically on Player and Scaled View regardless of each
+  // canvas's pixel resolution. Cells are kept square in screen space
+  // by deriving X spacing from the aspect ratio: N horizontal cells
+  // plus (N * aspect) vertical cells.
+  //
+  // v2.14.6 — distance-to-nearest-gridline is now 0 AT the line and
+  // grows toward the cell middle, so smoothstep(halfLine, 0, dist)
+  // produces a proper "lit on the line, dark off it" mask (previous
+  // version was inverted and gave dot-intersections for Grid).
   if (uRulingStyle > 0.5 && uRulingOpacity > 0.001) {
-    vec2 pxCoord = vUv * resolution;
-    float spacing = max(4.0, uRulingSpacing);
-    float halfLine = max(0.6, spacing * 0.02);  // line half-width in px
-    float dx = abs(mod(pxCoord.x, spacing) - spacing * 0.5) - (spacing * 0.5 - halfLine);
-    float dy = abs(mod(pxCoord.y, spacing) - spacing * 0.5) - (spacing * 0.5 - halfLine);
+    float aspect = resolution.x / max(1.0, resolution.y);
+    float linesPerHeight = max(1.0, uRulingSpacing);
+    float cellY = 1.0 / linesPerHeight;                 // vUv-Y per cell
+    float cellX = cellY / max(0.001, aspect);           // square cells in screen
+    // Half-line thickness as a fraction of the smaller cell dim, so the
+    // line stays visible at all spacings without dominating tight grids.
+    float halfFracY = clamp(cellY * 0.06, 0.0008, 0.012);
+    float halfFracX = halfFracY / max(0.001, aspect);   // px-square in screen
+    float distY = abs(mod(vUv.y + cellY * 0.5, cellY) - cellY * 0.5);
+    float distX = abs(mod(vUv.x + cellX * 0.5, cellX) - cellX * 0.5);
+    float maskY = smoothstep(halfFracY, 0.0, distY);
+    float maskX = smoothstep(halfFracX, 0.0, distX);
     float lineMask = 0.0;
     bool isLined = uRulingStyle > 0.5 && uRulingStyle < 1.5;
-    bool isGrid  = uRulingStyle > 1.5;
+    bool isGrid  = uRulingStyle > 1.5 && uRulingStyle < 2.5;
+    bool isDots  = uRulingStyle > 2.5;
     if (isLined) {
-      lineMask = smoothstep(halfLine, -halfLine, dy);
+      lineMask = maskY;                          // horizontal rules only
     } else if (isGrid) {
-      lineMask = max(smoothstep(halfLine, -halfLine, dx), smoothstep(halfLine, -halfLine, dy));
+      lineMask = max(maskX, maskY);              // crossing lines on both axes
+    } else if (isDots) {
+      lineMask = min(maskX, maskY);              // intersection points only
     }
-    // Direct mix - no extra 0.55 attenuation. uRulingOpacity goes
-    // 0..1 so the user gets the full range and lines actually show.
     col = mix(col, uRulingColor, lineMask * uRulingOpacity);
   }
 
