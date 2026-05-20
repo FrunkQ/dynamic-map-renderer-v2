@@ -411,6 +411,21 @@ body.projector-view .marker-overlay {
   cursor: nwse-resize;
 }
 
+/* v2.14.3 — aspect-ratio LOCK toggle. Sits above the resize handle in
+   the bottom-right cluster (resize at the corner, lock 30 px above).
+   Player only. Green halo when engaged so the locked state reads as
+   "this is on" without needing the icon swap alone to carry it. */
+.marker-handle--rect-ratio-lock {
+  top: calc(100% - 30px);
+  left: 100%;
+  cursor: pointer;
+}
+.marker-handle--rect-ratio-lock--engaged {
+  background: rgba(34, 197, 94, 0.92);
+  border-color: #fff;
+  color: #fff;
+}
+
 /* Maximise / aspect-lock buttons — top edge, in a row to the right of the
    move handle. Move centre at (0,0); each subsequent 26 px circle is
    offset by 30 px (handle width + 4 px gap). */

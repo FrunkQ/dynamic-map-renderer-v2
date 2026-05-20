@@ -44,6 +44,14 @@ export interface ViewState {
    * unit. Mirrors `FogState.shaderParams[kind]` on the MapFX side.
    */
   backdropDrafts?: Record<string, Record<string, number | string>>;
+  /**
+   * v2.14.3 — Player View aspect-ratio lock. When true, the resize
+   * handle on the player viewport rect preserves the current W:H
+   * ratio (computed in physical / map-aspect-aware space so it
+   * matches what the player sees). When false / unset, resize is
+   * free. Toggled via the lock icon in the rect's chrome cluster.
+   */
+  aspectLocked?: boolean;
 }
 
 // ─── Fog of War / Overlay (v2.12 unified system) ─────────────────────────────

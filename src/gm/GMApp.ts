@@ -218,10 +218,14 @@ export class GMApp {
   } | null = null;
 
   /** Active overlay-handle resize drag for the player rectangle. The
-   *  bottom-right corner follows the cursor; top-left stays fixed. */
+   *  bottom-right corner follows the cursor; top-left stays fixed.
+   *  v2.14.3 — also tracks the drag-start aspect ratio so the ratio-lock
+   *  toggle can constrain the resize when engaged. */
   private _rectResizeDrag: {
     /** Top-left corner in map-norm at drag start — anchor for the resize. */
     anchor: { x: number; y: number };
+    /** Drag-start W:H ratio (viewNW / viewNH). Used when aspectLocked is on. */
+    aspectAtStart: number;
   } | null = null;
 
   /** Which viewport rect (if any) is currently selected. Mutual-exclusive
@@ -622,6 +626,7 @@ export class GMApp {
           x: v.centerX - v.viewNW / 2,
           y: v.centerY - v.viewNH / 2,
         },
+        aspectAtStart: v.viewNH > 1e-6 ? v.viewNW / v.viewNH : 1,
       };
       return;
     }
@@ -638,8 +643,24 @@ export class GMApp {
     const a = this._rectResizeDrag.anchor;
     // Cursor is the new bottom-right corner; clamp inside map bounds
     // and enforce minimum 5% rect to avoid pixel-vanish collapses.
-    const brX = Math.max(a.x + 0.05, Math.min(1, norm.x));
-    const brY = Math.max(a.y + 0.05, Math.min(1, norm.y));
+    let brX = Math.max(a.x + 0.05, Math.min(1, norm.x));
+    let brY = Math.max(a.y + 0.05, Math.min(1, norm.y));
+    // v2.14.3 — aspect-ratio lock: constrain the new bottom-right corner
+    // so viewNW / viewNH preserves the drag-start ratio. Whichever axis
+    // moved further from anchor (in proportion) drives; the other is
+    // derived. Re-clamp to [a.x+0.05, 1] / [a.y+0.05, 1] so we don't
+    // ever fall under the 5% floor or run off the map.
+    if (this.state.snapshot().view?.aspectLocked) {
+      const ratio = this._rectResizeDrag.aspectAtStart;
+      const dxN = (brX - a.x);
+      const dyN = (brY - a.y);
+      const drivenByX = (dxN / ratio) >= dyN;
+      if (drivenByX) {
+        brY = Math.max(a.y + 0.05, Math.min(1, a.y + dxN / ratio));
+      } else {
+        brX = Math.max(a.x + 0.05, Math.min(1, a.x + dyN * ratio));
+      }
+    }
     const newViewNW = brX - a.x;
     const newViewNH = brY - a.y;
     const newCx = (a.x + brX) / 2;
@@ -712,8 +733,10 @@ export class GMApp {
           selected:   playerSelected,
           showResize: playerSelected,
           ...(playerSelected ? {
-            aspectLock: this._playerAspectUndo ? 'undo' : 'apply',
-            maximise:   this._playerMaxRestore ? 'maximised' : 'normal',
+            aspectLock:      this._playerAspectUndo ? 'undo' : 'apply',
+            maximise:        this._playerMaxRestore ? 'maximised' : 'normal',
+            // v2.14.3 — continuous aspect-ratio lock toggle.
+            aspectRatioLock: (this.state.snapshot().view?.aspectLocked) ? 'locked' : 'unlocked',
           } : {}),
         }
       : null,
@@ -998,6 +1021,22 @@ export class GMApp {
    * mode-button logic will quietly keep it on 'full' until the map is
    * calibrated.
    */
+  /**
+   * v2.14.3 — toggle the Player View aspect-ratio lock. Locks the
+   * current W:H so subsequent resize-handle drags preserve it. State
+   * lives on ViewState so it persists per-map and broadcasts to
+   * connected clients. No-op for the projector rect (its size is
+   * locked to calibration anyway).
+   */
+  private _handleRectRatioLock(kind: 'player' | 'projector'): void {
+    if (kind !== 'player') return;
+    const view = this.state.snapshot().view;
+    if (!view) return;
+    const next = { ...view, aspectLocked: !view.aspectLocked };
+    this.state.setView(next);
+    this._refreshRectOverlays();
+  }
+
   private _handleRectMaximise(kind: 'player' | 'projector'): void {
     if (kind === 'player') {
       const current = this.viewportEditor.getView();
@@ -4472,6 +4511,7 @@ export class GMApp {
         onRectResizeDrag: (kind, clientX, clientY, phase) => this._handleRectResizeDrag(kind, clientX, clientY, phase),
         onRectAspectLock: (kind) => this._handleRectAspect(kind),
         onRectMaximise:   (kind) => this._handleRectMaximise(kind),
+        onRectRatioLock:  (kind) => this._handleRectRatioLock(kind),
         // v2.12 unified — selector-icon click selects an overlay polygon
         // (non-fog kinds; fog uses interior click via FogEditor).
         onMapFXSelect:    (id) => this._selectOverlayPolygon(id),

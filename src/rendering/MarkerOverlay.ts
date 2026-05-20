@@ -127,6 +127,12 @@ export interface RectOverlayItem {
   /** Player-only: show aspect-lock button. `pendingUndo` swaps the icon
    *  to "undo" so a second click reverts to the pre-snap bounds. */
   aspectLock?: 'apply' | 'undo';
+  /** v2.14.3 — player-only: continuous-resize aspect lock toggle.
+   *  When 'locked', the resize handle preserves the rect's current
+   *  aspect ratio. When 'unlocked' (or undefined), resize is free.
+   *  Independent of `aspectLock` above (which is the one-shot 16:9
+   *  snap). */
+  aspectRatioLock?: 'locked' | 'unlocked';
 }
 
 export type RectMoveHandler   = (kind: RectKind, clientX: number, clientY: number, phase: 'start' | 'move' | 'end') => void;
@@ -161,6 +167,9 @@ export interface OverlayHandlers {
   onRectMaximise?:    RectClickHandler;
   /** Click on the aspect-lock button (player only). */
   onRectAspectLock?:  RectClickHandler;
+  /** v2.14.3 — Click on the aspect-ratio LOCK toggle (player only).
+   *  Distinct from `onRectAspectLock` which is the 16:9 snap. */
+  onRectRatioLock?:   RectClickHandler;
 }
 
 // ── Badge icon SVG fragments (Lucide-inspired strokes) ───────────────────────
@@ -218,9 +227,11 @@ interface RectElements {
   resizeHandle:  HTMLDivElement | null;
   maximiseBtn:   HTMLDivElement | null;
   aspectBtn:     HTMLDivElement | null;
+  ratioLockBtn:  HTMLDivElement | null;
   /** Cached state strings for idempotent DOM updates. */
-  lastMaximise: 'normal' | 'maximised' | null;
-  lastAspect:   'apply'  | 'undo'      | null;
+  lastMaximise: 'normal'   | 'maximised' | null;
+  lastAspect:   'apply'    | 'undo'      | null;
+  lastRatioLock:'locked'   | 'unlocked'  | null;
 }
 
 /**
@@ -433,8 +444,8 @@ export class MarkerOverlay {
     this.container.appendChild(root);
     return {
       root, moveHandle,
-      resizeHandle: null, maximiseBtn: null, aspectBtn: null,
-      lastMaximise: null, lastAspect: null,
+      resizeHandle: null, maximiseBtn: null, aspectBtn: null, ratioLockBtn: null,
+      lastMaximise: null, lastAspect: null, lastRatioLock: null,
     };
   }
 
@@ -505,11 +516,41 @@ export class MarkerOverlay {
            </svg>`
         : `<span style="font: 700 8px/1 system-ui,sans-serif; letter-spacing:-0.5px;">16:9</span>`;
     }
+
+    // v2.14.3 — continuous aspect-ratio lock toggle. Locks the rect's
+    // current W:H so the resize handle preserves it on drag.
+    const wantRatioLock = item.aspectRatioLock !== undefined;
+    this._toggleRectAux(r, 'ratioLockBtn', wantRatioLock, () => {
+      const el = document.createElement('div');
+      el.className = 'marker-handle marker-handle--rect-ratio-lock';
+      this._bindRectClick(el, kind, 'ratio-lock');
+      return el;
+    });
+    if (r.ratioLockBtn && wantRatioLock && item.aspectRatioLock !== r.lastRatioLock) {
+      r.lastRatioLock = item.aspectRatioLock!;
+      const locked = item.aspectRatioLock === 'locked';
+      r.ratioLockBtn.title = locked
+        ? 'Aspect ratio LOCKED — resize preserves W:H. Click to unlock.'
+        : 'Aspect ratio unlocked — resize is free. Click to lock to the current ratio.';
+      r.ratioLockBtn.classList.toggle('marker-handle--rect-ratio-lock--engaged', locked);
+      // Icon: open rectangle (unlocked) → rectangle with padlock chip (locked).
+      r.ratioLockBtn.innerHTML = locked
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <rect x="3" y="6" width="18" height="12" rx="1.5"/>
+             <rect x="14" y="11" width="6" height="6" rx="1" fill="currentColor"/>
+             <path d="M15 11v-1.5a2 2 0 0 1 4 0V11" stroke-width="1.5"/>
+           </svg>`
+        : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <rect x="3" y="6" width="18" height="12" rx="1.5"/>
+           </svg>`;
+    }
   }
 
   private _toggleRectAux(
     r: RectElements,
-    key: 'resizeHandle' | 'maximiseBtn' | 'aspectBtn',
+    key: 'resizeHandle' | 'maximiseBtn' | 'aspectBtn' | 'ratioLockBtn',
     want: boolean,
     factory: () => HTMLDivElement,
   ): void {
@@ -520,8 +561,9 @@ export class MarkerOverlay {
     } else if (!want && r[key]) {
       r[key]!.remove();
       r[key] = null;
-      if (key === 'maximiseBtn') r.lastMaximise = null;
-      if (key === 'aspectBtn')   r.lastAspect   = null;
+      if (key === 'maximiseBtn')  r.lastMaximise  = null;
+      if (key === 'aspectBtn')    r.lastAspect    = null;
+      if (key === 'ratioLockBtn') r.lastRatioLock = null;
     }
   }
 
@@ -549,12 +591,13 @@ export class MarkerOverlay {
     });
   }
 
-  private _bindRectClick(btn: HTMLDivElement, kind: RectKind, action: 'maximise' | 'aspect'): void {
+  private _bindRectClick(btn: HTMLDivElement, kind: RectKind, action: 'maximise' | 'aspect' | 'ratio-lock'): void {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (action === 'maximise') this.handlers.onRectMaximise?.(kind);
-      if (action === 'aspect')   this.handlers.onRectAspectLock?.(kind);
+      if (action === 'maximise')   this.handlers.onRectMaximise?.(kind);
+      if (action === 'aspect')     this.handlers.onRectAspectLock?.(kind);
+      if (action === 'ratio-lock') this.handlers.onRectRatioLock?.(kind);
     });
     btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
   }
