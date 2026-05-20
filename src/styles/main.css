@@ -1632,6 +1632,41 @@ option.select-option--add {
   letter-spacing: 0.02em;
   opacity: 0.92;
 }
+/* v2.14.4 — "Not connected, yet?" QR + URL panel under the faff
+   message. Helps the GM's second screen / already-connected players
+   bring late joiners in without leaving the hold screen. */
+.faff-overlay__connect {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: clamp(16px, 3vh, 32px);
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  max-width: min(90vw, 280px);
+}
+.faff-overlay__connect-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.85;
+  letter-spacing: 0.04em;
+}
+.faff-overlay__qr {
+  width: 160px;
+  height: 160px;
+  display: block;
+  border-radius: 4px;
+}
+.faff-overlay__url {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.78rem;
+  word-break: break-all;
+  text-align: center;
+  opacity: 0.75;
+  max-width: 240px;
+}
 
 .toggle-switch--warning input:checked + .toggle-slider {
   background: rgba(249, 115, 22, 0.25);

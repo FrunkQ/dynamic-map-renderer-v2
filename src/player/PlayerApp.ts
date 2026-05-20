@@ -1,6 +1,7 @@
 import { Guest } from '../p2p/Guest.ts';
 import { generateId } from '../utils/id.ts';
 import { bindFullscreenButton } from '../utils/fullscreen.ts';
+import QRCode from 'qrcode';
 import { decodeImageBitmap } from '../utils/decodeImageBitmap.ts';
 import { Renderer } from '../rendering/Renderer.ts';
 import { MarkerTexture } from '../rendering/MarkerTexture.ts';
@@ -777,7 +778,13 @@ export class PlayerApp {
   private _faffOverlayEl: HTMLElement | null = null;
 
   /** Renders the "Hold on while the GM faffs…" placeholder over the map.
-   *  The map continues to update underneath so resuming is instant. */
+   *  The map continues to update underneath so resuming is instant.
+   *
+   *  v2.14.4 — also surfaces a "Not connected, yet?" QR + URL panel
+   *  below the message. The currently-connected player's own URL is
+   *  the same URL latecomers would scan, so we can render it from
+   *  window.location with no extra state. Helps the GM's second
+   *  screen and any already-connected player help bring others in. */
   private _showFaffOverlay(show: boolean, message: string): void {
     if (!show) {
       this._faffOverlayEl?.remove();
@@ -789,9 +796,27 @@ export class PlayerApp {
       el.className = 'faff-overlay';
       el.innerHTML =
         '<img class="faff-overlay__logo" src="/icons/icon-192.png" alt="Mappadux" />' +
-        '<div class="faff-overlay__message"></div>';
+        '<div class="faff-overlay__message"></div>' +
+        '<div class="faff-overlay__connect">' +
+          '<div class="faff-overlay__connect-label">Not connected, yet?</div>' +
+          '<canvas class="faff-overlay__qr" width="160" height="160"></canvas>' +
+          '<div class="faff-overlay__url"></div>' +
+        '</div>';
       document.body.appendChild(el);
       this._faffOverlayEl = el;
+      // Render the QR once — the URL doesn't change for the session.
+      const qrCanvas = el.querySelector<HTMLCanvasElement>('.faff-overlay__qr');
+      const urlEl    = el.querySelector<HTMLElement>('.faff-overlay__url');
+      const url = window.location.href;
+      if (urlEl) urlEl.textContent = url;
+      if (qrCanvas) {
+        // Same palette as the GM panel's QR (light fg on dark bg) so it
+        // reads consistently in either screen.
+        void QRCode.toCanvas(qrCanvas, url, {
+          width: 160,
+          color: { dark: '#c8d8e8', light: '#0a0e1a' },
+        }).catch(() => { /* QR is non-critical */ });
+      }
     }
     const msgEl = this._faffOverlayEl.querySelector<HTMLElement>('.faff-overlay__message');
     if (msgEl) msgEl.textContent = message;
