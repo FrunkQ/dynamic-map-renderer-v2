@@ -880,6 +880,17 @@ body.projector-view .marker-overlay {
 .fog-delete-handle:active { transform: translate(-50%, -50%) scale(0.94); }
 .fog-delete-handle svg { display: block; }
 .fog-delete-handle[hidden] { display: none; }
+
+/*  These two prevent the projection picker from the scaled view section from overflowing
+    It is kind of a duct tape solution but it should work for now. */
+#scaled-view-projection-row{
+  grid-template-columns: auto;
+}
+
+#scaled-view-projection-picker, #scaled-view-projection-picker .editable-select {
+  min-width: 0;
+}
+
 #projector-viewport-canvas {
   position: absolute;
   inset: 0;
