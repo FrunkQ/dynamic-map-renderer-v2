@@ -7752,14 +7752,71 @@ option.select-option--add {
   letter-spacing: 0.08em;
   color: var(--text-secondary);
 }
-.annotate-clock-form { display: flex; flex-direction: column; gap: 6px; }
-.annotate-clock-row { display: flex; align-items: center; gap: 8px; }
-.annotate-seg-label { font-size: var(--font-size-sm); color: var(--text-secondary); }
-#annotate-clock-segments { width: 52px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); }
-.annotate-timer-mode { padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: var(--font-size-sm); }
-#annotate-timer-duration { width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); text-align: center; }
-#annotate-timer-duration:disabled { opacity: 0.4; }
-.annotate-color-row { display: flex; gap: 5px; flex-wrap: wrap; }
+
+/*Consistent styling for any inputs designated for naming within the annotation section*/
+.annotate-section-name-input {
+  padding: 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+.annotate-clock-form { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 6px; 
+}
+
+.annotate-clock-row { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+}
+
+.annotate-seg-label { 
+  font-size: var(--font-size-sm); 
+  color: var(--text-secondary); 
+}
+
+#annotate-clock-segments { 
+  width: 52px; 
+  padding: 4px 6px; 
+  background: var(--bg-input); 
+  border: 1px solid var(--border); 
+  border-radius: var(--radius-sm); 
+  color: var(--text-primary); 
+}
+
+.annotate-timer-mode { 
+  padding: 4px 6px; 
+  background: var(--bg-input); 
+  border: 1px solid var(--border); 
+  border-radius: var(--radius-sm); 
+  color: var(--text-primary); 
+  font-size: var(--font-size-sm); 
+}
+
+#annotate-timer-duration {
+  width: 60px;
+  padding: 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+#annotate-timer-duration:disabled {
+  opacity: 0.4;
+}
+
+.annotate-color-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
 .annotate-swatch {
   width: 20px;
   height: 20px;
