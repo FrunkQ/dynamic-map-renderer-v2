@@ -5123,6 +5123,20 @@ option.select-option--add {
   color: var(--text-secondary);
 }
 
+.about-edit input { 
+  padding: 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+.about-links-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* Edit-mode action row — Cancel / Save at the bottom-right. */
 .about-actions {
   display: flex;
