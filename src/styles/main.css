@@ -93,6 +93,20 @@ body {
   color: var(--text-primary);
   background: var(--bg-base);
 }
+/* ── Global Layout Tweaks ────────────────────────────────────────── */
+
+/* get rid of the arrows that appear on number type input elements */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* and of course for firefox too i guess */
+input[type="number"] {
+  appearance: none;
+  -moz-appearance: textfield; 
+}
 
 /* ── GM Layout ─────────────────────────────────────────────────────────── */
 body.gm-view {
