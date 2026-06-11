@@ -4502,12 +4502,14 @@ option.select-option--add {
 /* v2.12.20 — Settings sections are native <details> elements now so the
    browser owns the open/close state. The grid stays the same when open;
    the summary stays compact and clickable when closed. */
+/* old overflow: hidden behavior caused settings menu to 
+   contort in strange ways, keeping it visible works well for now */
 .settings-section {
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
-  overflow: hidden;  /* clip the body when collapsing — keeps the chevron stuck to a single rounded rect */
+  overflow: visible;  
 }
 .settings-section > .settings-section-title {
   list-style: none;
