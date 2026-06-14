@@ -769,6 +769,7 @@ body.projector-view .marker-overlay {
   border-radius: 8px;
   pointer-events: none;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+  z-index: -1;
 }
 
 /* Resize handle — bottom-right corner of the icon (opposite the move
