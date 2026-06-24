@@ -167,18 +167,3 @@ Same root cause as the option-styling note above — replaced by the
 glyph approach in v2.12.x so this is now informational only. Listed
 for completeness in case anyone reads the codebase and wonders why
 the italic CSS path was removed.
-
----
-
-## Animated backdrops only render on the GM canvas
-
-**Symptom.** You pick a Starfield backdrop from Settings → Theme
-→ Backdrop. It appears in the GM letterbox bars. Player and
-projector views show the plain background colour in their bars.
-
-**Cause.** Backdrop state lives in `ThemeConfig` which doesn't
-travel over P2P yet. The Renderer-level support is fully there;
-only the broadcast wiring is missing.
-
-**Workaround.** None — feature gap on the player / projector side.
-Queued for v2.13.
