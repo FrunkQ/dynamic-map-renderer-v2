@@ -105,6 +105,8 @@ Players stop being a passive audience. Each interaction has a switch in **Settin
 
 **Initiative tracker** — Opens from **Roll for Initiative** in the Players panel. A fanned-deck rail: broadcast a roll prompt to the table, fill in / drag to reorder the order, advance turns (the current actor parks behind the **ROUND END** marker so it acts next round), and end combat to close it. Sort direction (High → Low for d20, Low → High for roll-under) is set in **Settings → Game System**. The rail is mirrored to players + projector.
 
+> **Link a threat to a map marker** *(v2.17.32+)* — each enemy card has a small **link icon**; click it to associate the card with a marker on the current map (or pick "no marker" to unlink). The card then takes on that marker's **name and icon** — and so does the player view, so an anonymous opposition card reads as e.g. "Griffin" with its token art instead of the generic "!". Swap or unlink any time. The link lasts the current combat and clears on a new initiative, so re-link each fight (a couple of seconds). Renaming or re-iconing the marker updates the linked card live on every view.
+
 ---
 
 ## Annotations *(new in v2.17)*
