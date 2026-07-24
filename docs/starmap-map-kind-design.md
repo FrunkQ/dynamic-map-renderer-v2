@@ -237,3 +237,22 @@ crop and rotation for StarMap; on `starmap_show` hide canvas + pause renderer
 6. Pre-warm (`starMapPrewarm`) + `setPreset` instant switching.
 7. Bundle export/import + pack-load reconnect flow.
 8. Polish: transitions over show/hide, Help.md, CHANGELOG.
+
+## 10. Hoped scope (post-core, from the cross-VTT crossover analysis)
+
+From `vtt-integration-design.md` section 12 (SSE2 repo). Not part of the
+8-step core build; schedule after the StarMap kind ships and the SSE2 GM
+channel (gmToken + REQUEST_FOCUS) exists.
+
+- **"Starmap link" marker role** — a new marker role (alongside audio/motion)
+  carrying a bodyId. Tapping its badge on any map (e.g. a nav-console marker
+  on a deck plan) sends `REQUEST_FOCUS {token, bodyId}` via the Sse2Bridge;
+  the SSE2 GM tab applies the focus and the whole table's views swing to the
+  location. Optional flag: auto-activate the (or a chosen) StarMap map first,
+  so one tap cuts from deck plan to the starmap already framed on the target.
+- **Location tracker pill** — small GM-screen widget subscribed to the
+  redacted snapshot (constructs + journeys): "Aboard <ship> — in transit to
+  <body>, ETA ...". Display-only, no new wire traffic beyond the existing
+  snapshot.
+- gmToken lives in LOCAL settings (localStorage), never in pack exports —
+  a shared pack must not carry focus/notes authority over someone's session.
