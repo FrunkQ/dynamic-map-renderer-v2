@@ -36,6 +36,7 @@ export class StarMapDialog {
   constructor(private seed?: StarMapConfig) {
     // A map keeps the address it was made with; a NEW one starts from Settings > Connections.
     this.origin = Sse2Bridge.normaliseOrigin(seed?.origin ?? getSseOrigin());
+    this.knownSid = seed?.sessionId ?? null;
   }
 
   open(): Promise<StarMapDialogResult | null> {
@@ -65,9 +66,15 @@ export class StarMapDialog {
     this.resolver?.(v); this.resolver = null;
   }
 
+  /** The sid we can discover with: an existing map's, or one the GM pasted. With it the
+   *  bridge dials SSE over PeerJS (works across sites); without it only a same-site SSE
+   *  can be found (Chrome partitions the same-machine channel in third-party frames). */
+  private knownSid: string | null = null;
+  private pastedPreset: string | null = null;
+
   private async _search(): Promise<void> {
     this._renderSearching();
-    const a = await sse2Bridge.hello(this.origin);
+    const a = await sse2Bridge.hello(this.origin, this.knownSid);
     if (!this.overlay) return;
     if (a) { this.announce = a; this._renderFound(); }
     else this._renderNotFound();
@@ -109,22 +116,70 @@ export class StarMapDialog {
     return p;
   }
 
+  private static KNOWN_ORIGINS: { label: string; origin: string }[] = [
+    { label: 'Star System Explorer (production) — starsystemx.com', origin: 'https://starsystemx.com' },
+    { label: 'Beta — beta.starsystemx.com', origin: 'https://beta.starsystemx.com' },
+  ];
+
   private _originRow(): HTMLElement {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
     const label = document.createElement('span');
     label.className = 'about-edit-label';
     label.textContent = 'Star System Explorer address';
+    const select = document.createElement('select');
+    select.className = 'select-full';
+    const known = StarMapDialog.KNOWN_ORIGINS;
+    for (const k of known) {
+      const o = document.createElement('option'); o.value = k.origin; o.textContent = k.label; select.append(o);
+    }
+    const custom = document.createElement('option'); custom.value = '__custom'; custom.textContent = 'Other address (local dev, self-hosted)…'; select.append(custom);
+    const isKnown = known.some((k) => k.origin === this.origin);
+    select.value = isKnown ? this.origin : '__custom';
     const input = document.createElement('input');
     input.type = 'url';
     input.className = 'select-full';
-    input.value = this.origin;
-    input.title = 'Normally https://starsystemx.com — change only for the beta site or local development.';
+    input.placeholder = 'http://localhost:5173';
+    input.value = isKnown ? '' : this.origin;
+    input.hidden = isKnown;
     input.addEventListener('change', () => {
       this.origin = Sse2Bridge.normaliseOrigin(input.value);
       input.value = this.origin;
       void this._search();
     });
+    select.addEventListener('change', () => {
+      if (select.value === '__custom') { input.hidden = false; input.focus(); return; }
+      input.hidden = true;
+      this.origin = select.value;
+      void this._search();
+    });
+    wrap.append(label, select, input);
+    return wrap;
+  }
+
+  /** First pairing without same-site discovery: paste the share link from SSE's
+   *  Player Views modal. Gives us origin + sid (+ preset) — then PeerJS discovery
+   *  confirms the campaign name and lists ALL its views. */
+  private _pasteRow(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+    const label = document.createElement('span');
+    label.className = 'about-edit-label';
+    label.textContent = 'Or paste a player link from Star System Explorer (Player Views… → Copy link)';
+    const input = document.createElement('input');
+    input.type = 'url';
+    input.className = 'select-full';
+    input.placeholder = 'https://…/catalogue?sid=…&preset=…';
+    const apply = () => {
+      const parsed = Sse2Bridge.parseShareLink(input.value);
+      if (!parsed) return;
+      this.origin = Sse2Bridge.normaliseOrigin(parsed.origin);
+      this.knownSid = parsed.sessionId;
+      this.pastedPreset = parsed.presetId;
+      void this._search();
+    };
+    input.addEventListener('change', apply);
+    input.addEventListener('paste', () => setTimeout(apply, 0));
     wrap.append(label, input);
     return wrap;
   }
@@ -160,9 +215,13 @@ export class StarMapDialog {
     b.append(this._intro(), this._originRow());
     const p = document.createElement('p');
     p.style.cssText = 'margin:0;color:#ffcc80;';
-    p.innerHTML = '<strong>No Star System Explorer session found in this browser.</strong><br>' +
-      'Open it (same browser profile), load your starmap, and this dialog will pick it up automatically.';
-    b.append(p, this._actions(
+    p.innerHTML = '<strong>No Star System Explorer session found.</strong><br>' +
+      (this.knownSid
+        ? 'The saved session is not reachable — open Star System Explorer, load this starmap, and this dialog will pick it up automatically.'
+        : 'Open Star System Explorer, load your starmap, then paste one of its player links below — Mappadux finds the campaign from it. (After the first time, StarMaps reconnect on their own.)');
+    b.append(p);
+    if (!this.knownSid) b.append(this._pasteRow());
+    b.append(this._actions(
       this._btn('Cancel', 'btn--ghost', () => this._resolve(null)),
       this._btn('Retry', 'btn--ghost', () => void this._search()),
       this._btn('Open Star System Explorer', 'btn--primary', () => sse2Bridge.openSse(this.origin)),
@@ -220,6 +279,7 @@ export class StarMapDialog {
       input.name = 'starmap-preset';
       input.value = p.id;
       if (this.seed && p.id === this.seed.presetId) input.checked = true;
+      if (!this.seed && this.pastedPreset && p.id === this.pastedPreset) input.checked = true;
       const span = document.createElement('span');
       span.textContent = p.name;
       row.append(input, span);

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.2 — 2026-08-17
+
+StarMap fixes from the first real cross-site test (beta Mappadux + beta Star System Explorer): discovery now works across sites. Chrome partitions the same-browser channel inside a third-party frame, so the bridge could only find SSE when both ran on the same site (localhost dev) — it now discovers over PeerJS whenever it knows the session id (every existing StarMap map does), and the Add StarMap dialog gains a **Paste a player link** step for the very first pairing (copy it from SSE's Player Views…), after which StarMaps reconnect on their own. The address field is now a dropdown (production / beta / other). Requires Star System Explorer 2.1.753 or later.
+
 ## v2.18.1 — 2026-08-17
 
 Network: bring-your-own STUN/TURN relay for remote players, mirrored one-for-one with Star System Explorer. Settings → **Connections** takes a list of servers (`turns:host:443|user|credential`); they are added ahead of the built-in public relay and ride in every player and projector link (`?ice=`), so a workplace network that blocks UDP can still connect through a TLS relay on 443. Player and projector views now say "Connection blocked by this network" when neither a direct nor a relayed path can be made, instead of "Connecting…" forever. Same section holds the default **Star System Explorer address** for new StarMaps (production by default; point it at the beta site to test beta against beta — each StarMap map remembers the address it was created with). Nothing changes for tables that never touch the settings.

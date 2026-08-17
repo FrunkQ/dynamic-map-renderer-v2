@@ -36,7 +36,7 @@ export interface SseAnnounce {
 const NS = 'sse2-bridge';
 export const DEFAULT_SSE_ORIGIN = 'https://starsystemx.com';
 /** The oldest SSE build that speaks this contract (1B-1D + /bridge). */
-export const MIN_SSE_VERSION = '2.1.722';
+export const MIN_SSE_VERSION = '2.1.753';
 
 type Pending = { resolve: (a: SseAnnounce | null) => void; timer: ReturnType<typeof setTimeout> };
 
@@ -75,15 +75,24 @@ export class Sse2Bridge {
     return true;
   }
 
-  /** Mount (once per origin) the hidden bridge frame. Resolves when the frame
-   *  has loaded; the first hello establishes trust on the SSE side. */
-  ensure(originInput: string): Promise<void> {
+  /** Mount (once per origin+sid) the hidden bridge frame. Resolves when the
+   *  frame reports ready; the first hello establishes trust on the SSE side.
+   *
+   *  CROSS-SITE NOTE: Chrome partitions BroadcastChannel in a third-party
+   *  iframe, so a frame at starsystemx.com embedded here cannot hear the SSE
+   *  GM tab over the same-machine channel (that only works when host and SSE
+   *  are the same SITE, e.g. localhost dev). Given a `sid` the frame instead
+   *  dials the GM over PeerJS (`/bridge?sid=`), which is not partitioned. Every
+   *  StarMap map and every share link carries a sid; only a first pairing has
+   *  none, and that path pastes a share link (see StarMapDialog). */
+  ensure(originInput: string, sid?: string | null): Promise<void> {
     const origin = Sse2Bridge.normaliseOrigin(originInput);
-    const existing = this.ready.get(origin);
+    const key = this._key(origin, sid);
+    const existing = this.ready.get(key);
     if (existing) return existing;
     this._bind();
     const iframe = document.createElement('iframe');
-    iframe.src = `${origin}/bridge`;
+    iframe.src = `${origin}/bridge${sid ? `?sid=${encodeURIComponent(sid)}` : ''}`;
     iframe.setAttribute('aria-hidden', 'true');
     iframe.tabIndex = -1;
     iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none;';
@@ -95,27 +104,33 @@ export class Sse2Bridge {
     const p = new Promise<void>((resolve) => {
       let done = false;
       const finish = () => { if (!done) { done = true; resolve(); } };
-      this.readyResolvers.set(origin, finish);
+      this.readyResolvers.set(key, finish);
       setTimeout(finish, 6000);
     });
     document.body.appendChild(iframe);
-    this.frames.set(origin, iframe);
-    this.ready.set(origin, p);
+    this.frames.set(key, iframe);
+    this.frameOrigin.set(iframe, origin);
+    this.ready.set(key, p);
     return p;
   }
+  private _key(origin: string, sid?: string | null): string { return sid ? `${origin}#${sid}` : origin; }
+  private frameOrigin = new WeakMap<HTMLIFrameElement, string>();
 
-  /** Ask "who is here?"; null when no SSE GM tab in this browser answered. */
-  async hello(originInput: string, timeoutMs = 3000): Promise<SseAnnounce | null> {
+  /** Ask "who is here?"; null when no SSE GM answered. With a `sid` the frame
+   *  discovers over PeerJS (works cross-site); without one it can only use the
+   *  same-site local channel. Peer discovery needs the longer timeout. */
+  async hello(originInput: string, sid?: string | null, timeoutMs?: number): Promise<SseAnnounce | null> {
     const origin = Sse2Bridge.normaliseOrigin(originInput);
-    await this.ensure(origin);
-    const frame = this.frames.get(origin);
+    await this.ensure(origin, sid);
+    const frame = this.frames.get(this._key(origin, sid));
     if (!frame?.contentWindow) return null;
+    const wait = timeoutMs ?? (sid ? 14000 : 3000);
     // Two attempts: the first can race the frame's hydration on a slow load
     // even after `ready` (or after the fallback timer). Cheap and honest.
     for (let attempt = 0; attempt < 2; attempt++) {
       const requestId = `h${++this.seq}`;
       const a = await new Promise<SseAnnounce | null>((resolve) => {
-        const timer = setTimeout(() => { this.pending.delete(requestId); resolve(null); }, timeoutMs);
+        const timer = setTimeout(() => { this.pending.delete(requestId); resolve(null); }, wait);
         this.pending.set(requestId, { resolve, timer });
         frame.contentWindow!.postMessage({ ns: NS, v: 1, cmd: 'hello', requestId }, origin);
       });
@@ -128,9 +143,20 @@ export class Sse2Bridge {
    *  can dial in (SSE shows a notice on its side; never silent). */
   async ensureRemote(originInput: string, sessionId: string): Promise<void> {
     const origin = Sse2Bridge.normaliseOrigin(originInput);
-    await this.ensure(origin);
-    const frame = this.frames.get(origin);
+    await this.ensure(origin, sessionId);
+    const frame = this.frames.get(this._key(origin, sessionId));
     frame?.contentWindow?.postMessage({ ns: NS, v: 1, cmd: 'ensureRemote', sessionId, requestId: `r${++this.seq}` }, origin);
+  }
+
+  /** Parse an SSE share link (`.../catalogue?sid=…&preset=…`) the GM pasted —
+   *  the first-pairing path when same-site discovery is unavailable. */
+  static parseShareLink(text: string): { origin: string; sessionId: string; presetId: string | null } | null {
+    try {
+      const u = new URL(text.trim());
+      const sid = u.searchParams.get('sid');
+      if (!sid) return null;
+      return { origin: u.origin, sessionId: sid, presetId: u.searchParams.get('preset') };
+    } catch { return null; }
   }
 
   /** Unsolicited announces — the SSE tab opened/loaded/renamed after our hello. */
@@ -164,9 +190,9 @@ export class Sse2Bridge {
 
   private _onMessage = (e: MessageEvent) => {
     // Only frames WE mounted, and only from the origin we mounted them at.
-    let origin: string | null = null;
-    for (const [o, f] of this.frames) { if (e.source === f.contentWindow) { origin = o; break; } }
-    if (!origin || e.origin !== origin) return;
+    let origin: string | null = null; let key: string | null = null;
+    for (const [k, f] of this.frames) { if (e.source === f.contentWindow) { origin = this.frameOrigin.get(f) ?? null; key = k; break; } }
+    if (!origin || !key || e.origin !== origin) return;
     const d = e.data;
     if (!d || d.ns !== NS || d.v !== 1 || typeof d.event !== 'string') return;
     if (d.event === 'announce' && d.payload && typeof d.payload.sessionId === 'string') {
@@ -183,8 +209,8 @@ export class Sse2Bridge {
       if (p) { clearTimeout(p.timer); this.pending.delete(d.requestId); p.resolve(null); }
     }
     else if (d.event === 'ready') {
-      this.readyResolvers.get(origin)?.();
-      this.readyResolvers.delete(origin);
+      this.readyResolvers.get(key)?.();
+      this.readyResolvers.delete(key);
     }
     // 'ok' / 'error' need no action here.
   };

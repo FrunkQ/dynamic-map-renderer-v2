@@ -5435,7 +5435,7 @@ export class GMApp {
       if (this._activeStarMap !== cfg || origin !== Sse2Bridge.normaliseOrigin(cfg.origin)) return;
       void this._starMapReconcile(map, cfg, a);
     });
-    const a = await sse2Bridge.hello(cfg.origin);
+    const a = await sse2Bridge.hello(cfg.origin, cfg.sessionId); // sid known -> PeerJS discovery, works cross-site
     if (this._activeStarMap !== cfg) return; // the GM moved on while we waited
     if (!a) {
       this._showStarMapBanner(
