@@ -44,6 +44,7 @@ export class Sse2Bridge {
   private frames = new Map<string, HTMLIFrameElement>();
   private ready = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
+  private readyResolvers = new Map<string, () => void>();
   private announceListeners = new Set<(a: SseAnnounce, origin: string) => void>();
   private seq = 0;
   private bound = false;
@@ -86,12 +87,16 @@ export class Sse2Bridge {
     iframe.setAttribute('aria-hidden', 'true');
     iframe.tabIndex = -1;
     iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+    // Resolve on the bridge's own `ready` handshake, NOT the iframe load event:
+    // the route is a SvelteKit page whose message listener only exists after
+    // hydration, and `load` fires on the HTML well before that — a hello sent
+    // in between is silently dropped. Fallback timer so a blocked/failed load
+    // never hangs callers (hello() then times out honestly).
     const p = new Promise<void>((resolve) => {
       let done = false;
       const finish = () => { if (!done) { done = true; resolve(); } };
-      iframe.addEventListener('load', finish, { once: true });
-      // A blocked/failed load must not hang callers: hello() has its own timeout.
-      setTimeout(finish, 4000);
+      this.readyResolvers.set(origin, finish);
+      setTimeout(finish, 6000);
     });
     document.body.appendChild(iframe);
     this.frames.set(origin, iframe);
@@ -105,12 +110,18 @@ export class Sse2Bridge {
     await this.ensure(origin);
     const frame = this.frames.get(origin);
     if (!frame?.contentWindow) return null;
-    const requestId = `h${++this.seq}`;
-    return new Promise<SseAnnounce | null>((resolve) => {
-      const timer = setTimeout(() => { this.pending.delete(requestId); resolve(null); }, timeoutMs);
-      this.pending.set(requestId, { resolve, timer });
-      frame.contentWindow!.postMessage({ ns: NS, v: 1, cmd: 'hello', requestId }, origin);
-    });
+    // Two attempts: the first can race the frame's hydration on a slow load
+    // even after `ready` (or after the fallback timer). Cheap and honest.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const requestId = `h${++this.seq}`;
+      const a = await new Promise<SseAnnounce | null>((resolve) => {
+        const timer = setTimeout(() => { this.pending.delete(requestId); resolve(null); }, timeoutMs);
+        this.pending.set(requestId, { resolve, timer });
+        frame.contentWindow!.postMessage({ ns: NS, v: 1, cmd: 'hello', requestId }, origin);
+      });
+      if (a) return a;
+    }
+    return null;
   }
 
   /** Ask the SSE GM tab to start hosting on the PeerJS broker so REMOTE viewers
@@ -132,7 +143,9 @@ export class Sse2Bridge {
   /** Mappadux-only convenience (we own the GM's browser): open SSE for the GM. */
   openSse(originInput: string): void {
     const origin = Sse2Bridge.normaliseOrigin(originInput);
-    window.open(origin + '/', 'StarSystemExplorer');
+    // _blank + noopener: never navigate the GM's own tab, and give SSE no handle
+    // back to us (the bridge is the only sanctioned channel).
+    window.open(origin + '/', '_blank', 'noopener');
   }
 
   destroy(): void {
@@ -169,7 +182,11 @@ export class Sse2Bridge {
       const p = this.pending.get(d.requestId);
       if (p) { clearTimeout(p.timer); this.pending.delete(d.requestId); p.resolve(null); }
     }
-    // 'ready' / 'ok' / 'error' need no action here.
+    else if (d.event === 'ready') {
+      this.readyResolvers.get(origin)?.();
+      this.readyResolvers.delete(origin);
+    }
+    // 'ok' / 'error' need no action here.
   };
 }
 

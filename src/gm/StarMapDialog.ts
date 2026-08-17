@@ -44,8 +44,13 @@ export class StarMapDialog {
     // this is the "Open SSE, come back, it just works" path.
     this.unsub = sse2Bridge.onAnnounce((a, origin) => {
       if (origin !== this.origin) return;
+      // Re-render only when the ANNOUNCED IDENTITY changed (SSE re-announces
+      // whenever its own state ticks); a redraw on every announce would wipe
+      // the GM's ticks mid-selection.
+      const key = (x: SseAnnounce) => `${x.starmapId}|${x.sessionId}|${x.starmapName}|${x.presets.map((p) => p.id + ':' + p.name).join(',')}|${x.appVersion}`;
+      const changed = !this.announce || key(this.announce) !== key(a);
       this.announce = a;
-      this._renderFound();
+      if (changed) this._renderFound();
     });
     void this._search();
     return new Promise((resolve) => { this.resolver = resolve; });
