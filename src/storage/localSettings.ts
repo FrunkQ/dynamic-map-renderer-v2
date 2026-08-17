@@ -116,6 +116,21 @@ export function setLocalPlayerStaticOnly(enabled: boolean): void {
  *  (matching the Player view). Applied at ProjectorApp init time —
  *  the user must reopen the Scaled View window for the change to
  *  take effect. Default off. */
+// v2.18 — default Star System Explorer origin for new StarMap maps (prod / beta / dev).
+// Per-map origins still travel with each map; this only seeds the Add StarMap dialog.
+export const SSE_ORIGIN_KEY = 'mappadux:sse_origin';
+export const SSE_ORIGIN_DEFAULT = 'https://starsystemx.com';
+export function getSseOrigin(): string {
+  try { return localStorage.getItem(SSE_ORIGIN_KEY) || SSE_ORIGIN_DEFAULT; } catch { return SSE_ORIGIN_DEFAULT; }
+}
+export function setSseOrigin(origin: string | null): void {
+  try {
+    const o = (origin ?? '').trim();
+    if (!o || o === SSE_ORIGIN_DEFAULT) localStorage.removeItem(SSE_ORIGIN_KEY);
+    else localStorage.setItem(SSE_ORIGIN_KEY, o);
+  } catch { /* private mode etc. */ }
+}
+
 export const SCALED_VIEW_TRANSITIONS_KEY = 'mappadux:scaled_view_transitions';
 
 export function isScaledViewTransitionsEnabled(): boolean {

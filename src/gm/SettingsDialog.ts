@@ -51,6 +51,8 @@ import {
   isSpotifyEnabled,
   setSpotifyEnabled,
 } from '../stagecraft/stagecraftStorage.ts';
+import { loadStoredIce, saveStoredIce, parseIceText, iceToText } from '../p2p/iceConfig.ts';
+import { getSseOrigin, setSseOrigin, SSE_ORIGIN_DEFAULT } from '../storage/localSettings.ts';
 import { fetchInfo as fetchWledInfo, normaliseEndpoint } from '../stagecraft/wledClient.ts';
 import { fetchInfo as fetchQlcInfo, normaliseQlcEndpoint } from '../stagecraft/qlcClient.ts';
 import { wledConfigUrl, haConfigUrl, qlcConfigUrl } from '../stagecraft/configUrls.ts';
@@ -166,6 +168,8 @@ export class SettingsDialog {
     body.appendChild(this._buildPlayerPermissionsSection());
     body.appendChild(this._buildGameSystemSection());
     body.appendChild(this._buildReplyAssistantSection());
+    // ── v2.18 Connections: remote relay + Star System Explorer origin ─────
+    body.appendChild(this._buildConnectionsSection());
     // ── API Keys section ─────────────────────────────────────────────────
     body.appendChild(this._buildApiKeysSection());
     // ── Danger Zone ──────────────────────────────────────────────────────
@@ -410,6 +414,63 @@ export class SettingsDialog {
 
     sec.appendChild(this._buildMeasureUnitRow());
 
+    return sec;
+  }
+
+  /** v2.18 — remote players' relay (BYO STUN/TURN) + default Star System
+   *  Explorer origin (prod / beta / dev) for the StarMap map kind. */
+  private _buildConnectionsSection(): HTMLElement {
+    const sec = mkSection(
+      'Connections',
+      'Remote players connect peer-to-peer. That works on home and mobile networks by itself (a public relay is built in). A workplace network that blocks UDP can stop it - then a relay that speaks TLS on port 443 is needed.',
+    );
+    // Relay
+    const relayLabel = document.createElement('span');
+    relayLabel.className = 'about-edit-label';
+    relayLabel.textContent = 'Your own STUN/TURN servers (one per line: turns:host:443|username|credential)';
+    const ta = document.createElement('textarea');
+    ta.className = 'select-full';
+    ta.rows = 3;
+    ta.style.cssText = 'font: 12px/1.4 ui-monospace, monospace; resize: vertical;';
+    ta.placeholder = 'turns:relay.example.com:443|user|secret';
+    ta.value = iceToText(loadStoredIce());
+    const status = document.createElement('p');
+    status.className = 'settings-section-intro';
+    const summarise = () => {
+      const l = loadStoredIce();
+      if (!l || l.length === 0) { status.textContent = 'Using the built-in relay only.'; return; }
+      const tls = l.some((e) => (Array.isArray(e.urls) ? e.urls : [e.urls]).some((u) => /^turns:/i.test(u)));
+      status.textContent = `${l.length} custom server${l.length === 1 ? '' : 's'} saved${tls ? ' (includes a TLS relay - good for locked-down networks)' : ' (no turns: entry - a UDP-blocking network may still fail)'}. New player links and QR codes carry it; re-share existing ones.`;
+    };
+    ta.addEventListener('change', () => {
+      const servers = parseIceText(ta.value);
+      saveStoredIce(servers.length ? servers : null);
+      ta.value = iceToText(servers);
+      summarise();
+    });
+    summarise();
+    sec.append(relayLabel, ta, status);
+
+    // SSE origin
+    const originLabel = document.createElement('span');
+    originLabel.className = 'about-edit-label';
+    originLabel.style.marginTop = 'var(--space-md)';
+    originLabel.textContent = 'Star System Explorer address for new StarMaps';
+    const originInput = document.createElement('input');
+    originInput.type = 'url';
+    originInput.className = 'select-full';
+    originInput.value = getSseOrigin();
+    originInput.title = `Production is ${SSE_ORIGIN_DEFAULT}. Point at the beta site (https://beta.starsystemx.com) or a local dev server to test against it. Existing StarMap maps keep their own address.`;
+    originInput.addEventListener('change', () => {
+      let v = originInput.value.trim();
+      try { v = v ? new URL(v).origin : ''; } catch { v = ''; }
+      setSseOrigin(v || null);
+      originInput.value = getSseOrigin();
+    });
+    const originHint = document.createElement('p');
+    originHint.className = 'settings-section-intro';
+    originHint.textContent = 'Production by default. Use the beta address to test beta Mappadux against beta Star System Explorer; each StarMap map remembers the address it was created with.';
+    sec.append(originLabel, originInput, originHint);
     return sec;
   }
 

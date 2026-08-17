@@ -100,6 +100,7 @@ import { defaultProjectorViewport } from '../types.ts';
 // screen + player connect UI still do their own QR rendering too.
 import QRCode from 'qrcode';
 import { StarMapLayer } from '../rendering/StarMapLayer.ts';
+import { encodeIceParam, loadStoredIce } from '../p2p/iceConfig.ts';
 import { sse2Bridge, Sse2Bridge, type SseAnnounce } from './Sse2Bridge.ts';
 import { StarMapDialog } from './StarMapDialog.ts';
 
@@ -564,7 +565,12 @@ export class GMApp {
     // the rewrite entirely is simpler than chasing the misfire
     // through workbox + Vercel routing — and the projector URL
     // already takes this approach via /projector.html.
-    return `${this.playerOrigin}/player.html${this._instanceQuery()}#${code}`;
+    // v2.18 — carry the GM's custom relay (?ice=) so a player on a locked-down network
+    // knows about it BEFORE dialling. Absent when no custom relay is configured.
+    const ice = encodeIceParam(loadStoredIce());
+    const q = this._instanceQuery();
+    const iceQ = ice ? `${q ? '&' : '?'}ice=${ice}` : '';
+    return `${this.playerOrigin}/player.html${q}${iceQ}#${code}`;
   }
   private _buildProjectorUrl(code: string): string {
     // v2.17.17 — gmLocal=1 marks this as the GM's own same-machine projector

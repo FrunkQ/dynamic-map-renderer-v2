@@ -285,6 +285,8 @@ A StarMap is a map with no picture: it shows your players a **live Star System E
 
 **What is different for a StarMap:** filters run **inside** Star System Explorer (the Player View's own CRT/thermal look), so Mappadux's filter controls are disabled for it — no filter-on-filter. Fog, grid, markers, the viewport crop and annotations do not apply. Players keep a **Ping** button (drops a ping at screen centre; other players' pings show over the view). Sound, soundboard and Player Voice carry on as normal.
 
+**Beta vs production:** Settings → Connections → *Star System Explorer address* sets where NEW StarMaps look (production by default; use `https://beta.starsystemx.com` to pair beta Mappadux with beta SSE). Each StarMap remembers the address it was created with; the Add/Edit dialog can change it per map.
+
 **Wrong or missing starmap:** if SSE has a different starmap loaded, a banner names the one this map expects and the one that is loaded — load the right one in SSE, or **Re-point** the map at what is loaded. If SSE is closed, the banner offers to open it and the map goes live by itself once SSE announces the starmap. StarMap maps travel in your pack (with the SSE address, session id and starmap name), so a pack loaded next session reconnects on its own.
 
 ---

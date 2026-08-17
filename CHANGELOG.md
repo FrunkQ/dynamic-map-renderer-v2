@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.1 — 2026-08-17
+
+Network: bring-your-own STUN/TURN relay for remote players, mirrored one-for-one with Star System Explorer. Settings → **Connections** takes a list of servers (`turns:host:443|user|credential`); they are added ahead of the built-in public relay and ride in every player and projector link (`?ice=`), so a workplace network that blocks UDP can still connect through a TLS relay on 443. Player and projector views now say "Connection blocked by this network" when neither a direct nor a relayed path can be made, instead of "Connecting…" forever. Same section holds the default **Star System Explorer address** for new StarMaps (production by default; point it at the beta site to test beta against beta — each StarMap map remembers the address it was created with). Nothing changes for tables that never touch the settings.
+
 ## v2.18.0 — 2026-08-17
 
 New map kind: **StarMap** — a live Star System Explorer player view shown to players (and the projector) as a map. Add Map → **+ Add a StarMap**: Mappadux discovers the running SSE session in the same browser, lists its Player Views, and creates one StarMap map per view. You drive the view from your SSE tab; players get it in their normal Mappadux window with no window-hopping, and switching to a handout and back is instant (the view is kept warm). Filters are handed to SSE for these maps (no filter-on-filter); fog/grid/markers/crop don't apply; players keep Ping. Wrong-starmap and SSE-not-open states are explained in a banner that resolves itself once SSE announces the right starmap. StarMap maps travel in packs and reconnect on load. Requires Star System Explorer 2.1.722 or later. See HELP → StarMaps.

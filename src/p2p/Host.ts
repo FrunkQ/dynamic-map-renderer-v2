@@ -1,6 +1,7 @@
 import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage, SessionState, MarkerIconData, SoundboardAudioData, TextMapVideoElement, TextMapAltItem, MsgStarMapShow, MsgFullState } from '../types.ts';
 import { LocalChannel } from './LocalChannel.ts';
+import { peerConfigFor, loadStoredIce } from './iceConfig.ts';
 import { generateRoomCode } from './roomCode.ts';
 import { isLocalPlayerStaticOnly } from '../storage/localSettings.ts';
 
@@ -122,7 +123,12 @@ export class Host {
   /** Start the host. Pass a previously persisted peerId to attempt resumption. */
   start(peerId?: string): void {
     this.requestedRoomCode = peerId ?? null;
-    const peer = peerId ? new Peer(peerId) : new Peer();
+    // v2.18 — BYO STUN/TURN from Settings (prepended to PeerJS defaults) so remote players
+    // behind UDP-blocking networks can relay over TLS 443. Same list rides ?ice= on join URLs.
+    const cfg = peerConfigFor(loadStoredIce());
+    const peer = peerId
+      ? (cfg ? new Peer(peerId, { config: cfg }) : new Peer(peerId))
+      : (cfg ? new Peer({ config: cfg }) : new Peer());
     this.peer = peer;
 
     peer.on('open', (id) => {

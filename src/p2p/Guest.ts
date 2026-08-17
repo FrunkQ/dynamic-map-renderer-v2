@@ -1,5 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage } from '../types.ts';
+import { peerConfigFor, type IceServerEntry } from './iceConfig.ts';
 import { LocalChannel } from './LocalChannel.ts';
 
 export interface GuestEvents {
@@ -9,6 +10,10 @@ export interface GuestEvents {
   /** Fired when a disconnect is detected and a reconnect attempt is scheduled. */
   onReconnecting?: (attempt: number, delayMs: number) => void;
   onError: (err: Error) => void;
+  /** v2.18 — ICE verdict: 'ice-failed' when neither a direct nor a relayed path could be
+   *  negotiated (typically UDP blocked with no turns:443 relay); null once a later attempt
+   *  connects. Viewers turn it into an honest "blocked" message instead of endless waiting. */
+  onIceState?: (state: 'ice-failed' | null) => void;
 }
 
 /**
@@ -19,6 +24,10 @@ export interface GuestEvents {
  * by window.open() from the GM (same origin, no network needed).
  */
 export class Guest {
+  /** v2.18 — custom ICE servers for this guest (from the join URL). Set before connect(). */
+  private iceServers: IceServerEntry[] | null = null;
+  setIceServers(servers: IceServerEntry[] | null): void { this.iceServers = servers; }
+
   private peer: Peer | null = null;
   private conn: DataConnection | null = null;
   private local: LocalChannel;
@@ -151,7 +160,10 @@ export class Guest {
     this._teardownPeer();
     this._resetBlobState();
 
-    const peer = new Peer();
+    // v2.18 — BYO STUN/TURN (custom prepended to PeerJS defaults) so a locked-down network
+    // can still relay over TLS on 443. Read from the URL (?ice=) so it is known BEFORE dialling.
+    const cfg = peerConfigFor(this.iceServers);
+    const peer = cfg ? new Peer({ config: cfg }) : new Peer();
     this.peer = peer;
 
     peer.on('open', () => {
@@ -159,6 +171,16 @@ export class Guest {
       const conn = peer.connect(roomCode, { reliable: true, serialization: 'raw' });
       this.conn = conn;
       this.setupConnection(conn);
+      // ICE failure detection on the underlying RTCPeerConnection.
+      const watch = () => {
+        const pc: RTCPeerConnection | undefined = (conn as any).peerConnection;
+        if (!pc) { if (!this._destroyed) setTimeout(watch, 250); return; }
+        pc.addEventListener('connectionstatechange', () => {
+          if (pc.connectionState === 'failed') this.events.onIceState?.('ice-failed');
+          if (pc.connectionState === 'connected') this.events.onIceState?.(null);
+        });
+      };
+      watch();
     });
 
     peer.on('error', (err) => {

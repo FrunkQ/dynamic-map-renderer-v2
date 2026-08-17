@@ -16,6 +16,7 @@ import { NotesLayer } from '../annotate/NotesLayer.ts';
 import { WhiteboardLayer } from '../annotate/WhiteboardLayer.ts';
 import { TextMapVideoLayer } from '../rendering/TextMapVideoLayer.ts';
 import { StarMapLayer } from '../rendering/StarMapLayer.ts';
+import { parseIceParam } from '../p2p/iceConfig.ts';
 import { TextMapAltText } from '../rendering/TextMapAltText.ts';
 import { PlayerInitiativeRollModal } from './PlayerInitiativeRollModal.ts';
 import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix } from '../storage/localSettings.ts';
@@ -992,8 +993,13 @@ export class PlayerApp {
         this.setStatus(`Reconnecting… (${secs}s, attempt ${attempt})`);
       },
       onError: (err)  => this.setStatus(`Error: ${err.message}`),
+      // v2.18 — honest verdict when neither a direct nor relayed path exists (UDP blocked,
+      // no TLS relay): say so instead of "Connecting…" forever. Reconnect keeps trying.
+      onIceState: (st) => { if (st === 'ice-failed') this.setStatus('Connection blocked by this network — it will not carry a direct or relayed link to the GM (UDP blocked, no relay). Ask the GM for a link with a relay, or try another network.'); },
       onMessage: (msg, blob) => this.handleMessage(msg, blob),
     });
+    // v2.18 — BYO relay from the join URL (?ice=), set before dialling.
+    this.guest.setIceServers(parseIceParam(new URLSearchParams(location.search).get('ice')));
 
     // v2.17.16 — A GM preview (PiP / pop-out) is always same-browser, so
     // ride on LocalChannel alone and skip the flaky PeerJS loopback. Real

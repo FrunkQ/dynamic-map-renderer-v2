@@ -13,6 +13,7 @@ import { NotesLayer } from '../annotate/NotesLayer.ts';
 import { WhiteboardLayer } from '../annotate/WhiteboardLayer.ts';
 import { TextMapVideoLayer } from '../rendering/TextMapVideoLayer.ts';
 import { StarMapLayer } from '../rendering/StarMapLayer.ts';
+import { parseIceParam } from '../p2p/iceConfig.ts';
 import {
   type ProjectorSetup,
   getActiveSetup,
@@ -446,8 +447,10 @@ export class ProjectorApp {
         this._showStatus(`Reconnecting… (${secs}s, attempt ${attempt})`);
       },
       onError:   (err) => this._showStatus(`Error: ${err.message}`),
+      onIceState: (st) => { if (st === 'ice-failed') this._showStatus('Connection blocked by this network (UDP blocked, no relay). Ask the GM for a link with a relay.'); },
       onMessage: (msg, blob) => this._onMessage(msg, blob),
     });
+    this.guest.setIceServers(parseIceParam(new URLSearchParams(location.search).get('ice')));
     // v2.17.17 — same-machine GM projector: LocalChannel only (no loopback).
     if (this._gmLocalFlag) {
       this.guest.connectLocalOnly();

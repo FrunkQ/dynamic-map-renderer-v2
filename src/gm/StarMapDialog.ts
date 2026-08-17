@@ -16,6 +16,7 @@
  */
 import { sse2Bridge, Sse2Bridge, MIN_SSE_VERSION, type SseAnnounce } from './Sse2Bridge.ts';
 import type { StarMapConfig } from '../types.ts';
+import { getSseOrigin } from '../storage/localSettings.ts';
 
 export interface StarMapDialogResult {
   origin: string;
@@ -33,7 +34,8 @@ export class StarMapDialog {
   private onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') this._resolve(null); };
 
   constructor(private seed?: StarMapConfig) {
-    this.origin = Sse2Bridge.normaliseOrigin(seed?.origin);
+    // A map keeps the address it was made with; a NEW one starts from Settings > Connections.
+    this.origin = Sse2Bridge.normaliseOrigin(seed?.origin ?? getSseOrigin());
   }
 
   open(): Promise<StarMapDialogResult | null> {
