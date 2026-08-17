@@ -77,7 +77,26 @@ export class StarMapDialog {
     const a = await sse2Bridge.hello(this.origin, this.knownSid);
     if (!this.overlay) return;
     if (a) { this.announce = a; this._renderFound(); }
+    else if (sse2Bridge.lastFailure === 'unreachable') this._renderUnreachable();
     else this._renderNotFound();
+  }
+
+  /** The address answered nothing at all: /bridge is missing there (an SSE build older than the
+   *  integration) or a firewall/challenge page is blocking third-party frames (a Vercel Security
+   *  Checkpoint returns 403 to an embedded frame that cannot solve it). Neither is "SSE not open". */
+  private _renderUnreachable(): void {
+    const b = this._clear();
+    b.append(this._intro(), this._originRow());
+    const p = document.createElement('p');
+    p.style.cssText = 'margin:0;color:#ff8a8a;';
+    p.innerHTML = '<strong>Star System Explorer at this address cannot be reached for integration.</strong><br>' +
+      'Either that site is older than the integration (needs Star System Explorer ' + MIN_SSE_VERSION + ' or later), ' +
+      'or a firewall / security challenge is blocking embedded frames there. ' +
+      'Try the other address, or on the SSE side allow <code>/bridge</code> and <code>/catalogue</code> through the firewall.';
+    b.append(p, this._actions(
+      this._btn('Cancel', 'btn--ghost', () => this._resolve(null)),
+      this._btn('Retry', 'btn--primary', () => void this._search()),
+    ));
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -113,6 +132,10 @@ export class StarMapDialog {
     p.style.margin = '0';
     p.style.opacity = '0.85';
     p.textContent = 'A StarMap shows players a live Star System Explorer view — the full 3D app, driven by you from the SSE tab. Mappadux frames it; the star map data never passes through Mappadux.';
+    const note = document.createElement('span');
+    note.style.cssText = 'display:block;margin-top:6px;font-size:12px;opacity:0.7;';
+    note.textContent = 'Beta feature — in testing. Needs Star System Explorer ' + MIN_SSE_VERSION + ' or later at the chosen address.';
+    p.append(note);
     return p;
   }
 

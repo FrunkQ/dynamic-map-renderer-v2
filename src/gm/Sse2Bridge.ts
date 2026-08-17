@@ -45,6 +45,12 @@ export class Sse2Bridge {
   private ready = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
   private readyResolvers = new Map<string, () => void>();
+  /** Keys whose frame has spoken to us at least once (`ready`/`announce`/`gone`). A frame that
+   *  never speaks is unreachable: 404 (SSE too old for /bridge), a firewall challenge (Vercel
+   *  Security Checkpoint returns 403 to a third-party frame that cannot solve it), or blocked. */
+  private spoken = new Set<string>();
+  /** Why the last hello for an origin failed — lets the dialog say the RIGHT thing. */
+  lastFailure: 'unreachable' | 'no-session' | null = null;
   private announceListeners = new Set<(a: SseAnnounce, origin: string) => void>();
   private seq = 0;
   private bound = false;
@@ -127,6 +133,7 @@ export class Sse2Bridge {
     const wait = timeoutMs ?? (sid ? 14000 : 3000);
     // Two attempts: the first can race the frame's hydration on a slow load
     // even after `ready` (or after the fallback timer). Cheap and honest.
+    const key = this._key(origin, sid);
     for (let attempt = 0; attempt < 2; attempt++) {
       const requestId = `h${++this.seq}`;
       const a = await new Promise<SseAnnounce | null>((resolve) => {
@@ -134,8 +141,11 @@ export class Sse2Bridge {
         this.pending.set(requestId, { resolve, timer });
         frame.contentWindow!.postMessage({ ns: NS, v: 1, cmd: 'hello', requestId }, origin);
       });
-      if (a) return a;
+      if (a) { this.lastFailure = null; return a; }
     }
+    // The frame answered `gone` (spoke) => SSE reachable, nobody hosting/announcing.
+    // The frame never spoke at all => the route is missing or blocked at that address.
+    this.lastFailure = this.spoken.has(key) ? 'no-session' : 'unreachable';
     return null;
   }
 
@@ -195,6 +205,7 @@ export class Sse2Bridge {
     if (!origin || !key || e.origin !== origin) return;
     const d = e.data;
     if (!d || d.ns !== NS || d.v !== 1 || typeof d.event !== 'string') return;
+    this.spoken.add(key);
     if (d.event === 'announce' && d.payload && typeof d.payload.sessionId === 'string') {
       const a = d.payload as SseAnnounce;
       const rid = typeof d.requestId === 'string' ? d.requestId : null;

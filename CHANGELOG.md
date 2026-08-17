@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.3 — 2026-08-18
+
+StarMap: the Add StarMap dialog now tells apart "no Star System Explorer session found" from "this address cannot be reached for integration" (the SSE site is older than the integration, or a firewall/security challenge is blocking embedded frames — a Vercel Security Checkpoint returns 403 to a third-party frame that cannot solve it). Found on the first beta test, where SSE's beta site was behind a challenge page. Dialog also carries a "beta feature — in testing" note.
+
 ## v2.18.2 — 2026-08-17
 
 StarMap fixes from the first real cross-site test (beta Mappadux + beta Star System Explorer): discovery now works across sites. Chrome partitions the same-browser channel inside a third-party frame, so the bridge could only find SSE when both ran on the same site (localhost dev) — it now discovers over PeerJS whenever it knows the session id (every existing StarMap map does), and the Add StarMap dialog gains a **Paste a player link** step for the very first pairing (copy it from SSE's Player Views…), after which StarMaps reconnect on their own. The address field is now a dropdown (production / beta / other). Requires Star System Explorer 2.1.753 or later.
