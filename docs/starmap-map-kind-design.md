@@ -256,3 +256,42 @@ channel (gmToken + REQUEST_FOCUS) exists.
   snapshot.
 - gmToken lives in LOCAL settings (localStorage), never in pack exports —
   a shared pack must not carry focus/notes authority over someone's session.
+
+## 11. Build status (2026-08-17)
+
+SHIPPED on Mappadux beta at v2.18.0 against SSE beta v2.1.722+, all eight
+build steps plus fixes found in live verification. Verified in the browser
+(GM at localhost:5180, SSE dev at localhost:5199 — a genuine cross-origin
+setup): discovery dialog found the running SSE session and listed all six
+Player Views; minted `✦ Local Neighbourhood — Holo Table`; GM preview showed
+the live 3D holo view; the PiP player window (a real player.html over the
+local channel) showed the same view; StarMap → Griffinholm → StarMap kept the
+SAME warm iframe (no reload) with filters gated on and off correctly; the
+"SSE not open" banner and the "wrong starmap loaded" banner both rendered with
+their actions and did not broadcast; a fresh page load with the StarMap as
+lastMapId reconnected by itself.
+
+Two faults found and fixed by that verification: (1) `Sse2Bridge.ensure`
+resolved on the iframe `load` event, which fires before the SvelteKit route
+hydrates its listener, so the first hello could be silently dropped — it now
+resolves on the bridge's `ready` handshake with a hello retry; (2) the
+dialog redrew on EVERY announce (SSE re-announces on state ticks) and wiped
+the GM's ticks — it now redraws only when the announced identity changes.
+
+Deviations from the spec, deliberate: (a) player Ping is a corner button
+(drops at screen centre) rather than the map long-press gesture, because a
+cross-origin iframe swallows its own pointer events and MUST (players drive
+the view); other players' pings still draw over the frame. (b) The player
+tool menu is not "restricted to Ping" so much as unreachable over the frame;
+the Ping button is the affordance.
+
+Not verified here (needs a real second device): PeerJS remote path from a
+phone into a Mappadux-hosted StarMap; projector surface visually (code path
+identical to the player, wired the same way).
+
+Contract reuse (owner's ask): `src/gm/Sse2Bridge.ts` has no Mappadux
+imports and is the reusable shim for a Foundry module / Owlbear extension
+(hello/announce/ensureRemote/playerViewUrl/version gate). Mappadux-only
+extras sit in GMApp (open SSE tab, banners, warm switching, filter gates).
+Rule adopted: AUTOMATE when we own the surface, INSTRUCT the user when we do
+not — never rely on loading a starmap by URL.

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.0 — 2026-08-17
+
+New map kind: **StarMap** — a live Star System Explorer player view shown to players (and the projector) as a map. Add Map → **+ Add a StarMap**: Mappadux discovers the running SSE session in the same browser, lists its Player Views, and creates one StarMap map per view. You drive the view from your SSE tab; players get it in their normal Mappadux window with no window-hopping, and switching to a handout and back is instant (the view is kept warm). Filters are handed to SSE for these maps (no filter-on-filter); fog/grid/markers/crop don't apply; players keep Ping. Wrong-starmap and SSE-not-open states are explained in a banner that resolves itself once SSE announces the right starmap. StarMap maps travel in packs and reconnect on load. Requires Star System Explorer 2.1.722 or later. See HELP → StarMaps.
+
 ## v2.17.39 — 2026-07-05
 
 Two GM-editor fixes from a community PR (thanks to Naturalitee on GitHub): the Player-view preview (PiP) no longer ends up stranded off-screen when you resize or zoom the window — it now keeps its spot proportionally; and the player-view crop rectangle updates the moment you zoom instead of lagging a frame. (Plus a follow-up so the remembered PiP position survives a page reload.)
