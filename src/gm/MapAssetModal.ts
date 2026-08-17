@@ -8,6 +8,7 @@ import { getUsedMapAssetIds } from '../storage/assetUsage.ts';
 import { detectMapScale, autoApplyPatch } from '../utils/detectMapScale.ts';
 import { generateId } from '../utils/id.ts';
 import { TextMapEditor } from './TextMapEditor.ts';
+import { StarMapDialog } from './StarMapDialog.ts';
 import { saveMap as _saveMap, saveMapAsset, getAllMaps } from '../storage/db.ts';
 import { iconPencil, iconDownload, iconX } from './uiIcons.ts';
 
@@ -278,6 +279,46 @@ export class MapAssetModal {
       'click',
       () => void this._enterCompositePickMode(),
     );
+
+    // v2.18 — StarMap entry point: discover the running Star System Explorer
+    // session and mint one StarMap map per chosen Player View.
+    this.el.querySelector('#map-library-create-starmap-btn')?.addEventListener(
+      'click',
+      () => void this._createStarMaps(),
+    );
+  }
+
+  /** v2.18 — Add StarMap flow (docs/starmap-map-kind-design.md 4.2). One
+   *  MapAsset {source:'starmap'} + one StoredMap per ticked Player View,
+   *  named "<starmap> — <preset>"; the first is picked into the GM. */
+  private async _createStarMaps(): Promise<void> {
+    const result = await new StarMapDialog().open();
+    if (!result || result.presets.length === 0) return;
+    const { origin, announce } = result;
+    let first: StoredMap | null = null;
+    for (const p of result.presets) {
+      const assetId = generateId();
+      const asset: MapAsset = {
+        id:            assetId,
+        filename:      `${announce.starmapName || 'StarMap'} — ${p.name}`,
+        source:        'starmap',
+        locallyStored: true,
+        addedAt:       Date.now(),
+        starMap: {
+          origin,
+          sessionId:   announce.sessionId,
+          starmapId:   announce.starmapId,
+          starmapName: announce.starmapName,
+          presetId:    p.id,
+          presetName:  p.name,
+        },
+      };
+      await saveMapAsset(asset);
+      const map: StoredMap = { id: generateId(), name: asset.filename, mapAssetId: assetId, addedAt: Date.now() };
+      await _saveMap(map);
+      first ??= map;
+    }
+    if (first) { this.onPick(first); this.close(); }
   }
 
   /** v2.14.37 — flip the library into pick-first-tile mode for a new
