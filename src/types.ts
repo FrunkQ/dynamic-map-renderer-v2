@@ -658,6 +658,13 @@ export interface MsgFullState {
    *  gets them on initial connect, the same way it gets the map. Absent /
    *  empty on maps with no video. */
   textMapVideos?:      TextMapVideoElement[];
+  /** v2.18 — the active map IS a StarMap: viewers show the SSE iframe instead
+   *  of a map texture. Same shape as starmap_show's payload. */
+  starMap?:            MsgStarMapShow['payload'];
+  /** v2.18 — the pack contains at least one StarMap: viewers pre-warm a hidden
+   *  SSE iframe at connect so a later starmap_show is an instant show/hide,
+   *  not a cold boot (design section 6). */
+  starMapPrewarm?:     { origin: string; sessionId: string };
   /** v2.17.27 — accessibility content for the active text-map: each text
    *  block's words and each image's alt (resolved by the GM), so a viewer's
    *  screen-reader region can announce the handout. Carried in full_state for
@@ -1451,6 +1458,35 @@ export interface MsgTextMapVideos {
   videos: TextMapVideoElement[];
 }
 
+/** v2.18 — the StarMap map kind's descriptor (on MapAsset.starMap). Identity
+ *  anchors for the "is the right starmap loaded?" prompt plus the Player View
+ *  this map shows on activation. `sessionId` is SSE's persistent per-starmap
+ *  broadcastId, so it survives GM restarts and PC moves. */
+export interface StarMapConfig {
+  /** SSE origin, e.g. https://starsystemx.com (beta/dev origins allowed). */
+  origin:      string;
+  sessionId:   string;
+  starmapId:   string;
+  starmapName: string;
+  presetId:    string;
+  presetName:  string;
+}
+
+/** v2.18 — "show this StarMap". Sent WHERE map_change would have gone when the
+ *  activated map is a StarMap: viewers hide the WebGL canvas, pause the
+ *  renderer and show the SSE player view in a full-bleed iframe that
+ *  connects itself to the SSE session (parallel channel — Mappadux carries
+ *  no SSE data). Any later map_change ends StarMap mode. Small, single frame. */
+export interface MsgStarMapShow {
+  type: 'starmap_show';
+  payload: {
+    origin: string;
+    sessionId: string;
+    presetId: string;
+    backgroundColor?: string;
+  };
+}
+
 /** One handout element reduced to its accessible text plus the top-left
  *  position used to read the list in page order. The GM resolves image alt
  *  (authored, else the asset name) so viewers don't need the source assets. */
@@ -1541,7 +1577,8 @@ export type GMMessage =
   | MsgAnnotateNotes
   | MsgTextMapVideos
   | MsgTextMapAlt
-  | MsgVideoPlayback;
+  | MsgVideoPlayback
+  | MsgStarMapShow;
 
 // ─── Storage types ───────────────────────────────────────────────────────────
 
@@ -1639,9 +1676,10 @@ export interface MapAsset {
   id:            string;
   /** Display name — derived from the original file or URL, user-renameable. */
   filename:      string;
-  source:        'upload' | 'web-link' | 'text-map' | 'composite-map';
+  source:        'upload' | 'web-link' | 'text-map' | 'composite-map' | 'starmap';
   /** True when the blob is in IDB (and travels in bundle exports). For
-   *  text-map assets this is always true (the body lives in `textMap`). */
+   *  text-map assets this is always true (the body lives in `textMap`);
+   *  likewise for starmap assets (the body lives in `starMap`). */
   locallyStored: boolean;
   /** Set for web-link assets; the URL the blob is fetched from. */
   sourceUrl?:    string;
@@ -1736,6 +1774,14 @@ export interface MapAsset {
    * background colour to produce a canvas-rendered image at display time.
    */
   textMap?:      TextMapConfig;
+  /**
+   * v2.18 — StarMap payload. Present iff source='starmap'. A StarMap has NO
+   * image: activating it shows viewers a live Star System Explorer player view
+   * (the full 3D app in an iframe) that the GM drives from the SSE tab.
+   * Mappadux carries only this descriptor; view data flows over SSE's own
+   * channel. See docs/starmap-map-kind-design.md.
+   */
+  starMap?:      StarMapConfig;
   /**
    * v2.14.3 — composite-map tile list. Present iff source='composite-map'.
    * The renderer composites these tiles into a single output canvas; see

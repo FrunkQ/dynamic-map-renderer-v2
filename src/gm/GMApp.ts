@@ -149,6 +149,20 @@ const COMPOSITE_MAP_PREFIX = '▦ ';
 // text in EditableSelect so the GM spots the broken row before
 // loading it.
 const MISSING_MAP_PREFIX   = '⚠ ';
+// v2.18 — ✦ for a StarMap: a live Star System Explorer view, not an image.
+const STARMAP_PREFIX       = '✦ ';
+
+type MapDropdownKind = 'image' | 'animated' | 'text' | 'composite' | 'starmap' | 'missing';
+/** The ONE place a dropdown kind becomes its glyph prefix (was duplicated in
+ *  two render paths, which is exactly how a new kind gets one and not the other). */
+function _prefixForKind(kind: MapDropdownKind): string {
+  return kind === 'missing'   ? MISSING_MAP_PREFIX   :
+         kind === 'starmap'   ? STARMAP_PREFIX       :
+         kind === 'composite' ? COMPOSITE_MAP_PREFIX :
+         kind === 'text'      ? TEXT_MAP_PREFIX      :
+         kind === 'animated'  ? ANIMATED_MAP_PREFIX  :
+                                IMAGE_MAP_PREFIX;
+}
 
 /** Strip every decoration that has ever been put on a map's display
  *  name — current "▣ " / "▶ " / "▤ " prefixes, the brief "≡ " trial
@@ -159,7 +173,7 @@ function _cleanMapDisplayName(name: string): string {
     // Strip any decorative leading prefix: the legacy "[T] " variant
     // first, then any glyph in the set we've ever used.
     .replace(/^\[T\]\s+/, '')
-    .replace(/^[▣▶▤▦¶≡⚠]\s+/, '')
+    .replace(/^[▣▶▤▦¶≡⚠✦]\s+/, '')
     // Legacy trailing " [T]" decoration.
     .replace(/(?: \[T\])+$/, '')
     .trim();
@@ -172,13 +186,14 @@ function _cleanMapDisplayName(name: string): string {
  *  checks matches populateMapList: text-map wins over animated wins
  *  over image, so a hypothetical "video text-map" still reads as
  *  text. */
-function _dropdownKindForAsset(asset: import('../types.ts').MapAsset | undefined): 'image' | 'animated' | 'text' | 'composite' | 'missing' {
+function _dropdownKindForAsset(asset: import('../types.ts').MapAsset | undefined): MapDropdownKind {
   // v2.14.60 — undefined means the StoredMap references a MapAsset
   // that's been removed (manual library delete, or a bundle import
   // that didn't carry it). Surface it as 'missing' so the dropdown
   // shows the hazard prefix + orange tint rather than silently
   // falling back to the image glyph and failing on load.
   if (!asset) return 'missing';
+  if (asset.source === 'starmap') return 'starmap';
   if (asset.source === 'composite-map') return 'composite';
   if (asset.source === 'text-map') return 'text';
   if ((asset.blob?.type ?? '').startsWith('video/')) return 'animated';
@@ -2750,12 +2765,7 @@ export class GMApp {
       // a normal image map and failing on load.
       const kind = kindByAssetId.get(m.mapAssetId) ?? 'missing';
       const cleanName = _cleanMapDisplayName(m.name);
-      const prefix =
-        kind === 'missing'   ? MISSING_MAP_PREFIX   :
-        kind === 'composite' ? COMPOSITE_MAP_PREFIX :
-        kind === 'text'      ? TEXT_MAP_PREFIX      :
-        kind === 'animated'  ? ANIMATED_MAP_PREFIX  :
-                               IMAGE_MAP_PREFIX;
+      const prefix = _prefixForKind(kind);
       opt.textContent = `${prefix}${cleanName}`;
       if (kind === 'missing') {
         opt.dataset['missing'] = 'true';
@@ -7291,17 +7301,12 @@ export class GMApp {
   private _insertMapOptionSorted(
     id: string,
     name: string,
-    kind: 'image' | 'animated' | 'text' | 'composite' | 'missing' = 'image',
+    kind: MapDropdownKind = 'image',
   ): void {
     const opt = document.createElement('option');
     opt.value = id;
     const cleanName = _cleanMapDisplayName(name);
-    const prefix =
-      kind === 'missing'   ? MISSING_MAP_PREFIX   :
-      kind === 'composite' ? COMPOSITE_MAP_PREFIX :
-      kind === 'text'      ? TEXT_MAP_PREFIX      :
-      kind === 'animated'  ? ANIMATED_MAP_PREFIX  :
-                             IMAGE_MAP_PREFIX;
+    const prefix = _prefixForKind(kind);
     opt.textContent = `${prefix}${cleanName}`;
     if (kind === 'missing') {
       opt.dataset['missing'] = 'true';
@@ -7369,7 +7374,7 @@ export class GMApp {
     // Look up the underlying asset so the re-inserted option gets
     // the right leading glyph for its kind.
     const map = await getMap(id);
-    let kind: 'image' | 'animated' | 'text' | 'composite' | 'missing' = 'image';
+    let kind: MapDropdownKind = 'image';
     if (map) {
       const asset = await MapAssetStore.get(map.mapAssetId);
       kind = _dropdownKindForAsset(asset);
