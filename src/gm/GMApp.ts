@@ -2734,17 +2734,16 @@ export class GMApp {
     // Per-asset kind lookup so we can flag text-map and animated
     // entries in the dropdown with the right leading glyph. Cheap
     // (small N) and saves a round-trip per option.
-    type DropdownKind = 'text' | 'animated' | 'image' | 'composite' | 'missing';
-    const kindByAssetId = new Map<string, DropdownKind>();
-    for (const a of mapAssets) {
-      const isAnimated = (a.blob?.type ?? '').startsWith('video/');
-      const kind: DropdownKind =
-        a.source === 'composite-map' ? 'composite' :
-        a.source === 'text-map'      ? 'text'      :
-        isAnimated                   ? 'animated'  :
-                                       'image';
-      kindByAssetId.set(a.id, kind);
-    }
+    // (v2.18: derived by _dropdownKindForAsset — the ONE kind rule — rather
+    //  than a second inline copy that had to be kept in step with it.)
+    const kindByAssetId = new Map<string, MapDropdownKind>();
+    for (const a of mapAssets) kindByAssetId.set(a.id, _dropdownKindForAsset(a));
+    // v2.18 — pre-warm hint: if the pack holds any StarMap, viewers mount the
+    // SSE view hidden at connect so the first cut into it is instant.
+    const firstStarMap = mapAssets.find((a) => a.source === 'starmap' && a.starMap)?.starMap;
+    this.host.setLastStarMapPrewarm(firstStarMap
+      ? { origin: Sse2Bridge.normaliseOrigin(firstStarMap.origin), sessionId: firstStarMap.sessionId }
+      : null);
     this.mapSelect.innerHTML = '';
     if (maps.length === 0) {
       const placeholder = document.createElement('option');

@@ -60,6 +60,10 @@ interface StoredMapAssetEntry {
   noGrid?: boolean;
   /** Stream C text-map payload — only present for source='text-map'. */
   textMap?: MapAsset['textMap'];
+  /** v2.18 StarMap payload — only present for source='starmap'. Carries the
+   *  SSE origin + persistent session id + starmap identity + Player View, so
+   *  a loaded pack can prompt for (and reconnect to) the right starmap. */
+  starMap?: MapAsset['starMap'];
   /** v2.15 composite-map fields — only present for source='composite-map'.
    *  Without these the bundle would round-trip a composite map as an
    *  empty shell (no tiles, no aspect, no mode), which is the v2.15
@@ -305,8 +309,9 @@ export async function exportBundle(opts?: { password?: string }): Promise<Export
   for (const asset of mapAssetsAll) {
     const isTextMap   = asset.source === 'text-map';
     const isComposite = asset.source === 'composite-map';
-    if (isTextMap || isComposite || (asset.locallyStored && asset.blob)) {
-      const blobBits = (isTextMap || isComposite) || !asset.blob
+    const isStarMap   = asset.source === 'starmap'; // v2.18 — payload-only, like text-maps
+    if (isTextMap || isComposite || isStarMap || (asset.locallyStored && asset.blob)) {
+      const blobBits = (isTextMap || isComposite || isStarMap) || !asset.blob
         ? { mimeType: undefined, dataB64: undefined }
         : { mimeType: asset.blob.type || 'image/png', dataB64: ab2b64(await asset.blob.arrayBuffer()) };
       // Layered-mode reveal-backing PNG round-trips via base64.
@@ -334,6 +339,7 @@ export async function exportBundle(opts?: { password?: string }): Promise<Export
         scaleConfidence:  asset.scaleConfidence,
         noGrid:           asset.noGrid,
         textMap:          asset.textMap,
+        starMap:          asset.starMap,
         compositeTiles:   asset.compositeTiles,
         compositeAspect:  asset.compositeAspect,
         compositeMode:    asset.compositeMode,
@@ -571,6 +577,7 @@ export async function importBundleText(
           scaleConfidence: e.scaleConfidence,
           noGrid:          e.noGrid,
           textMap:         e.textMap,
+          starMap:         e.starMap,
           compositeTiles:  e.compositeTiles,
           compositeAspect: e.compositeAspect,
           compositeMode:   e.compositeMode,
