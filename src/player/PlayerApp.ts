@@ -15,6 +15,7 @@ import { TimersLayer } from '../annotate/TimersLayer.ts';
 import { NotesLayer } from '../annotate/NotesLayer.ts';
 import { WhiteboardLayer } from '../annotate/WhiteboardLayer.ts';
 import { TextMapVideoLayer } from '../rendering/TextMapVideoLayer.ts';
+import { StarMapLayer } from '../rendering/StarMapLayer.ts';
 import { TextMapAltText } from '../rendering/TextMapAltText.ts';
 import { PlayerInitiativeRollModal } from './PlayerInitiativeRollModal.ts';
 import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix } from '../storage/localSettings.ts';
@@ -246,6 +247,9 @@ export class PlayerApp {
   private _annotateNotes: NotesLayer | null = null;
   /** v2.16.91 — live YouTube videos on a text-map page. */
   private _textMapVideos: TextMapVideoLayer | null = null;
+  /** v2.18 — StarMap: full-bleed Star System Explorer view (docs/starmap-map-kind-design.md). */
+  private _starMap: StarMapLayer | null = null;
+  private _starMapActive = false;
   /** v2.17.27 — screen-reader region for the active text-map (text + image alt
    *  sent by the GM). No visual presence; runs on mobile too (unlike video). */
   private _textMapAlt: TextMapAltText | null = null;
@@ -400,6 +404,10 @@ export class PlayerApp {
         window.setTimeout(() => this._textMapVideos?.refresh(), 250);
       });
     }
+    // v2.18 — StarMap layer. Interactive on purpose (the preset's own flags govern
+    // what players may do inside SSE); kept warm when hidden.
+    const starMapEl = document.getElementById('starmap-layer');
+    if (starMapEl) this._starMap = new StarMapLayer(starMapEl, 'viewer');
     // v2.16.77 — read-only whiteboard mirrored from the GM.
     const boardEl = document.getElementById('annotate-whiteboard') as HTMLCanvasElement | null;
     if (boardEl) this._annotateBoard = new WhiteboardLayer(boardEl, (x, y) => this.renderer.mapNormToCanvasCss(x, y));
@@ -1215,6 +1223,51 @@ export class PlayerApp {
     this._pressStart = null;
   }
 
+  // ── v2.18 StarMap mode ─────────────────────────────────────────────────────
+
+  private _enterStarMap(t: { origin: string; sessionId: string; presetId: string; backgroundColor?: string }): void {
+    if (!this._starMap) return;
+    this._starMapActive = true;
+    document.body.classList.add('starmap-active');
+    if (t.backgroundColor) document.body.style.backgroundColor = t.backgroundColor;
+    this._starMap.show({ origin: t.origin, sessionId: t.sessionId, presetId: t.presetId });
+    // Exactly one 3D app on the device: the SSE view. The map canvas is hidden
+    // under the layer, so skip its GL work entirely (instant resume on exit).
+    this.renderer.setPaused(true);
+    this._textMapVideos?.clear();
+    this._refreshStarMapPingButton();
+  }
+
+  private _exitStarMap(): void {
+    if (!this._starMapActive) return;
+    this._starMapActive = false;
+    document.body.classList.remove('starmap-active');
+    document.body.style.backgroundColor = '';
+    this._starMap?.hide(); // warm for the cut back
+    this.renderer.setPaused(false);
+    this._refreshStarMapPingButton();
+  }
+
+  /** In StarMap mode the map gesture cannot reach us — a cross-origin iframe
+   *  swallows its own pointer events (and it MUST, so players can drive the
+   *  view). So "Ping" is offered from a corner button beside the existing
+   *  chrome, and drops the ping at screen centre (screen-space, roughly
+   *  aligned — decision Q4). Other players' pings still draw over the frame. */
+  private _refreshStarMapPingButton(): void {
+    let btn = document.querySelector<HTMLButtonElement>('#player-starmap-ping-btn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'player-starmap-ping-btn';
+      btn.className = 'player-reset-view-btn player-starmap-ping-btn';
+      btn.title = 'Ping the star map (everyone sees it)';
+      btn.textContent = '◎ Ping';
+      btn.hidden = true;
+      btn.addEventListener('click', () => this._sendPing(0.5, 0.5));
+      document.body.appendChild(btn);
+    }
+    btn.hidden = !(this._starMapActive && this.features.pings && !this._isPreviewMode());
+  }
+
   /** Open the player action menu at a viewport point, if it maps onto the map. */
   private _openPlayerMenu(clientX: number, clientY: number): void {
     const canvas = document.querySelector<HTMLCanvasElement>('#renderer-canvas');
@@ -1366,6 +1419,11 @@ export class PlayerApp {
         // textmap_videos message, which could miss the timing).
         this._textMapVideos?.setVideos(msg.textMapVideos ?? []);
         this._textMapAlt?.setItems(msg.textMapAlt ?? []);
+        // v2.18 — StarMap: pre-warm the SSE view when the pack has one, and enter
+        // StarMap mode if the ACTIVE map is one (late joiner / reconnect).
+        if (msg.starMapPrewarm) this._starMap?.preload(msg.starMapPrewarm);
+        if (msg.starMap) this._enterStarMap(msg.starMap);
+        else if (this._starMapActive) this._exitStarMap();
         // v2.14.17 — pick up calibration + dimensions for the
         // player-side grid renderer.
         // v2.14.18 — gridOffsetX/Y travel in the same payload.
@@ -1412,6 +1470,8 @@ export class PlayerApp {
 
       case 'map_change': {
         this.currentMapId = msg.payload.id;
+        // v2.18 — any ordinary map ends StarMap mode (the SSE view stays warm, hidden).
+        if (this._starMapActive) this._exitStarMap();
         // Abandon any in-flight ruler — its anchor belonged to the old map.
         this._measureTool?.cancel();
         if (msg.markers !== undefined) this.currentMarkers = msg.markers;
@@ -1895,6 +1955,20 @@ export class PlayerApp {
       case 'textmap_videos': {
         // v2.16.91 — live YouTube videos for the active text-map.
         this._textMapVideos?.setVideos(msg.videos);
+        break;
+      }
+      case 'starmap_show': {
+        // v2.18 — the GM activated a StarMap: show the live SSE view (transition
+        // out of the previous map first, like any map cut), pause the map
+        // renderer, and restrict tools to Ping. Sent WHERE map_change would go.
+        this.currentMapId = null; // no StoredMap texture is on screen now
+        this._measureTool?.cancel();
+        this._stopAllSoundboard();
+        this._stopAllPositional();
+        this._trackerScans = [];
+        this._trackerBlobs = [];
+        const target = msg.payload;
+        void this.runTransition(undefined, async () => { this._enterStarMap(target); });
         break;
       }
       case 'textmap_alt': {

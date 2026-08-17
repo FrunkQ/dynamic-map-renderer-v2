@@ -12,6 +12,7 @@ import { TimersLayer } from '../annotate/TimersLayer.ts';
 import { NotesLayer } from '../annotate/NotesLayer.ts';
 import { WhiteboardLayer } from '../annotate/WhiteboardLayer.ts';
 import { TextMapVideoLayer } from '../rendering/TextMapVideoLayer.ts';
+import { StarMapLayer } from '../rendering/StarMapLayer.ts';
 import {
   type ProjectorSetup,
   getActiveSetup,
@@ -134,6 +135,9 @@ export class ProjectorApp {
   private _annotateNotes:    NotesLayer | null = null;
   private _annotateBoard:    WhiteboardLayer | null = null;
   private _textMapVideos:    TextMapVideoLayer | null = null;
+  /** v2.18 — StarMap: full-bleed SSE view (calibration/crop/rotation do not apply). */
+  private _starMap: StarMapLayer | null = null;
+  private _starMapActive = false;
   private _playerIcons   = new Map<string, string>();
   private _lastPlayerMarkers: Array<{ playerId: string; name: string; color: string; x: number; y: number; iconChar?: string; hasIcon?: boolean; tokenSize?: import('../types.ts').TokenSize }> = [];
   /** Icons currently being requested via `player_icon_request` — debounce so a
@@ -308,6 +312,9 @@ export class ProjectorApp {
         window.setTimeout(() => this._textMapVideos?.refresh(), 250);
       });
     }
+    // v2.18 — StarMap layer (full-bleed; the projector shows the same live view as players).
+    const starMapEl = document.getElementById('starmap-layer');
+    if (starMapEl) this._starMap = new StarMapLayer(starMapEl, 'viewer');
     // v2.16.77 — read-only whiteboard mirrored from the GM.
     const boardEl = document.getElementById('annotate-whiteboard') as HTMLCanvasElement | null;
     if (boardEl) this._annotateBoard = new WhiteboardLayer(boardEl, (x, y) => this.renderer.mapNormToCanvasCss(x, y));
@@ -555,6 +562,10 @@ export class ProjectorApp {
         // v2.16.100 — videos ride in full_state so a fresh projector gets them
         // on connect, not only via the discrete textmap_videos message.
         this._textMapVideos?.setVideos(msg.textMapVideos ?? []);
+        // v2.18 — StarMap: pre-warm + enter/exit on the active map's kind.
+        if (msg.starMapPrewarm) this._starMap?.preload(msg.starMapPrewarm);
+        if (msg.starMap) this._enterStarMap(msg.starMap);
+        else if (this._starMapActive) this._exitStarMap();
         if (msg.mapPixelsPerSquare !== undefined) this.mapPixelsPerSquare = msg.mapPixelsPerSquare;
         if (msg.mapImageWidth      !== undefined) this.mapImageWidth      = msg.mapImageWidth;
         if (msg.mapImageHeight     !== undefined) this.mapImageHeight     = msg.mapImageHeight;
@@ -585,6 +596,7 @@ export class ProjectorApp {
         break;
       }
       case 'map_change': {
+        if (this._starMapActive) this._exitStarMap(); // v2.18 — any ordinary map ends StarMap mode
         this.currentMapId   = msg.payload.id;
         this.currentMarkers = msg.markers ?? [];
         this.currentFog     = msg.fog ?? { polygons: [] };
@@ -879,6 +891,12 @@ export class ProjectorApp {
         this._textMapVideos?.setVideos(msg.videos);
         break;
       }
+      case 'starmap_show': {
+        // v2.18 — full-bleed SSE view; the projector's own calibration and crop
+        // are meaningless for a live external view (decision Q5).
+        this._enterStarMap(msg.payload);
+        break;
+      }
       case 'video_playback': {
         // v2.16.95 — follow the GM's play/pause/seek/volume for one video.
         this._textMapVideos?.applyPlayback({
@@ -903,6 +921,23 @@ export class ProjectorApp {
    * is a master gate — when off, the filter pass is bypassed regardless of
    * which filter is set, which matches our "default off" stance.
    */
+  // ── v2.18 StarMap mode ─────────────────────────────────────────────────────
+  private _enterStarMap(t: { origin: string; sessionId: string; presetId: string; backgroundColor?: string }): void {
+    if (!this._starMap) return;
+    this._starMapActive = true;
+    document.body.classList.add('starmap-active');
+    this._starMap.show({ origin: t.origin, sessionId: t.sessionId, presetId: t.presetId });
+    this.renderer.setPaused(true);
+    this._textMapVideos?.clear();
+  }
+  private _exitStarMap(): void {
+    if (!this._starMapActive) return;
+    this._starMapActive = false;
+    document.body.classList.remove('starmap-active');
+    this._starMap?.hide();
+    this.renderer.setPaused(false);
+  }
+
   private _applyFilter(): void {
     if (!this.projectorViewport.filterEnabled) {
       this.renderer.setFilterEnabled(false);

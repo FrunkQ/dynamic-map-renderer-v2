@@ -7652,6 +7652,21 @@ option.select-option--add {
 /* v2.16.91 — live text-map video overlay. Container is click-through; the
    video hosts opt back in so the viewer uses YouTube's own controls. */
 .textmap-video-layer { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+/* v2.18 — StarMap: the SSE player view fills the surface; pings (z 7+) draw over it. */
+.starmap-layer { position: absolute; inset: 0; z-index: 5; background: #000; }
+.starmap-layer[hidden] { display: none; }
+.starmap-layer .starmap-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #000; }
+/* While a StarMap is showing, chrome that only makes sense over a map texture steps aside. */
+body.starmap-active #player-grid,
+body.starmap-active #marker-overlay,
+body.starmap-active #player-marker-layer,
+body.starmap-active #measure-layer,
+body.starmap-active #annotate-whiteboard,
+body.starmap-active #annotate-clocks,
+body.starmap-active #annotate-timers,
+body.starmap-active #annotate-notes,
+body.starmap-active #player-reset-view-btn { display: none !important; }
+.player-starmap-ping-btn { bottom: 90px; }
 .textmap-video {
   position: absolute;
   transform-origin: center center;
