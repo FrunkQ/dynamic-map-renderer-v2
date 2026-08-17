@@ -99,6 +99,9 @@ import { defaultProjectorViewport } from '../types.ts';
 // subpanel (scan to open a remote player window over the LAN). The hold
 // screen + player connect UI still do their own QR rendering too.
 import QRCode from 'qrcode';
+import { StarMapLayer } from '../rendering/StarMapLayer.ts';
+import { sse2Bridge, Sse2Bridge, type SseAnnounce } from './Sse2Bridge.ts';
+import { StarMapDialog } from './StarMapDialog.ts';
 
 const REMOTE_AUDIO_KEY = 'dmr_remote_audio';
 
@@ -418,6 +421,10 @@ export class GMApp {
   private pingLayer: PingLayer | null = null;
   /** v2.16.91 — live YouTube videos placed on a text-map page. */
   private textMapVideoLayer: import('../rendering/TextMapVideoLayer.ts').TextMapVideoLayer | null = null;
+  /** v2.18 — StarMap: GM preview of the live SSE view + "is it live?" state. */
+  private starMapLayer: StarMapLayer | null = null;
+  private _activeStarMap: import('../types.ts').StarMapConfig | null = null;
+  private _starMapUnsub: (() => void) | null = null;
   private _currentTextMapVideos: import('../types.ts').TextMapVideoElement[] = [];
   /** v2.17.26 — screen-reader region exposing the handout's text + image alt
    *  (otherwise baked into the page image, invisible to assistive tech). */
@@ -3192,6 +3199,13 @@ export class GMApp {
       this._setAnimationButtonState('idle');
     }
     if (this.revealProgressEl) this.revealProgressEl.hidden = true;
+    // v2.18 — StarMap: a live external view, no image. Its own path (state load,
+    // discovery, broadcast, preview) — everything below assumes a texture.
+    if (mapAssetForButton?.source === 'starmap' && mapAssetForButton.starMap) {
+      await this._loadStarMap(map, mapAssetForButton.starMap);
+      return;
+    }
+    if (this._activeStarMap) this._leaveStarMap(); // an ordinary map ends StarMap mode
     const fileBlob = await this.maps.getBlob(map.id);
     if (!fileBlob) { this.setStatus('Map blob not found', 'error'); return; }
 
@@ -3528,6 +3542,9 @@ export class GMApp {
         { showLabel: true, persistent: true, onDismiss: () => { /* GM-local removal only */ } },
       );
     }
+    // v2.18 — StarMap GM preview layer (what players see; drive it from the SSE tab).
+    const starMapLayerEl = document.getElementById('starmap-layer');
+    if (starMapLayerEl) this.starMapLayer = new StarMapLayer(starMapLayerEl, 'gm');
     // v2.16.91 — live text-map video overlay (tracks the map like markers).
     const videoLayerEl = document.getElementById('textmap-video-layer');
     if (videoLayerEl) {
@@ -5383,8 +5400,155 @@ export class GMApp {
    *  the Visual Filter bypass switch is off, otherwise the live
    *  state.filter. Keeps the dropdown selection alive in the UI
    *  while suppressing the actual effect. */
+  // ── v2.18 StarMap (docs/starmap-map-kind-design.md 4.3 / 4.4) ─────────────
+
+  /** GM activation of a StarMap map. Loads the map's own saved config (so
+   *  audio slots, projector viewport etc. still round-trip), then discovers
+   *  the SSE session through the bridge and, once it matches, broadcasts
+   *  starmap_show and shows the GM preview. Never broadcasts on a mismatch. */
+  private async _loadStarMap(map: StoredMap, cfg: import('../types.ts').StarMapConfig): Promise<void> {
+    await this.state.loadForMap({ id: map.id, name: map.name }, null);
+    this.fogEditor.loadState(this.state.getState().fog);
+    this.syncView(this.state.getState());
+    this.filterSelect.value = this.state.getState().filter.filterId;
+    this.setStatus('', 'ok');
+    void loadSession().then((s) => { if (s) void saveSession({ ...s, lastMapId: map.id }); });
+    this.interactions.reset();
+    this.soundboardPanel.stopAll();
+    this.soundboardPanel.update(this.state.getState().audio.slots);
+    // No texture: clear map-bound overlays so nothing stale hangs over the frame.
+    this._currentTextMapVideos = [];
+    this.textMapVideoLayer?.setVideos([]);
+    this.host.setLastTextMapVideos([]);
+    this.host.broadcast({ type: 'textmap_videos', videos: [] });
+    this._activeStarMap = cfg;
+    this._applyStarMapUiGates(true);
+    // Discovery. Any later announce (SSE opened / right map loaded) re-runs
+    // the check, so the banner resolves itself without the GM re-clicking.
+    this._starMapUnsub?.();
+    this._starMapUnsub = sse2Bridge.onAnnounce((a, origin) => {
+      if (this._activeStarMap !== cfg || origin !== Sse2Bridge.normaliseOrigin(cfg.origin)) return;
+      void this._starMapReconcile(map, cfg, a);
+    });
+    const a = await sse2Bridge.hello(cfg.origin);
+    if (this._activeStarMap !== cfg) return; // the GM moved on while we waited
+    if (!a) {
+      this._showStarMapBanner(
+        `Open Star System Explorer to power "${cfg.starmapName} — ${cfg.presetName}". This map shows its live player view.`,
+        [{ label: 'Open Star System Explorer', primary: true, onClick: () => sse2Bridge.openSse(cfg.origin) },
+         { label: 'Retry', onClick: () => void this._loadStarMap(map, cfg) }],
+      );
+      return;
+    }
+    await this._starMapReconcile(map, cfg, a);
+  }
+
+  /** Compare what SSE announces with what this map expects; go live only on a match. */
+  private async _starMapReconcile(map: StoredMap, cfg: import('../types.ts').StarMapConfig, a: SseAnnounce): Promise<void> {
+    if (a.starmapId !== cfg.starmapId) {
+      this._showStarMapBanner(
+        `This map expects the starmap "${cfg.starmapName}", but Star System Explorer has "${a.starmapName}" loaded. Load "${cfg.starmapName}" there, or re-point this map.`,
+        [{ label: 'Re-point to loaded starmap…', onClick: () => void this._editActiveStarMap() }],
+      );
+      return;
+    }
+    // Same starmap, different persistent session id (the owner regenerated it):
+    // follow it and save, so the pack stays right for next time.
+    if (a.sessionId !== cfg.sessionId) {
+      cfg = { ...cfg, sessionId: a.sessionId };
+      this._activeStarMap = cfg;
+      const asset = await this.maps.getAsset(map.id);
+      if (asset?.starMap) await MapAssetStore.update(asset.id, { starMap: cfg });
+    }
+    this._hideStarMapBanner();
+    void sse2Bridge.ensureRemote(cfg.origin, cfg.sessionId); // remote players can dial in
+    const payload = {
+      origin: Sse2Bridge.normaliseOrigin(cfg.origin),
+      sessionId: cfg.sessionId,
+      presetId: cfg.presetId,
+      backgroundColor: this.state.getState().view?.backgroundColor,
+    };
+    this.host.setLastStarMap(payload);
+    this.host.broadcast({ type: 'starmap_show', payload });
+    // Filters are forced off for the frame — tell viewers so nothing lingers.
+    this.host.broadcast({ type: 'filter_update', payload: this._effectiveFilter() });
+    this.starMapLayer?.show({ origin: payload.origin, sessionId: payload.sessionId, presetId: payload.presetId });
+    this.renderer.setPaused(true);
+  }
+
+  /** Leaving StarMap mode (an ordinary map was activated). The viewer side
+   *  ends StarMap mode on the incoming map_change; here we restore GM chrome. */
+  private _leaveStarMap(): void {
+    this._starMapUnsub?.(); this._starMapUnsub = null;
+    this._activeStarMap = null;
+    this.host.setLastStarMap(null);
+    this._hideStarMapBanner();
+    this.starMapLayer?.hide();
+    this.renderer.setPaused(false);
+    this._applyStarMapUiGates(false);
+  }
+
+  /** Disable gates (decision Q4/Q5): filters, viewport editors, fog, markers,
+   *  grid and annotate tools have no meaning over a live external view. */
+  private _applyStarMapUiGates(on: boolean): void {
+    document.body.classList.toggle('starmap-active', on);
+    const tip = on ? 'Filters run inside Star System Explorer for StarMap maps' : '';
+    this.filterSelect.disabled = on;
+    this.filterSelect.title = tip;
+    const fx = document.querySelector<HTMLButtonElement>('#filter-fx-btn');
+    if (fx) { fx.disabled = on; fx.title = tip; }
+  }
+
+  private _showStarMapBanner(text: string, actions: { label: string; primary?: boolean; onClick: () => void }[]): void {
+    const el = document.getElementById('starmap-banner');
+    if (!el) return;
+    el.replaceChildren();
+    const span = document.createElement('span');
+    span.textContent = text;
+    el.append(span);
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn btn--sm ${a.primary ? 'btn--primary' : 'btn--ghost'}`;
+      b.textContent = a.label;
+      b.addEventListener('click', a.onClick);
+      el.append(b);
+    }
+    el.hidden = false;
+  }
+  private _hideStarMapBanner(): void {
+    const el = document.getElementById('starmap-banner');
+    if (el) { el.hidden = true; el.replaceChildren(); }
+  }
+
+  /** Re-point / re-pick the active StarMap's preset via the same dialog. */
+  private async _editActiveStarMap(): Promise<void> {
+    const cfg = this._activeStarMap;
+    const mapId = this.state.getState().map?.id;
+    if (!cfg || !mapId) return;
+    const asset = await this.maps.getAsset(mapId);
+    if (!asset?.starMap) return;
+    const result = await new StarMapDialog(asset.starMap).open();
+    if (!result || result.presets.length === 0) return;
+    const p = result.presets[0]!;
+    const next: import('../types.ts').StarMapConfig = {
+      origin: result.origin,
+      sessionId: result.announce.sessionId,
+      starmapId: result.announce.starmapId,
+      starmapName: result.announce.starmapName,
+      presetId: p.id,
+      presetName: p.name,
+    };
+    await MapAssetStore.update(asset.id, { starMap: next, filename: `${next.starmapName} — ${next.presetName}` });
+    const map = (await getAllMaps()).find((m) => m.id === mapId);
+    if (map) await this.loadMap(map);
+  }
+
   private _effectiveFilter(): FilterState {
     if (this._filterBypassed) return { filterId: 'none', params: {} };
+    // v2.18 — a StarMap's look (CRT, thermal...) is the SSE preset's own GLSL
+    // filter; Mappadux must not filter the frame again (no filter-in-filter).
+    if (this._activeStarMap) return { filterId: 'none', params: {} };
     return this.state.getState().filter;
   }
 

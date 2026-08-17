@@ -7667,6 +7667,16 @@ body.starmap-active #annotate-timers,
 body.starmap-active #annotate-notes,
 body.starmap-active #player-reset-view-btn { display: none !important; }
 .player-starmap-ping-btn { bottom: 90px; }
+.starmap-banner {
+  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+  z-index: 8; max-width: min(92%, 640px);
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: 8px 12px; border-radius: 8px;
+  background: rgba(20, 20, 26, 0.92); color: #ffcc80; border: 1px solid rgba(255, 204, 128, 0.35);
+  font-size: 13px; line-height: 1.35;
+}
+.starmap-banner[hidden] { display: none; }
+.starmap-banner .btn { flex: 0 0 auto; }
 .textmap-video {
   position: absolute;
   transform-origin: center center;
