@@ -5479,6 +5479,25 @@ export class GMApp {
     this.host.broadcast({ type: 'filter_update', payload: this._effectiveFilter() });
     this.starMapLayer?.show({ origin: payload.origin, sessionId: payload.sessionId, presetId: payload.presetId });
     this.renderer.setPaused(true);
+    this._showStarMapGmHint(payload.origin);
+  }
+
+  /** The GM's StarMap surface is the PLAYERS' view; the controls live in the SSE tab. Shown on
+   *  every activation until dismissed for this session (a GM who knows can close it once). */
+  private _gmHintDismissed = false;
+  private _showStarMapGmHint(origin: string): void {
+    if (this._gmHintDismissed) return;
+    const el = document.getElementById('starmap-gm-hint');
+    if (!el) return;
+    el.hidden = false;
+    const open = document.getElementById('starmap-gm-hint-open');
+    const close = document.getElementById('starmap-gm-hint-close');
+    if (open) open.onclick = () => sse2Bridge.openSse(origin);
+    if (close) close.onclick = () => { this._gmHintDismissed = true; el.hidden = true; };
+  }
+  private _hideStarMapGmHint(): void {
+    const el = document.getElementById('starmap-gm-hint');
+    if (el) el.hidden = true;
   }
 
   /** Leaving StarMap mode (an ordinary map was activated). The viewer side
@@ -5488,6 +5507,7 @@ export class GMApp {
     this._activeStarMap = null;
     this.host.setLastStarMap(null);
     this._hideStarMapBanner();
+    this._hideStarMapGmHint();
     this.starMapLayer?.hide();
     this.renderer.setPaused(false);
     this._applyStarMapUiGates(false);
@@ -5502,6 +5522,11 @@ export class GMApp {
     this.filterSelect.title = tip;
     const fx = document.querySelector<HTMLButtonElement>('#filter-fx-btn');
     if (fx) { fx.disabled = on; fx.title = tip; }
+    // Say it in the panel, not only in a tooltip: swap the filter row for a one-line note.
+    const note = document.getElementById('starmap-filter-note');
+    const row = document.getElementById('filter-kind-row');
+    if (note) note.hidden = !on;
+    if (row) row.hidden = on;
   }
 
   private _showStarMapBanner(text: string, actions: { label: string; primary?: boolean; onClick: () => void }[]): void {

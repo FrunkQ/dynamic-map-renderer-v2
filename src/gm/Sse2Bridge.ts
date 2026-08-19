@@ -144,10 +144,20 @@ export class Sse2Bridge {
       if (a) { this.lastFailure = null; return a; }
     }
     // The frame answered `gone` (spoke) => SSE reachable, nobody hosting/announcing.
-    // The frame never spoke at all => the route is missing or blocked at that address.
+    // The frame never spoke at all => the route is missing or blocked at that address — OR a stale
+    // service worker / cold edge served a 404 once. Remount the frame ONCE and try again before
+    // declaring it unreachable; the second load is usually fine.
+    if (!this.spoken.has(key) && !this.remounted.has(key)) {
+      this.remounted.add(key);
+      this.frames.get(key)?.remove();
+      this.frames.delete(key); this.ready.delete(key); this.readyResolvers.delete(key);
+      await new Promise((r) => setTimeout(r, 1500));
+      return this.hello(originInput, sid, timeoutMs);
+    }
     this.lastFailure = this.spoken.has(key) ? 'no-session' : 'unreachable';
     return null;
   }
+  private remounted = new Set<string>();
 
   /** Ask the SSE GM tab to start hosting on the PeerJS broker so REMOTE viewers
    *  can dial in (SSE shows a notice on its side; never silent). */

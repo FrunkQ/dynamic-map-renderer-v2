@@ -283,6 +283,8 @@ A StarMap is a map with no picture: it shows your players a **live Star System E
 
 **At the table:** activate a StarMap like any other map. Players' windows show the live view (interactive — what they may do is set by the Player View in SSE). Switch to a handout, then back — the cut is instant, because the SSE view is kept warm behind the scenes; several StarMaps on the same campaign share it. The projector shows the same full-screen view.
 
+**Driving it:** your own GM canvas shows exactly what the players see — it is *not* the control surface. Focus a planet, run time, change the Player View from your **Star System Explorer** tab (a caption on the map reminds you, with an *Open SSE tab* button; dismiss it once you know).
+
 **What is different for a StarMap:** filters run **inside** Star System Explorer (the Player View's own CRT/thermal look), so Mappadux's filter controls are disabled for it — no filter-on-filter. Fog, grid, markers, the viewport crop and annotations do not apply. Players keep a **Ping** button (drops a ping at screen centre; other players' pings show over the view). Sound, soundboard and Player Voice carry on as normal.
 
 **Beta vs production:** Settings → Connections → *Star System Explorer address* sets where NEW StarMaps look (production by default; use `https://beta.starsystemx.com` to pair beta Mappadux with beta SSE). Each StarMap remembers the address it was created with; the Add/Edit dialog can change it per map.

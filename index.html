@@ -628,7 +628,13 @@
              <select> for the kind picker + sliders button to open the
              side panel with tint toggle and per-filter params. Matches
              Backdrop and MapFX. -->
-        <div class="fog-row fog-row--kind">
+        <!-- v2.18 — shown in place of the controls while a StarMap is active: the SSE Player View's own
+             GLSL filter is the filter; Mappadux's is forced off so nothing filters twice. -->
+        <div class="fog-row starmap-filter-note" id="starmap-filter-note" hidden>
+          <span class="fog-row-label">Type</span>
+          <span class="starmap-filter-note-text">Star System Explorer filters override — this map's look (CRT, thermal…) is set by its Player View in SSE.</span>
+        </div>
+        <div class="fog-row fog-row--kind" id="filter-kind-row">
           <span class="fog-row-label">Type</span>
           <select class="fog-row-select" id="filter-select" title="Pick the active visual filter (Night Vision, Thermal, Candlelight, etc.)."></select>
           <button type="button" id="filter-fx-btn" class="icon-btn bg-fx-btn" title="Tune this filter — its parameters + the per-map Tint Player Markers toggle." aria-label="Tune Visual Filter" aria-haspopup="true" aria-expanded="false">
@@ -735,6 +741,13 @@
            for "SSE not open / wrong starmap loaded". -->
       <div id="starmap-layer" hidden></div>
       <div id="starmap-banner" class="starmap-banner" hidden></div>
+      <!-- v2.18 — the GM's StarMap surface IS the players' view; the controls are in the SSE tab.
+           Say so, every time, until dismissed for this session. -->
+      <div id="starmap-gm-hint" class="starmap-gm-hint" hidden>
+        <span class="starmap-gm-hint-text">This is what your players see. Drive it — focus, time, Player View — from your <strong>Star System Explorer</strong> tab.</span>
+        <button type="button" id="starmap-gm-hint-open" class="btn btn--sm btn--primary">Open SSE tab</button>
+        <button type="button" id="starmap-gm-hint-close" class="btn btn--sm btn--ghost" aria-label="Dismiss">×</button>
+      </div>
       <canvas id="annotate-whiteboard" class="annotate-whiteboard" hidden></canvas>
       <div id="annotate-notes" class="annotate-notes"></div>
       <div id="annotate-clocks" class="annotate-clocks"></div>

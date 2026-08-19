@@ -90,9 +90,10 @@ export class StarMapDialog {
     const p = document.createElement('p');
     p.style.cssText = 'margin:0;color:#ff8a8a;';
     p.innerHTML = '<strong>Star System Explorer at this address cannot be reached for integration.</strong><br>' +
-      'Either that site is older than the integration (needs Star System Explorer ' + MIN_SSE_VERSION + ' or later), ' +
-      'or a firewall / security challenge is blocking embedded frames there. ' +
-      'Try the other address, or on the SSE side allow <code>/bridge</code> and <code>/catalogue</code> through the firewall.';
+      'Most often this is a stale copy of Star System Explorer in this browser: open <code>' + this.origin + '</code> in a tab, ' +
+      'hard-reload it once (Ctrl+Shift+R) so it picks up the current version, then Retry. ' +
+      'Otherwise that site is older than the integration (needs Star System Explorer ' + MIN_SSE_VERSION + ' or later), ' +
+      'or a firewall / security challenge is blocking embedded frames there (allow <code>/bridge</code> and <code>/catalogue</code>).';
     b.append(p, this._actions(
       this._btn('Cancel', 'btn--ghost', () => this._resolve(null)),
       this._btn('Retry', 'btn--primary', () => void this._search()),

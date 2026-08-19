@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.4 — 2026-08-19
+
+StarMap polish from the first owner test: (1) the GM's StarMap surface now carries a caption — "This is what your players see. Drive it from your Star System Explorer tab" with an **Open SSE tab** button — because the GM canvas is effectively a player screen for these maps; dismissable per session. (2) The Visual Filter panel swaps its controls for a one-line note while a StarMap is active: "Star System Explorer filters override — this map's look is set by its Player View in SSE" (previously only a tooltip on the disabled dropdown). (3) When the SSE bridge frame never answers, Mappadux remounts it once after 1.5 s before declaring the address unreachable, and the message now leads with the common cause — a stale copy of SSE in the browser (hard-reload it once) — ahead of "too old" / "firewall".
+
 ## v2.18.3 — 2026-08-18
 
 StarMap: the Add StarMap dialog now tells apart "no Star System Explorer session found" from "this address cannot be reached for integration" (the SSE site is older than the integration, or a firewall/security challenge is blocking embedded frames — a Vercel Security Checkpoint returns 403 to a third-party frame that cannot solve it). Found on the first beta test, where SSE's beta site was behind a challenge page. Dialog also carries a "beta feature — in testing" note.
