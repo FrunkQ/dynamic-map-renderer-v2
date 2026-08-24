@@ -36,9 +36,9 @@ export interface SseAnnounce {
 const NS = 'sse2-bridge';
 export const DEFAULT_SSE_ORIGIN = 'https://starsystemx.com';
 /** The oldest SSE build that speaks this contract (1B-1D + /bridge). */
-export const MIN_SSE_VERSION = '2.1.753';
+export const MIN_SSE_VERSION = '2.1.753'; // opener pairing needs 3.0.34; the paste path still works below that
 
-type Pending = { resolve: (a: SseAnnounce | null) => void; timer: ReturnType<typeof setTimeout> };
+type Pending = { resolve: (a: SseAnnounce | null) => void; timer: ReturnType<typeof setTimeout>; origin: string };
 
 export class Sse2Bridge {
   private frames = new Map<string, HTMLIFrameElement>();
@@ -138,7 +138,7 @@ export class Sse2Bridge {
       const requestId = `h${++this.seq}`;
       const a = await new Promise<SseAnnounce | null>((resolve) => {
         const timer = setTimeout(() => { this.pending.delete(requestId); resolve(null); }, wait);
-        this.pending.set(requestId, { resolve, timer });
+        this.pending.set(requestId, { resolve, timer, origin });
         frame.contentWindow!.postMessage({ ns: NS, v: 1, cmd: 'hello', requestId }, origin);
       });
       if (a) { this.lastFailure = null; return a; }
@@ -186,20 +186,62 @@ export class Sse2Bridge {
     return () => this.announceListeners.delete(cb);
   }
 
-  /** Mappadux-only convenience (we own the GM's browser): open SSE for the GM. */
+  /** Open SSE for the GM — and PAIR with the tab we opened.
+   *
+   *  v2.18.5: this is the zero-paste first pairing. Cross-site discovery cannot use the
+   *  same-machine channel (Chrome partitions BroadcastChannel inside our hidden /bridge frame), so
+   *  a campaign we have never seen has no session id to dial. The one channel partitioning does not
+   *  touch is the OPENER relationship: the tab we open can postMessage straight back to us. So we
+   *  deliberately do NOT pass `noopener` here, name the window so a second click reuses that tab,
+   *  and poke it until it answers with its ANNOUNCE (SSE also volunteers one unprompted).
+   *
+   *  The cost of dropping `noopener` is that the opened page holds a handle on this window and
+   *  could navigate it. We only ever open the SSE origin the GM configured, and we only ACT on a
+   *  message whose source is that window AND whose origin matches — but a GM who types a hostile
+   *  address into "Other address" is trusting it with that much. Noted, accepted, deliberate. */
   openSse(originInput: string): void {
     const origin = Sse2Bridge.normaliseOrigin(originInput);
-    // _blank + noopener: never navigate the GM's own tab, and give SSE no handle
-    // back to us (the bridge is the only sanctioned channel).
-    window.open(origin + '/', '_blank', 'noopener');
+    this._bind();
+    const w = window.open(origin + '/', 'SseIntegration');
+    if (!w) return; // popup blocked — the paste path still works
+    this.opened.set(w, origin);
+    // SSE answers on load, but the GM may still have to pick a starmap: keep asking for a while.
+    let tries = 0;
+    const poke = setInterval(() => {
+      if (++tries > 20 || w.closed || this.answered.has(w)) { clearInterval(poke); return; }
+      try { w.postMessage({ ns: NS, v: 1, cmd: 'hello' }, origin); } catch { /* not loaded yet */ }
+    }, 1200);
   }
+  /** Windows we opened, and the origin we opened them at. */
+  private opened = new Map<Window, string>();
+  /** Opened windows that have announced at least once — stops the poke, keeps the listener. */
+  private answered = new Set<Window>();
 
   destroy(): void {
+    this.opened.clear(); this.answered.clear();
     for (const f of this.frames.values()) f.remove();
     this.frames.clear(); this.ready.clear();
     for (const p of this.pending.values()) { clearTimeout(p.timer); p.resolve(null); }
     this.pending.clear();
     if (this.bound) { window.removeEventListener('message', this._onMessage); this.bound = false; }
+  }
+
+  /** Resolve whatever is waiting on this announce and tell every listener. Both the frame path and
+   *  the opened-tab path land here, so a dialog cannot tell (or care) which one found SSE. */
+  private _deliverAnnounce(a: SseAnnounce, origin: string, requestId: string | null): void {
+    if (requestId && this.pending.has(requestId)) {
+      const p = this.pending.get(requestId)!;
+      clearTimeout(p.timer); this.pending.delete(requestId); p.resolve(a);
+    } else if (!requestId) {
+      // An unsolicited announce answers any hello still outstanding FOR THE SAME ORIGIN — that is
+      // the whole point when the GM clicks "Open Star System Explorer" from a searching dialog. A
+      // hello waiting on a different address must not be answered by it.
+      for (const [rid, p] of [...this.pending]) {
+        if (p.origin !== origin) continue;
+        clearTimeout(p.timer); this.pending.delete(rid); p.resolve(a);
+      }
+    }
+    for (const cb of this.announceListeners) { try { cb(a, origin); } catch { /* listener bug must not break the bridge */ } }
   }
 
   private _bind() {
@@ -209,6 +251,19 @@ export class Sse2Bridge {
   }
 
   private _onMessage = (e: MessageEvent) => {
+    // A TAB WE OPENED announcing itself (the zero-paste pairing — see openSse). Same shape as the
+    // frame protocol, so it feeds the same listeners and the open dialog updates itself.
+    for (const [w, o] of this.opened) {
+      if (e.source !== w) continue;
+      if (e.origin !== o) return;
+      const d = e.data;
+      if (!d || d.ns !== NS || d.v !== 1 || d.event !== 'announce' || typeof d.payload?.sessionId !== 'string') return;
+      this.answered.add(w);
+      this.spoken.add(this._key(o, null));
+      this.lastFailure = null;
+      this._deliverAnnounce(d.payload as SseAnnounce, o, null);
+      return;
+    }
     // Only frames WE mounted, and only from the origin we mounted them at.
     let origin: string | null = null; let key: string | null = null;
     for (const [k, f] of this.frames) { if (e.source === f.contentWindow) { origin = this.frameOrigin.get(f) ?? null; key = k; break; } }
@@ -217,14 +272,7 @@ export class Sse2Bridge {
     if (!d || d.ns !== NS || d.v !== 1 || typeof d.event !== 'string') return;
     this.spoken.add(key);
     if (d.event === 'announce' && d.payload && typeof d.payload.sessionId === 'string') {
-      const a = d.payload as SseAnnounce;
-      const rid = typeof d.requestId === 'string' ? d.requestId : null;
-      if (rid && this.pending.has(rid)) {
-        const p = this.pending.get(rid)!;
-        clearTimeout(p.timer); this.pending.delete(rid); p.resolve(a);
-      }
-      // Solicited or not, an announce is news: listeners keep dialogs current.
-      for (const cb of this.announceListeners) { try { cb(a, origin); } catch { /* listener bug must not break the bridge */ } }
+      this._deliverAnnounce(d.payload as SseAnnounce, origin, typeof d.requestId === 'string' ? d.requestId : null);
     } else if (d.event === 'gone' && typeof d.requestId === 'string') {
       const p = this.pending.get(d.requestId);
       if (p) { clearTimeout(p.timer); this.pending.delete(d.requestId); p.resolve(null); }

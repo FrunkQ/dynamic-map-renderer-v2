@@ -242,13 +242,33 @@ export class StarMapDialog {
     p.innerHTML = '<strong>No Star System Explorer session found.</strong><br>' +
       (this.knownSid
         ? 'The saved session is not reachable — open Star System Explorer, load this starmap, and this dialog will pick it up automatically.'
-        : 'Open Star System Explorer, load your starmap, then paste one of its player links below — Mappadux finds the campaign from it. (After the first time, StarMaps reconnect on their own.)');
+        : 'Nothing on this machine can see a running session by itself (browsers keep sites apart). ' +
+          '<strong>Open Star System Explorer from here</strong> and the tab it opens will introduce itself — no copying needed. ' +
+          'Already have it open in another tab? Paste one of its player links instead.');
     b.append(p);
     if (!this.knownSid) b.append(this._pasteRow());
     b.append(this._actions(
       this._btn('Cancel', 'btn--ghost', () => this._resolve(null)),
       this._btn('Retry', 'btn--ghost', () => void this._search()),
-      this._btn('Open Star System Explorer', 'btn--primary', () => sse2Bridge.openSse(this.origin)),
+      this._btn('Open Star System Explorer', 'btn--primary', () => { sse2Bridge.openSse(this.origin); this._renderOpening(); }),
+    ));
+  }
+
+  /** v2.18.5 — we opened the tab; it announces itself when its starmap is loaded (openSse), so the
+   *  only thing left to do is say so. `onAnnounce` re-renders this into the found state by itself. */
+  private _renderOpening(): void {
+    const b = this._clear();
+    b.append(this._intro(), this._originRow());
+    const p = document.createElement('p');
+    p.style.margin = '0';
+    p.innerHTML = '<strong>Star System Explorer is opening…</strong><br>' +
+      'Load the starmap you want in that tab. This dialog fills itself in as soon as it does — ' +
+      'leave it open. (If the tab was blocked by your browser, allow pop-ups for Mappadux, or paste a player link below.)';
+    b.append(p);
+    if (!this.knownSid) b.append(this._pasteRow());
+    b.append(this._actions(
+      this._btn('Cancel', 'btn--ghost', () => this._resolve(null)),
+      this._btn('Retry', 'btn--ghost', () => void this._search()),
     ));
   }
 

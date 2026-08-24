@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.5 — 2026-08-24
+
+StarMap pairing without copying anything: **Open Star System Explorer** in the Add StarMap dialog now pairs with the tab it opens. Browsers deliberately keep separate sites from seeing each other's tabs, which is why Mappadux could never find a running Star System Explorer by itself and you had to paste a player link; the one channel that still works is the tab we opened ourselves, so SSE now introduces itself over it and the dialog fills in the moment you load a starmap there. Pasting a link still works and remains the way to pair with a tab you opened yourself. Needs Star System Explorer 3.0.34 or later.
+
 ## v2.18.4 — 2026-08-19
 
 StarMap polish from the first owner test: (1) the GM's StarMap surface now carries a caption — "This is what your players see. Drive it from your Star System Explorer tab" with an **Open SSE tab** button — because the GM canvas is effectively a player screen for these maps; dismissable per session. (2) The Visual Filter panel swaps its controls for a one-line note while a StarMap is active: "Star System Explorer filters override — this map's look is set by its Player View in SSE" (previously only a tooltip on the disabled dropdown). (3) When the SSE bridge frame never answers, Mappadux remounts it once after 1.5 s before declaring the address unreachable, and the message now leads with the common cause — a stale copy of SSE in the browser (hard-reload it once) — ahead of "too old" / "firewall".
