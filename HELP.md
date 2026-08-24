@@ -275,6 +275,24 @@ travel in `.mappadux` bundles; the credentials don't.
 
 ---
 
+## StarMaps — Star System Explorer *(new in v2.18)*
+
+A StarMap is a map with no picture: it shows your players a **live Star System Explorer view** — the full 3D star map, orrery and info panels, exactly as SSE's own player view — inside their normal Mappadux player window. You drive it from your Star System Explorer tab (focus a planet, run time, push a Player View); Mappadux just frames it. The star-map data never passes through Mappadux, so nothing about SSE's redaction changes.
+
+**Adding one:** Add Map dialog → **+ Add a StarMap (Star System Explorer)**. Mappadux looks for a running Star System Explorer in the same browser, tells you which starmap it found, and lists that starmap's Player Views — tick the ones you want and one StarMap map is created per view (named "*starmap* — *view*"). If SSE is not open the dialog says so and offers to open it; come back and it picks up automatically.
+
+**At the table:** activate a StarMap like any other map. Players' windows show the live view (interactive — what they may do is set by the Player View in SSE). Switch to a handout, then back — the cut is instant, because the SSE view is kept warm behind the scenes; several StarMaps on the same campaign share it. The projector shows the same full-screen view.
+
+**Driving it:** your own GM canvas shows exactly what the players see — it is *not* the control surface. Focus a planet, run time, change the Player View from your **Star System Explorer** tab (a caption on the map reminds you, with an *Open SSE tab* button; dismiss it once you know).
+
+**What is different for a StarMap:** filters run **inside** Star System Explorer (the Player View's own CRT/thermal look), so Mappadux's filter controls are disabled for it — no filter-on-filter. Fog, grid, markers, the viewport crop and annotations do not apply. Players keep a **Ping** button (drops a ping at screen centre; other players' pings show over the view). Sound, soundboard and Player Voice carry on as normal.
+
+**Beta vs production:** Settings → Connections → *Star System Explorer address* sets where NEW StarMaps look (production by default; use `https://beta.starsystemx.com` to pair beta Mappadux with beta SSE). Each StarMap remembers the address it was created with; the Add/Edit dialog can change it per map.
+
+**Wrong or missing starmap:** if SSE has a different starmap loaded, a banner names the one this map expects and the one that is loaded — load the right one in SSE, or **Re-point** the map at what is loaded. If SSE is closed, the banner offers to open it and the map goes live by itself once SSE announces the starmap. StarMap maps travel in your pack (with the SSE address, session id and starmap name), so a pack loaded next session reconnects on its own.
+
+---
+
 ## Composite Maps *(new in v2.15)*
 
 A composite map stitches several image maps together into one playable surface. Two flavours:

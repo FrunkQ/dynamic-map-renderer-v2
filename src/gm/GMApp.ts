@@ -99,6 +99,10 @@ import { defaultProjectorViewport } from '../types.ts';
 // subpanel (scan to open a remote player window over the LAN). The hold
 // screen + player connect UI still do their own QR rendering too.
 import QRCode from 'qrcode';
+import { StarMapLayer } from '../rendering/StarMapLayer.ts';
+import { encodeIceParam, loadStoredIce } from '../p2p/iceConfig.ts';
+import { sse2Bridge, Sse2Bridge, type SseAnnounce } from './Sse2Bridge.ts';
+import { StarMapDialog } from './StarMapDialog.ts';
 
 const REMOTE_AUDIO_KEY = 'dmr_remote_audio';
 
@@ -149,6 +153,20 @@ const COMPOSITE_MAP_PREFIX = '▦ ';
 // text in EditableSelect so the GM spots the broken row before
 // loading it.
 const MISSING_MAP_PREFIX   = '⚠ ';
+// v2.18 — ✦ for a StarMap: a live Star System Explorer view, not an image.
+const STARMAP_PREFIX       = '✦ ';
+
+type MapDropdownKind = 'image' | 'animated' | 'text' | 'composite' | 'starmap' | 'missing';
+/** The ONE place a dropdown kind becomes its glyph prefix (was duplicated in
+ *  two render paths, which is exactly how a new kind gets one and not the other). */
+function _prefixForKind(kind: MapDropdownKind): string {
+  return kind === 'missing'   ? MISSING_MAP_PREFIX   :
+         kind === 'starmap'   ? STARMAP_PREFIX       :
+         kind === 'composite' ? COMPOSITE_MAP_PREFIX :
+         kind === 'text'      ? TEXT_MAP_PREFIX      :
+         kind === 'animated'  ? ANIMATED_MAP_PREFIX  :
+                                IMAGE_MAP_PREFIX;
+}
 
 /** Strip every decoration that has ever been put on a map's display
  *  name — current "▣ " / "▶ " / "▤ " prefixes, the brief "≡ " trial
@@ -159,7 +177,7 @@ function _cleanMapDisplayName(name: string): string {
     // Strip any decorative leading prefix: the legacy "[T] " variant
     // first, then any glyph in the set we've ever used.
     .replace(/^\[T\]\s+/, '')
-    .replace(/^[▣▶▤▦¶≡⚠]\s+/, '')
+    .replace(/^[▣▶▤▦¶≡⚠✦]\s+/, '')
     // Legacy trailing " [T]" decoration.
     .replace(/(?: \[T\])+$/, '')
     .trim();
@@ -172,13 +190,14 @@ function _cleanMapDisplayName(name: string): string {
  *  checks matches populateMapList: text-map wins over animated wins
  *  over image, so a hypothetical "video text-map" still reads as
  *  text. */
-function _dropdownKindForAsset(asset: import('../types.ts').MapAsset | undefined): 'image' | 'animated' | 'text' | 'composite' | 'missing' {
+function _dropdownKindForAsset(asset: import('../types.ts').MapAsset | undefined): MapDropdownKind {
   // v2.14.60 — undefined means the StoredMap references a MapAsset
   // that's been removed (manual library delete, or a bundle import
   // that didn't carry it). Surface it as 'missing' so the dropdown
   // shows the hazard prefix + orange tint rather than silently
   // falling back to the image glyph and failing on load.
   if (!asset) return 'missing';
+  if (asset.source === 'starmap') return 'starmap';
   if (asset.source === 'composite-map') return 'composite';
   if (asset.source === 'text-map') return 'text';
   if ((asset.blob?.type ?? '').startsWith('video/')) return 'animated';
@@ -403,6 +422,10 @@ export class GMApp {
   private pingLayer: PingLayer | null = null;
   /** v2.16.91 — live YouTube videos placed on a text-map page. */
   private textMapVideoLayer: import('../rendering/TextMapVideoLayer.ts').TextMapVideoLayer | null = null;
+  /** v2.18 — StarMap: GM preview of the live SSE view + "is it live?" state. */
+  private starMapLayer: StarMapLayer | null = null;
+  private _activeStarMap: import('../types.ts').StarMapConfig | null = null;
+  private _starMapUnsub: (() => void) | null = null;
   private _currentTextMapVideos: import('../types.ts').TextMapVideoElement[] = [];
   /** v2.17.26 — screen-reader region exposing the handout's text + image alt
    *  (otherwise baked into the page image, invisible to assistive tech). */
@@ -542,7 +565,12 @@ export class GMApp {
     // the rewrite entirely is simpler than chasing the misfire
     // through workbox + Vercel routing — and the projector URL
     // already takes this approach via /projector.html.
-    return `${this.playerOrigin}/player.html${this._instanceQuery()}#${code}`;
+    // v2.18 — carry the GM's custom relay (?ice=) so a player on a locked-down network
+    // knows about it BEFORE dialling. Absent when no custom relay is configured.
+    const ice = encodeIceParam(loadStoredIce());
+    const q = this._instanceQuery();
+    const iceQ = ice ? `${q ? '&' : '?'}ice=${ice}` : '';
+    return `${this.playerOrigin}/player.html${q}${iceQ}#${code}`;
   }
   private _buildProjectorUrl(code: string): string {
     // v2.17.17 — gmLocal=1 marks this as the GM's own same-machine projector
@@ -2712,17 +2740,16 @@ export class GMApp {
     // Per-asset kind lookup so we can flag text-map and animated
     // entries in the dropdown with the right leading glyph. Cheap
     // (small N) and saves a round-trip per option.
-    type DropdownKind = 'text' | 'animated' | 'image' | 'composite' | 'missing';
-    const kindByAssetId = new Map<string, DropdownKind>();
-    for (const a of mapAssets) {
-      const isAnimated = (a.blob?.type ?? '').startsWith('video/');
-      const kind: DropdownKind =
-        a.source === 'composite-map' ? 'composite' :
-        a.source === 'text-map'      ? 'text'      :
-        isAnimated                   ? 'animated'  :
-                                       'image';
-      kindByAssetId.set(a.id, kind);
-    }
+    // (v2.18: derived by _dropdownKindForAsset — the ONE kind rule — rather
+    //  than a second inline copy that had to be kept in step with it.)
+    const kindByAssetId = new Map<string, MapDropdownKind>();
+    for (const a of mapAssets) kindByAssetId.set(a.id, _dropdownKindForAsset(a));
+    // v2.18 — pre-warm hint: if the pack holds any StarMap, viewers mount the
+    // SSE view hidden at connect so the first cut into it is instant.
+    const firstStarMap = mapAssets.find((a) => a.source === 'starmap' && a.starMap)?.starMap;
+    this.host.setLastStarMapPrewarm(firstStarMap
+      ? { origin: Sse2Bridge.normaliseOrigin(firstStarMap.origin), sessionId: firstStarMap.sessionId }
+      : null);
     this.mapSelect.innerHTML = '';
     if (maps.length === 0) {
       const placeholder = document.createElement('option');
@@ -2750,12 +2777,7 @@ export class GMApp {
       // a normal image map and failing on load.
       const kind = kindByAssetId.get(m.mapAssetId) ?? 'missing';
       const cleanName = _cleanMapDisplayName(m.name);
-      const prefix =
-        kind === 'missing'   ? MISSING_MAP_PREFIX   :
-        kind === 'composite' ? COMPOSITE_MAP_PREFIX :
-        kind === 'text'      ? TEXT_MAP_PREFIX      :
-        kind === 'animated'  ? ANIMATED_MAP_PREFIX  :
-                               IMAGE_MAP_PREFIX;
+      const prefix = _prefixForKind(kind);
       opt.textContent = `${prefix}${cleanName}`;
       if (kind === 'missing') {
         opt.dataset['missing'] = 'true';
@@ -3182,6 +3204,13 @@ export class GMApp {
       this._setAnimationButtonState('idle');
     }
     if (this.revealProgressEl) this.revealProgressEl.hidden = true;
+    // v2.18 — StarMap: a live external view, no image. Its own path (state load,
+    // discovery, broadcast, preview) — everything below assumes a texture.
+    if (mapAssetForButton?.source === 'starmap' && mapAssetForButton.starMap) {
+      await this._loadStarMap(map, mapAssetForButton.starMap);
+      return;
+    }
+    if (this._activeStarMap) this._leaveStarMap(); // an ordinary map ends StarMap mode
     const fileBlob = await this.maps.getBlob(map.id);
     if (!fileBlob) { this.setStatus('Map blob not found', 'error'); return; }
 
@@ -3518,6 +3547,9 @@ export class GMApp {
         { showLabel: true, persistent: true, onDismiss: () => { /* GM-local removal only */ } },
       );
     }
+    // v2.18 — StarMap GM preview layer (what players see; drive it from the SSE tab).
+    const starMapLayerEl = document.getElementById('starmap-layer');
+    if (starMapLayerEl) this.starMapLayer = new StarMapLayer(starMapLayerEl, 'gm');
     // v2.16.91 — live text-map video overlay (tracks the map like markers).
     const videoLayerEl = document.getElementById('textmap-video-layer');
     if (videoLayerEl) {
@@ -5373,8 +5405,180 @@ export class GMApp {
    *  the Visual Filter bypass switch is off, otherwise the live
    *  state.filter. Keeps the dropdown selection alive in the UI
    *  while suppressing the actual effect. */
+  // ── v2.18 StarMap (docs/starmap-map-kind-design.md 4.3 / 4.4) ─────────────
+
+  /** GM activation of a StarMap map. Loads the map's own saved config (so
+   *  audio slots, projector viewport etc. still round-trip), then discovers
+   *  the SSE session through the bridge and, once it matches, broadcasts
+   *  starmap_show and shows the GM preview. Never broadcasts on a mismatch. */
+  private async _loadStarMap(map: StoredMap, cfg: import('../types.ts').StarMapConfig): Promise<void> {
+    await this.state.loadForMap({ id: map.id, name: map.name }, null);
+    this.fogEditor.loadState(this.state.getState().fog);
+    this.syncView(this.state.getState());
+    this.filterSelect.value = this.state.getState().filter.filterId;
+    this.setStatus('', 'ok');
+    void loadSession().then((s) => { if (s) void saveSession({ ...s, lastMapId: map.id }); });
+    this.interactions.reset();
+    this.soundboardPanel.stopAll();
+    this.soundboardPanel.update(this.state.getState().audio.slots);
+    // No texture: clear map-bound overlays so nothing stale hangs over the frame.
+    this._currentTextMapVideos = [];
+    this.textMapVideoLayer?.setVideos([]);
+    this.host.setLastTextMapVideos([]);
+    this.host.broadcast({ type: 'textmap_videos', videos: [] });
+    this._activeStarMap = cfg;
+    this._applyStarMapUiGates(true);
+    // Discovery. Any later announce (SSE opened / right map loaded) re-runs
+    // the check, so the banner resolves itself without the GM re-clicking.
+    this._starMapUnsub?.();
+    this._starMapUnsub = sse2Bridge.onAnnounce((a, origin) => {
+      if (this._activeStarMap !== cfg || origin !== Sse2Bridge.normaliseOrigin(cfg.origin)) return;
+      void this._starMapReconcile(map, cfg, a);
+    });
+    const a = await sse2Bridge.hello(cfg.origin, cfg.sessionId); // sid known -> PeerJS discovery, works cross-site
+    if (this._activeStarMap !== cfg) return; // the GM moved on while we waited
+    if (!a) {
+      this._showStarMapBanner(
+        `Open Star System Explorer to power "${cfg.starmapName} — ${cfg.presetName}". This map shows its live player view.`,
+        [{ label: 'Open Star System Explorer', primary: true, onClick: () => sse2Bridge.openSse(cfg.origin) },
+         { label: 'Retry', onClick: () => void this._loadStarMap(map, cfg) }],
+      );
+      return;
+    }
+    await this._starMapReconcile(map, cfg, a);
+  }
+
+  /** Compare what SSE announces with what this map expects; go live only on a match. */
+  private async _starMapReconcile(map: StoredMap, cfg: import('../types.ts').StarMapConfig, a: SseAnnounce): Promise<void> {
+    if (a.starmapId !== cfg.starmapId) {
+      this._showStarMapBanner(
+        `This map expects the starmap "${cfg.starmapName}", but Star System Explorer has "${a.starmapName}" loaded. Load "${cfg.starmapName}" there, or re-point this map.`,
+        [{ label: 'Re-point to loaded starmap…', onClick: () => void this._editActiveStarMap() }],
+      );
+      return;
+    }
+    // Same starmap, different persistent session id (the owner regenerated it):
+    // follow it and save, so the pack stays right for next time.
+    if (a.sessionId !== cfg.sessionId) {
+      cfg = { ...cfg, sessionId: a.sessionId };
+      this._activeStarMap = cfg;
+      const asset = await this.maps.getAsset(map.id);
+      if (asset?.starMap) await MapAssetStore.update(asset.id, { starMap: cfg });
+    }
+    this._hideStarMapBanner();
+    void sse2Bridge.ensureRemote(cfg.origin, cfg.sessionId); // remote players can dial in
+    const payload = {
+      origin: Sse2Bridge.normaliseOrigin(cfg.origin),
+      sessionId: cfg.sessionId,
+      presetId: cfg.presetId,
+      backgroundColor: this.state.getState().view?.backgroundColor,
+    };
+    this.host.setLastStarMap(payload);
+    this.host.broadcast({ type: 'starmap_show', payload });
+    // Filters are forced off for the frame — tell viewers so nothing lingers.
+    this.host.broadcast({ type: 'filter_update', payload: this._effectiveFilter() });
+    this.starMapLayer?.show({ origin: payload.origin, sessionId: payload.sessionId, presetId: payload.presetId });
+    this.renderer.setPaused(true);
+    this._showStarMapGmHint(payload.origin);
+  }
+
+  /** The GM's StarMap surface is the PLAYERS' view; the controls live in the SSE tab. Shown on
+   *  every activation until dismissed for this session (a GM who knows can close it once). */
+  private _gmHintDismissed = false;
+  private _showStarMapGmHint(origin: string): void {
+    if (this._gmHintDismissed) return;
+    const el = document.getElementById('starmap-gm-hint');
+    if (!el) return;
+    el.hidden = false;
+    const open = document.getElementById('starmap-gm-hint-open');
+    const close = document.getElementById('starmap-gm-hint-close');
+    if (open) open.onclick = () => sse2Bridge.openSse(origin);
+    if (close) close.onclick = () => { this._gmHintDismissed = true; el.hidden = true; };
+  }
+  private _hideStarMapGmHint(): void {
+    const el = document.getElementById('starmap-gm-hint');
+    if (el) el.hidden = true;
+  }
+
+  /** Leaving StarMap mode (an ordinary map was activated). The viewer side
+   *  ends StarMap mode on the incoming map_change; here we restore GM chrome. */
+  private _leaveStarMap(): void {
+    this._starMapUnsub?.(); this._starMapUnsub = null;
+    this._activeStarMap = null;
+    this.host.setLastStarMap(null);
+    this._hideStarMapBanner();
+    this._hideStarMapGmHint();
+    this.starMapLayer?.hide();
+    this.renderer.setPaused(false);
+    this._applyStarMapUiGates(false);
+  }
+
+  /** Disable gates (decision Q4/Q5): filters, viewport editors, fog, markers,
+   *  grid and annotate tools have no meaning over a live external view. */
+  private _applyStarMapUiGates(on: boolean): void {
+    document.body.classList.toggle('starmap-active', on);
+    const tip = on ? 'Filters run inside Star System Explorer for StarMap maps' : '';
+    this.filterSelect.disabled = on;
+    this.filterSelect.title = tip;
+    const fx = document.querySelector<HTMLButtonElement>('#filter-fx-btn');
+    if (fx) { fx.disabled = on; fx.title = tip; }
+    // Say it in the panel, not only in a tooltip: swap the filter row for a one-line note.
+    const note = document.getElementById('starmap-filter-note');
+    const row = document.getElementById('filter-kind-row');
+    if (note) note.hidden = !on;
+    if (row) row.hidden = on;
+  }
+
+  private _showStarMapBanner(text: string, actions: { label: string; primary?: boolean; onClick: () => void }[]): void {
+    const el = document.getElementById('starmap-banner');
+    if (!el) return;
+    el.replaceChildren();
+    const span = document.createElement('span');
+    span.textContent = text;
+    el.append(span);
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn btn--sm ${a.primary ? 'btn--primary' : 'btn--ghost'}`;
+      b.textContent = a.label;
+      b.addEventListener('click', a.onClick);
+      el.append(b);
+    }
+    el.hidden = false;
+  }
+  private _hideStarMapBanner(): void {
+    const el = document.getElementById('starmap-banner');
+    if (el) { el.hidden = true; el.replaceChildren(); }
+  }
+
+  /** Re-point / re-pick the active StarMap's preset via the same dialog. */
+  private async _editActiveStarMap(): Promise<void> {
+    const cfg = this._activeStarMap;
+    const mapId = this.state.getState().map?.id;
+    if (!cfg || !mapId) return;
+    const asset = await this.maps.getAsset(mapId);
+    if (!asset?.starMap) return;
+    const result = await new StarMapDialog(asset.starMap).open();
+    if (!result || result.presets.length === 0) return;
+    const p = result.presets[0]!;
+    const next: import('../types.ts').StarMapConfig = {
+      origin: result.origin,
+      sessionId: result.announce.sessionId,
+      starmapId: result.announce.starmapId,
+      starmapName: result.announce.starmapName,
+      presetId: p.id,
+      presetName: p.name,
+    };
+    await MapAssetStore.update(asset.id, { starMap: next, filename: `${next.starmapName} — ${next.presetName}` });
+    const map = (await getAllMaps()).find((m) => m.id === mapId);
+    if (map) await this.loadMap(map);
+  }
+
   private _effectiveFilter(): FilterState {
     if (this._filterBypassed) return { filterId: 'none', params: {} };
+    // v2.18 — a StarMap's look (CRT, thermal...) is the SSE preset's own GLSL
+    // filter; Mappadux must not filter the frame again (no filter-in-filter).
+    if (this._activeStarMap) return { filterId: 'none', params: {} };
     return this.state.getState().filter;
   }
 
@@ -7291,17 +7495,12 @@ export class GMApp {
   private _insertMapOptionSorted(
     id: string,
     name: string,
-    kind: 'image' | 'animated' | 'text' | 'composite' | 'missing' = 'image',
+    kind: MapDropdownKind = 'image',
   ): void {
     const opt = document.createElement('option');
     opt.value = id;
     const cleanName = _cleanMapDisplayName(name);
-    const prefix =
-      kind === 'missing'   ? MISSING_MAP_PREFIX   :
-      kind === 'composite' ? COMPOSITE_MAP_PREFIX :
-      kind === 'text'      ? TEXT_MAP_PREFIX      :
-      kind === 'animated'  ? ANIMATED_MAP_PREFIX  :
-                             IMAGE_MAP_PREFIX;
+    const prefix = _prefixForKind(kind);
     opt.textContent = `${prefix}${cleanName}`;
     if (kind === 'missing') {
       opt.dataset['missing'] = 'true';
@@ -7369,7 +7568,7 @@ export class GMApp {
     // Look up the underlying asset so the re-inserted option gets
     // the right leading glyph for its kind.
     const map = await getMap(id);
-    let kind: 'image' | 'animated' | 'text' | 'composite' | 'missing' = 'image';
+    let kind: MapDropdownKind = 'image';
     if (map) {
       const asset = await MapAssetStore.get(map.mapAssetId);
       kind = _dropdownKindForAsset(asset);

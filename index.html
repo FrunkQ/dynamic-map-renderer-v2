@@ -628,7 +628,13 @@
              <select> for the kind picker + sliders button to open the
              side panel with tint toggle and per-filter params. Matches
              Backdrop and MapFX. -->
-        <div class="fog-row fog-row--kind">
+        <!-- v2.18 — shown in place of the controls while a StarMap is active: the SSE Player View's own
+             GLSL filter is the filter; Mappadux's is forced off so nothing filters twice. -->
+        <div class="fog-row starmap-filter-note" id="starmap-filter-note" hidden>
+          <span class="fog-row-label">Type</span>
+          <span class="starmap-filter-note-text">Star System Explorer filters override — this map's look (CRT, thermal…) is set by its Player View in SSE.</span>
+        </div>
+        <div class="fog-row fog-row--kind" id="filter-kind-row">
           <span class="fog-row-label">Type</span>
           <select class="fog-row-select" id="filter-select" title="Pick the active visual filter (Night Vision, Thermal, Candlelight, etc.)."></select>
           <button type="button" id="filter-fx-btn" class="icon-btn bg-fx-btn" title="Tune this filter — its parameters + the per-map Tint Player Markers toggle." aria-label="Tune Visual Filter" aria-haspopup="true" aria-expanded="false">
@@ -730,6 +736,18 @@
            clocks float as a draggable HUD above it. -->
       <!-- v2.16.91 — live YouTube videos placed on a text-map page. -->
       <div id="textmap-video-layer" class="textmap-video-layer"></div>
+      <!-- v2.18 — StarMap: the GM's preview of the live Star System Explorer
+           view players see (drive it from the SSE tab), plus a status banner
+           for "SSE not open / wrong starmap loaded". -->
+      <div id="starmap-layer" hidden></div>
+      <div id="starmap-banner" class="starmap-banner" hidden></div>
+      <!-- v2.18 — the GM's StarMap surface IS the players' view; the controls are in the SSE tab.
+           Say so, every time, until dismissed for this session. -->
+      <div id="starmap-gm-hint" class="starmap-gm-hint" hidden>
+        <span class="starmap-gm-hint-text">This is what your players see. Drive it — focus, time, Player View — from your <strong>Star System Explorer</strong> tab.</span>
+        <button type="button" id="starmap-gm-hint-open" class="btn btn--sm btn--primary">Open SSE tab</button>
+        <button type="button" id="starmap-gm-hint-close" class="btn btn--sm btn--ghost" aria-label="Dismiss">×</button>
+      </div>
       <canvas id="annotate-whiteboard" class="annotate-whiteboard" hidden></canvas>
       <div id="annotate-notes" class="annotate-notes"></div>
       <div id="annotate-clocks" class="annotate-clocks"></div>
@@ -891,6 +909,7 @@ https://example.com/sound2.wav"></textarea>
             <p id="map-library-store-status" class="library-store-status"></p>
             <button id="map-library-create-handout-btn" class="btn btn--primary btn--full" title="Create a text-based handout — proclamation, journal entry, ransom note, in-character letter">+ Create a New Handout (Text Map)</button>
             <button id="map-library-create-composite-btn" class="btn btn--primary btn--full" title="Create a composite map — tile multiple maps side-by-side (modular) or stacked (layered, like roof-over-interior). After clicking you'll pick a first tile from your library; the new composite opens with that tile in the centre and room to add more.">+ Create a New Composite Map</button>
+            <button id="map-library-create-starmap-btn" class="btn btn--primary btn--full" title="Add a StarMap — a live Star System Explorer player view (the full 3D star map, driven by you from the SSE tab) shown to players as a map. Needs Star System Explorer open in this browser.">+ Add a StarMap (Star System Explorer)</button>
             <button id="map-library-attributions-btn" class="btn btn--ghost btn--xs btn--full">ℹ Attributions &amp; Licences</button>
           </div>
         </div>

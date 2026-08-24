@@ -79,6 +79,10 @@ export class MapAssetStore {
    *      write unless the user clicks Store.
    */
   static async getBlob(asset: MapAsset): Promise<Blob | null> {
+    // v2.18 — a StarMap has no image, ever: it is a live external view. The
+    // GM activation path branches BEFORE asking; this guards every other
+    // caller (thumbnails, previews) so none tries to rasterise nothing.
+    if (asset.source === 'starmap') return null;
     if (asset.blob) return asset.blob;
     const cached = MapAssetStore.runtimeBlobs.get(asset.id);
     if (cached) return cached;

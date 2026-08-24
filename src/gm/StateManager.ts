@@ -45,7 +45,9 @@ export class StateManager {
    *  first-time setup (e.g. auto-sample the background colour from the
    *  map's top-left pixel) — re-running that on reload would clobber
    *  the user's saved picks. */
-  async loadForMap(map: MapState, mapBlob: ArrayBuffer): Promise<boolean> {
+  /** `mapBlob` is optional as of v2.18: a StarMap map has no image, and the
+   *  blob was only ever passed through to listeners (never saved here). */
+  async loadForMap(map: MapState, mapBlob?: ArrayBuffer | null): Promise<boolean> {
     const saved     = await loadConfig(map.id);
     const migrated  = saved ? migrateSessionState(saved) : null;
     const base      = defaultSessionState();
@@ -61,7 +63,7 @@ export class StateManager {
     // Ensure filter defaults are seeded for filters that have no saved params
     this.seedFilterDefaults();
 
-    this._notify(['map', 'view', 'filter', 'fog'], mapBlob);
+    this._notify(['map', 'view', 'filter', 'fog'], mapBlob ?? undefined);
     return migrated !== null;
   }
 

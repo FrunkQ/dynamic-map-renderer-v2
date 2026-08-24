@@ -1,6 +1,7 @@
 import Peer, { type DataConnection } from 'peerjs';
-import type { GMMessage, SessionState, MarkerIconData, SoundboardAudioData, TextMapVideoElement, TextMapAltItem } from '../types.ts';
+import type { GMMessage, SessionState, MarkerIconData, SoundboardAudioData, TextMapVideoElement, TextMapAltItem, MsgStarMapShow, MsgFullState } from '../types.ts';
 import { LocalChannel } from './LocalChannel.ts';
+import { peerConfigFor, loadStoredIce } from './iceConfig.ts';
 import { generateRoomCode } from './roomCode.ts';
 import { isLocalPlayerStaticOnly } from '../storage/localSettings.ts';
 
@@ -69,6 +70,11 @@ export class Host {
    *  full_state (including the BroadcastChannel one a same-browser
    *  preview / pop-out requests on open) carries them. */
   private lastTextMapVideos:    TextMapVideoElement[] = [];
+  /** v2.18 — StarMap: the ACTIVE map is a StarMap (viewers show the SSE view
+   *  instead of a texture) and/or the pack contains one (viewers pre-warm).
+   *  Both ride every full_state so a late joiner is correct on connect. */
+  private lastStarMap:          MsgStarMapShow['payload'] | null = null;
+  private lastStarMapPrewarm:   { origin: string; sessionId: string } | null = null;
   /** v2.17.27 — accessibility content (text + image alt) for the active
    *  text-map, cached so every full_state carries it like the videos do. */
   private lastTextMapAlt:       TextMapAltItem[] = [];
@@ -117,7 +123,12 @@ export class Host {
   /** Start the host. Pass a previously persisted peerId to attempt resumption. */
   start(peerId?: string): void {
     this.requestedRoomCode = peerId ?? null;
-    const peer = peerId ? new Peer(peerId) : new Peer();
+    // v2.18 — BYO STUN/TURN from Settings (prepended to PeerJS defaults) so remote players
+    // behind UDP-blocking networks can relay over TLS 443. Same list rides ?ice= on join URLs.
+    const cfg = peerConfigFor(loadStoredIce());
+    const peer = peerId
+      ? (cfg ? new Peer(peerId, { config: cfg }) : new Peer(peerId))
+      : (cfg ? new Peer({ config: cfg }) : new Peer());
     this.peer = peer;
 
     peer.on('open', (id) => {
@@ -184,6 +195,7 @@ export class Host {
           ...(this.lastComposite                    ? { composite:         this.lastComposite      } : {}),
           ...(this.lastTextMapVideos.length > 0      ? { textMapVideos:     this.lastTextMapVideos  } : {}),
           ...(this.lastTextMapAlt.length > 0         ? { textMapAlt:        this.lastTextMapAlt     } : {}),
+          ...this._starMapFullStateFields(),
         };
         this.local.send(msg);
         // v2.16.108 — if the GM is faffing (broadcast toggle off), the new
@@ -392,6 +404,24 @@ export class Host {
     this.lastTextMapVideos = videos;
   }
 
+  /** v2.18 — StarMap: what the active map is (null = an ordinary map) and
+   *  whether the pack has any StarMap at all (pre-warm hint). */
+  setLastStarMap(active: MsgStarMapShow['payload'] | null): void {
+    this.lastStarMap = active;
+    // When a StarMap is active it is also the pack's warm target: keep the
+    // pre-warm hint pointing at the same session so viewers reuse the frame.
+    if (active) this.lastStarMapPrewarm = { origin: active.origin, sessionId: active.sessionId };
+  }
+  setLastStarMapPrewarm(hint: { origin: string; sessionId: string } | null): void {
+    this.lastStarMapPrewarm = hint;
+  }
+  private _starMapFullStateFields(): Pick<MsgFullState, 'starMap' | 'starMapPrewarm'> {
+    return {
+      ...(this.lastStarMap        ? { starMap:        this.lastStarMap        } : {}),
+      ...(this.lastStarMapPrewarm ? { starMapPrewarm: this.lastStarMapPrewarm } : {}),
+    };
+  }
+
   /** v2.17.27 — keep cached alt content current so a viewer joining after a
    *  map load gets the handout's screen-reader text in its initial full_state. */
   setLastTextMapAlt(items: TextMapAltItem[]): void {
@@ -471,6 +501,7 @@ export class Host {
           ...(this.lastComposite                    ? { composite:         this.lastComposite      } : {}),
           ...(this.lastTextMapVideos.length > 0      ? { textMapVideos:     this.lastTextMapVideos  } : {}),
           ...(this.lastTextMapAlt.length > 0         ? { textMapAlt:        this.lastTextMapAlt     } : {}),
+          ...this._starMapFullStateFields(),
         };
         this.sendTo(conn, msg);
         // v2.16.108 — if the GM is faffing (broadcast toggle off), the new

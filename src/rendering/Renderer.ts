@@ -1963,7 +1963,18 @@ export class Renderer {
     }
   }
 
+  /** v2.18 — while a StarMap (a live external view in an iframe) is on screen
+   *  the map canvas is hidden, so skip ALL GL work: the viewer device then runs
+   *  exactly one 3D app. The RAF loop stays alive so resume is instant. */
+  private paused = false;
+  setPaused(on: boolean): void {
+    if (this.paused === on) return;
+    this.paused = on;
+    if (!on) this.needsRender = true;
+  }
+
   private renderFrame(): void {
+    if (this.paused) return;
     // Tick animated overlay polygons (fire flicker, electric crackle, etc.).
     // Cheap because the compositor just re-runs polygon path ops at a
     // modulated alpha; no PNG decoding involved.

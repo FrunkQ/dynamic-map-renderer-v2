@@ -1,5 +1,29 @@
 # Changelog
 
+## v2.18.5 — 2026-08-24
+
+StarMap pairing without copying anything: **Open Star System Explorer** in the Add StarMap dialog now pairs with the tab it opens. Browsers deliberately keep separate sites from seeing each other's tabs, which is why Mappadux could never find a running Star System Explorer by itself and you had to paste a player link; the one channel that still works is the tab we opened ourselves, so SSE now introduces itself over it and the dialog fills in the moment you load a starmap there. Pasting a link still works and remains the way to pair with a tab you opened yourself. Needs Star System Explorer 3.0.34 or later.
+
+## v2.18.4 — 2026-08-19
+
+StarMap polish from the first owner test: (1) the GM's StarMap surface now carries a caption — "This is what your players see. Drive it from your Star System Explorer tab" with an **Open SSE tab** button — because the GM canvas is effectively a player screen for these maps; dismissable per session. (2) The Visual Filter panel swaps its controls for a one-line note while a StarMap is active: "Star System Explorer filters override — this map's look is set by its Player View in SSE" (previously only a tooltip on the disabled dropdown). (3) When the SSE bridge frame never answers, Mappadux remounts it once after 1.5 s before declaring the address unreachable, and the message now leads with the common cause — a stale copy of SSE in the browser (hard-reload it once) — ahead of "too old" / "firewall".
+
+## v2.18.3 — 2026-08-18
+
+StarMap: the Add StarMap dialog now tells apart "no Star System Explorer session found" from "this address cannot be reached for integration" (the SSE site is older than the integration, or a firewall/security challenge is blocking embedded frames — a Vercel Security Checkpoint returns 403 to a third-party frame that cannot solve it). Found on the first beta test, where SSE's beta site was behind a challenge page. Dialog also carries a "beta feature — in testing" note.
+
+## v2.18.2 — 2026-08-17
+
+StarMap fixes from the first real cross-site test (beta Mappadux + beta Star System Explorer): discovery now works across sites. Chrome partitions the same-browser channel inside a third-party frame, so the bridge could only find SSE when both ran on the same site (localhost dev) — it now discovers over PeerJS whenever it knows the session id (every existing StarMap map does), and the Add StarMap dialog gains a **Paste a player link** step for the very first pairing (copy it from SSE's Player Views…), after which StarMaps reconnect on their own. The address field is now a dropdown (production / beta / other). Requires Star System Explorer 2.1.753 or later.
+
+## v2.18.1 — 2026-08-17
+
+Network: bring-your-own STUN/TURN relay for remote players, mirrored one-for-one with Star System Explorer. Settings → **Connections** takes a list of servers (`turns:host:443|user|credential`); they are added ahead of the built-in public relay and ride in every player and projector link (`?ice=`), so a workplace network that blocks UDP can still connect through a TLS relay on 443. Player and projector views now say "Connection blocked by this network" when neither a direct nor a relayed path can be made, instead of "Connecting…" forever. Same section holds the default **Star System Explorer address** for new StarMaps (production by default; point it at the beta site to test beta against beta — each StarMap map remembers the address it was created with). Nothing changes for tables that never touch the settings.
+
+## v2.18.0 — 2026-08-17
+
+New map kind: **StarMap** — a live Star System Explorer player view shown to players (and the projector) as a map. Add Map → **+ Add a StarMap**: Mappadux discovers the running SSE session in the same browser, lists its Player Views, and creates one StarMap map per view. You drive the view from your SSE tab; players get it in their normal Mappadux window with no window-hopping, and switching to a handout and back is instant (the view is kept warm). Filters are handed to SSE for these maps (no filter-on-filter); fog/grid/markers/crop don't apply; players keep Ping. Wrong-starmap and SSE-not-open states are explained in a banner that resolves itself once SSE announces the right starmap. StarMap maps travel in packs and reconnect on load. Requires Star System Explorer 2.1.722 or later. See HELP → StarMaps.
+
 ## v2.17.39 — 2026-07-05
 
 Two GM-editor fixes from a community PR (thanks to Naturalitee on GitHub): the Player-view preview (PiP) no longer ends up stranded off-screen when you resize or zoom the window — it now keeps its spot proportionally; and the player-view crop rectangle updates the moment you zoom instead of lagging a frame. (Plus a follow-up so the remembered PiP position survives a page reload.)

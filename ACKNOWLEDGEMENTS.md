@@ -10,7 +10,7 @@ with the default *Getting Started* pack — practising what we preach.
 
 Community members who've contributed code, with thanks:
 
-- **[Naturalitee](https://github.com/Naturalitee)** — GM main-area UI fixes: input-styling consistency, projection-picker overflow, and settings-section scroll (v2.17.24); keeping the Player-view PiP on-screen when the viewport resizes, and syncing the player-view rect on zoom (v2.17.39).
+- **[Naturalitee](https://github.com/Naturalitee)** — the **initiative-card ↔ map-marker** association feature (his concept; implemented v2.17.32); GM main-area UI fixes: input-styling consistency, projection-picker overflow, and settings-section scroll (v2.17.24); and keeping the Player-view PiP on-screen when the viewport resizes plus syncing the player-view rect on zoom (v2.17.39).
 
 ## Default "Getting Started" Pack
 
