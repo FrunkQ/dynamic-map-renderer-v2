@@ -119,9 +119,14 @@ In the map-switch flow, branch on `asset.source === 'starmap'` BEFORE the
    - no announce → banner "Open Star System Explorer to power this map" +
      Open button; auto-proceed when an announce with the right id arrives.
 2. Broadcast `starmap_show` (+ set it as the `full_state` representation).
-3. Local GM preview: `StarMapLayer` in `mode:'gm'` over the GM canvas;
-   `Renderer` paused (§6). The GM's control surface remains the SSE2 tab —
-   the preview is "what players see".
+3. GM canvas: SUPERSEDED at v2.18.11. Was a local `StarMapLayer` in
+   `mode:'gm'`; that meant TWO live SSE sessions on the GM's machine (this
+   preview, plus the one inside the Player View PiP) for one picture. The GM
+   now gets an opaque stand-in (`#starmap-standin`), a notice strip naming the
+   live starmap + Player View with the way back to the SSE tab, and the Player
+   View PiP switched to LARGE mode — that is the GM's preview. `Renderer`
+   stays paused (§6). Map-anchored tooling (Markers, Fog/MapFX, Annotate,
+   player tokens) greys out; audio, map transitions and Player Views stay live.
 4. `MapAssetStore.getBlob()` gains an early `null` return for `'starmap'`
    (never called on the happy path, but belt-and-braces for thumbnail code).
 5. `_dropdownKindForAsset` (GMApp.ts ~175) gains a `'starmap'` arm + glyph
@@ -277,6 +282,18 @@ hydrates its listener, so the first hello could be silently dropped — it now
 resolves on the bridge's `ready` handshake with a hello retry; (2) the
 dialog redrew on EVERY announce (SSE re-announces on state ticks) and wiped
 the GM's ticks — it now redraws only when the announced identity changes.
+
+Fault found live at v2.18.9 and fixed at v2.18.10 (third of the same family):
+a RECONNECTING viewer gets `starMapPrewarm` and `starMap` in one `full_state`,
+so `StarMapLayer` mounted the presetless prewarm URL and then tried to correct
+it with a `setPreset` postMessage into a frame that had not hydrated - dropped,
+leaving players on SSE's `FALLBACK_PRESET_ID` ("The Guide") while the GM's own
+preview was right. The layer now mounts the preset in the URL when the frame has
+not answered a ping, queues a `setPreset` aimed at a silent frame until its
+`pong`, and the viewers skip the prewarm when the same message already carries
+the map they are about to show. Covered by `test/unit/starMapLayer.test.ts`.
+GENERAL RULE, three faults in: nothing may be posted at an SSE frame until that
+frame has spoken - `ready` for `/bridge`, `pong` for `/catalogue`.
 
 Deviations from the spec, deliberate: (a) player Ping is a corner button
 (drops at screen centre) rather than the map long-press gesture, because a

@@ -99,7 +99,6 @@ import { defaultProjectorViewport } from '../types.ts';
 // subpanel (scan to open a remote player window over the LAN). The hold
 // screen + player connect UI still do their own QR rendering too.
 import QRCode from 'qrcode';
-import { StarMapLayer } from '../rendering/StarMapLayer.ts';
 import { encodeIceParam, loadStoredIce } from '../p2p/iceConfig.ts';
 import { sse2Bridge, Sse2Bridge, type SseAnnounce } from './Sse2Bridge.ts';
 import { StarMapDialog } from './StarMapDialog.ts';
@@ -422,8 +421,7 @@ export class GMApp {
   private pingLayer: PingLayer | null = null;
   /** v2.16.91 — live YouTube videos placed on a text-map page. */
   private textMapVideoLayer: import('../rendering/TextMapVideoLayer.ts').TextMapVideoLayer | null = null;
-  /** v2.18 — StarMap: GM preview of the live SSE view + "is it live?" state. */
-  private starMapLayer: StarMapLayer | null = null;
+  /** v2.18 — StarMap: which one is live, and the announce subscription watching it. */
   private _activeStarMap: import('../types.ts').StarMapConfig | null = null;
   private _starMapUnsub: (() => void) | null = null;
   private _currentTextMapVideos: import('../types.ts').TextMapVideoElement[] = [];
@@ -1853,6 +1851,8 @@ export class GMApp {
           return u.toString();
         },
       });
+      // The import is lazy; a StarMap loaded from the last session may already be up.
+      if (this._activeStarMap) this._playerPip.setLargeMode(true);
     });
 
     // Resume positional audio context on first user gesture (autoplay policy)
@@ -3547,9 +3547,6 @@ export class GMApp {
         { showLabel: true, persistent: true, onDismiss: () => { /* GM-local removal only */ } },
       );
     }
-    // v2.18 — StarMap GM preview layer (what players see; drive it from the SSE tab).
-    const starMapLayerEl = document.getElementById('starmap-layer');
-    if (starMapLayerEl) this.starMapLayer = new StarMapLayer(starMapLayerEl, 'gm');
     // v2.16.91 — live text-map video overlay (tracks the map like markers).
     const videoLayerEl = document.getElementById('textmap-video-layer');
     if (videoLayerEl) {
@@ -5428,6 +5425,13 @@ export class GMApp {
     this.host.broadcast({ type: 'textmap_videos', videos: [] });
     this._activeStarMap = cfg;
     this._applyStarMapUiGates(true);
+    // v2.18.11 — no copy of the players' view is drawn here (that was a second live Star System
+    // Explorer session on this machine). Blank ground + the notice strip, and the Player View
+    // window goes large: it is the GM's preview now.
+    this._showStarMapStandin();
+    this._setStarMapStrip(cfg.origin, `${cfg.starmapName} — ${cfg.presetName}`, 'Looking for Star System Explorer…');
+    this._playerPip?.setLargeMode(true);
+    this.renderer.setPaused(true);
     // Discovery. Any later announce (SSE opened / right map loaded) re-runs
     // the check, so the banner resolves itself without the GM re-clicking.
     this._starMapUnsub?.();
@@ -5477,27 +5481,35 @@ export class GMApp {
     this.host.broadcast({ type: 'starmap_show', payload });
     // Filters are forced off for the frame — tell viewers so nothing lingers.
     this.host.broadcast({ type: 'filter_update', payload: this._effectiveFilter() });
-    this.starMapLayer?.show({ origin: payload.origin, sessionId: payload.sessionId, presetId: payload.presetId });
-    this.renderer.setPaused(true);
-    this._showStarMapGmHint(payload.origin);
+    this._setStarMapStrip(payload.origin, `${cfg.starmapName} — ${cfg.presetName}`,
+      'Live for your players. Drive it — focus, time, Player View — from your Star System Explorer tab.');
   }
 
-  /** The GM's StarMap surface is the PLAYERS' view; the controls live in the SSE tab. Shown on
-   *  every activation until dismissed for this session (a GM who knows can close it once). */
-  private _gmHintDismissed = false;
-  private _showStarMapGmHint(origin: string): void {
-    if (this._gmHintDismissed) return;
-    const el = document.getElementById('starmap-gm-hint');
+  /** v2.18.11 — the GM's whole StarMap chrome, now that nothing is drawn on the canvas: which
+   *  starmap and Player View is live, and the way back to the tab that drives it. Not
+   *  dismissible — dismissing it would leave the GM with a blank canvas and no explanation. */
+  private _setStarMapStrip(origin: string, name: string, state: string): void {
+    const el = document.getElementById('starmap-strip');
     if (!el) return;
     el.hidden = false;
-    const open = document.getElementById('starmap-gm-hint-open');
-    const close = document.getElementById('starmap-gm-hint-close');
+    const n = document.getElementById('starmap-strip-name');
+    const s = document.getElementById('starmap-strip-state');
+    if (n) n.textContent = name;
+    if (s) s.textContent = state;
+    const open = document.getElementById('starmap-strip-open');
     if (open) open.onclick = () => sse2Bridge.openSse(origin);
-    if (close) close.onclick = () => { this._gmHintDismissed = true; el.hidden = true; };
   }
-  private _hideStarMapGmHint(): void {
-    const el = document.getElementById('starmap-gm-hint');
-    if (el) el.hidden = true;
+
+  /** Opaque ground over the canvas, so the map texture we are NOT rendering cannot show through. */
+  private _showStarMapStandin(): void {
+    const el = document.getElementById('starmap-standin');
+    if (el) el.hidden = false;
+  }
+  private _hideStarMapChrome(): void {
+    const standin = document.getElementById('starmap-standin');
+    if (standin) standin.hidden = true;
+    const strip = document.getElementById('starmap-strip');
+    if (strip) strip.hidden = true;
   }
 
   /** Leaving StarMap mode (an ordinary map was activated). The viewer side
@@ -5507,8 +5519,8 @@ export class GMApp {
     this._activeStarMap = null;
     this.host.setLastStarMap(null);
     this._hideStarMapBanner();
-    this._hideStarMapGmHint();
-    this.starMapLayer?.hide();
+    this._hideStarMapChrome();
+    this._playerPip?.setLargeMode(false);
     this.renderer.setPaused(false);
     this._applyStarMapUiGates(false);
   }

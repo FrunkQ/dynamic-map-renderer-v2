@@ -1427,7 +1427,10 @@ export class PlayerApp {
         this._textMapAlt?.setItems(msg.textMapAlt ?? []);
         // v2.18 — StarMap: pre-warm the SSE view when the pack has one, and enter
         // StarMap mode if the ACTIVE map is one (late joiner / reconnect).
-        if (msg.starMapPrewarm) this._starMap?.preload(msg.starMapPrewarm);
+        // v2.18.10 — prewarm ONLY when the active map is not itself a StarMap: this same
+        // full_state carries the one we are about to show, and mounting it presetless first only
+        // costs a wasted frame (and used to cost the right view entirely).
+        if (msg.starMapPrewarm && !msg.starMap) this._starMap?.preload(msg.starMapPrewarm);
         if (msg.starMap) this._enterStarMap(msg.starMap);
         else if (this._starMapActive) this._exitStarMap();
         // v2.14.17 — pick up calibration + dimensions for the
