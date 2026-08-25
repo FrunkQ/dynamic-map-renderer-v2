@@ -1,0 +1,187 @@
+# Dice — detailed design (v2.19)
+
+Players roll; the table sees what it should; the GM watches it all as chat.
+Sets belong to the game, not the person, so they travel in the pack.
+
+## 1. What it is
+
+A GM authors a small **dice set** for the game — a handful of named formulas
+("Attack", "1d20+5"). Players get a **tray** of those as chips on their own
+screen: one tap is one roll, no dialog, no modifier picker. Results are shown
+where the table wants them: animated on the table screen, as a line in a feed
+for other players, and always as a chat line for the GM.
+
+The set and the house rules about it travel inside the `.mappadux` bundle, so
+handing someone a pack hands them the dice too.
+
+## 2. Data model
+
+### 2.1 The set (travels with the pack)
+
+```ts
+interface DiceButton {
+  id: string;
+  label: string;      // "Attack"
+  formula: string;    // "1d20+5"
+  public?: boolean;   // GM entry that is loud even when GM rolls are private
+}
+```
+
+Stored in `localSettings` (`mappadux:dice_set`), collected into
+`BundledGmPreferences.diceSet` on export and applied on import — the same route
+measurement units and initiative direction already take.
+
+Three presets seed a set in one click so no GM starts from an empty list:
+**d20** (d20, adv, dis, the polyhedral spread, 2d6), **d6 pool** (1d6..6d6),
+**Fate / Blades** (4dF, 1d6..4d6).
+
+### 2.2 The policy (travels with the pack)
+
+`DicePolicy` in `src/dice/dicePolicy.ts`, defaults in brackets:
+
+| Field | Meaning |
+|---|---|
+| `playerRollAudience` | who hears a player's roll: `table` [default] / `gm` / `roller` |
+| `gmRollsPublic` | GM rolls reach the room [false — private] |
+| `othersDetail` | how non-rollers see it: `full` / `line` [default] / `none` |
+| `tableDetail` | how the table screen shows it: `full` [default] / `line` / `none` |
+| `rollerDetail` | how the roller sees their own: `auto` [default] / `full` / `line` / `none` |
+
+`auto` means: a line when the table screen is already showing it in full,
+because everyone is looking up at the table instead of down at their phone.
+
+### 2.3 The viewer's own choice (per device, never travels)
+
+`mappadux:dice_detail` — `full` | `line` | `none`. A player may always turn
+spectacle DOWN. It is a device setting, so importing a pack never overwrites it.
+
+### 2.4 Permission
+
+`mappadux:player_dice_disabled`, surfaced in Settings > Player Permissions
+beside pings and messaging, mirrored to viewers on `MsgPlayerFeatures.dice` and
+carried in the bundle as `playerDiceEnabled`. Off means no tray, no menu entry,
+and a roll from a stale client is dropped on arrival. The GM's own dice keep
+working: rolling for the table is still useful when players may not.
+
+## 3. Precedence
+
+Effective detail for a recipient is the **least** of three layers:
+
+```
+pack policy (ceiling)  ->  viewer's own choice  ->  what the device can do
+```
+
+Two rules are fixed and not configurable:
+
+- **The GM always gets a line, never an animation.** Rolls land in the chat
+  feed. A GM asked not to have every roll thrown at their screen.
+- **A whisper never reaches the table screen or another player**, whatever the
+  policy says — and the roller sees it in full on their own device, since the
+  table cannot show it for them. Whisper is the one case where the roller's own
+  detail goes UP.
+
+`detailFor(recipient, ctx)` is the single seam; every surface asks it.
+
+## 4. Wire protocol
+
+Two messages, mirroring the ping relay exactly (player -> GM -> everyone), so
+the GM stays the hub and can mute the whole channel.
+
+```ts
+MsgDiceRoll  // player -> GM
+  { type: 'dice_roll', playerId, clientId, rollId, label, roll: RollOutcome, whisper }
+
+MsgDiceShow  // GM -> everyone
+  { type: 'dice_show', rollId, label, roll, fromPlayerId | null, fromName, fromColor,
+    whisper, detailOthers, detailTable, rollerClientId }
+```
+
+`RollOutcome` carries the individual faces. **The roller decides the faces and
+every other device replays them.** Nothing re-rolls a roll it was told about —
+otherwise the table screen lands on 17 while the chat says 12, and that is an
+evening lost to arguing with the software.
+
+The GM computes `detailOthers` / `detailTable` from the policy before relaying,
+so viewers need no copy of the policy: they reduce what they are told against
+their own preference and their device. `rollerClientId` lets the roller's own
+window recognise its roll and apply `rollerDetail` instead.
+
+## 5. Surfaces
+
+### 5.1 Player — the tray
+
+A rail of chips along the bottom edge, idle-fading like the fullscreen button.
+One tap rolls. Adv/dis/damage are not options inside a chip; they are their own
+chips, because the GM authored the vocabulary.
+
+**Whisper** is a mode toggle on the tray, not a per-chip flag:
+
+- It applies to whatever is rolled next.
+- **Ten-minute auto-reset**, the timer restarting on each whispered roll. When
+  it lapses the player is told ("Whisper off"). It must never change silently,
+  or the first they will know is a secret roll on the table screen.
+- While armed, the whole tray takes an indigo glow and the chips desaturate —
+  free colours, since green and orange are reserved for view identity and
+  red/yellow already mean danger and caution. The toggle also reads "Whisper" in
+  words, because a glow alone fails anyone colour-blind or on a washed-out
+  projector.
+
+Mirrored in the player action menu (the established second route), which also
+carries the viewer's own **Dice display** cycle: full -> lines -> off.
+
+### 5.2 GM — rolls are chat
+
+A roll becomes a `ThreadMessage` with `kind: 'roll'` in the existing
+`MessageThreads` store, rendering as a roll chip rather than a sentence. No
+toast on the GM screen at all. Three consequences that had to be handled:
+
+- Rolls bump a **quiet** counter, not the red unread badge — otherwise the
+  Players panel screams all evening.
+- The LLM reply assistant prefetches on the last inbound *message*; rolls are
+  excluded, or it drafts a reply to "1d20+5 -> 17".
+- Threads are per-player, so a roll needs an identified player — the same
+  identity gate pings already have.
+
+**All Players** panel: the same SidePanel, every thread merged
+chronologically, each row labelled in the roller's colour, with All / Rolls /
+Chat filters. No composer (replying means picking someone): each row offers a
+reply that opens that player's own thread. This is the GM's "watch the table"
+panel and is meant to be left open.
+
+### 5.3 The table screen is a dice target
+
+When the table screen is showing rolls in full, it is the **stage**: dice land
+there, not on five phones.
+
+- A `DiceLayer` mounted beside `PingLayer` in `ProjectorApp`.
+- **Screen space, not map space.** PingLayer is map-anchored; dice must not be,
+  or they swim when the GM pans and can land in the letterbox or outside the
+  calibrated crop. Dice belong to the surface: a tray zone along the bottom.
+- Landed dice sit until that roller's next roll, because a table should behave
+  like a table. One lane per roller, tinted with their colour and captioned with
+  their name, so two people rolling at once do not collide.
+
+## 6. Rendering fidelity
+
+`full` is animated. v2.19 draws that in 2D (a short tumble, then the faces),
+with `prefers-reduced-motion` skipping straight to the result. The optional 3D
+version lands later as a **lazy chunk** loaded only when policy and device both
+say so — never in the main bundle, because the table screen is usually the
+weakest device in the house (a stick PC or a smart TV browser) and a player's
+phone is the second weakest. A per-device `diceRender` setting arrives with it;
+until then there is nothing for it to choose between.
+
+Whatever draws it, the faces come down the wire. See section 4.
+
+## 7. Build order
+
+1. `src/dice/roll.ts` + `src/dice/dicePolicy.ts` with tests — pure, no UI.
+2. Types, storage, permission plumbing.
+3. Rolls in threads + the All Players panel (useful on its own).
+4. GM Dice panel: set editor, presets, policy.
+5. Player tray + whisper; GM relay; lines and 2D animation on every surface.
+6. Optional 3D as a lazy chunk.
+
+## 8. Build status
+
+Sections 1-5 shipped on beta at v2.19.0. Section 6 (3D) not started.
