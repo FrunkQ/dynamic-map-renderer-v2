@@ -7183,6 +7183,43 @@ option.select-option--add {
   word-break: break-word;
 }
 
+/* ─── v2.19 Dice: the GM's set editor ──────────────────────────────────────
+   One row per entry. The row IS the roll button — a GM reaching for their own
+   dice should not have to find a separate control — with the public star and
+   the delete handle alongside. */
+.dice-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--space-xs); }
+.dice-row { display: flex; align-items: stretch; gap: 4px; }
+.dice-row-roll {
+  flex: 1 1 auto; display: flex; align-items: baseline; gap: var(--space-xs);
+  padding: 5px 8px; border-radius: 6px; cursor: pointer; text-align: left;
+  background: rgba(255, 255, 255, 0.05); color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-row-roll:hover { background: rgba(255, 255, 255, 0.12); }
+.dice-row-label   { font-weight: 600; font-size: var(--font-size-sm); }
+.dice-row-formula { margin-left: auto; color: var(--text-dim); font-size: 11px; font-family: ui-monospace, monospace; }
+.dice-row-public {
+  flex: 0 0 auto; width: 26px; border-radius: 6px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.14); font-size: 12px; line-height: 1;
+}
+.dice-row-public.is-on { color: #cfe0ff; border-color: rgba(140, 170, 255, 0.5); background: rgba(140, 170, 255, 0.14); }
+.dice-row-delete {
+  flex: 0 0 auto; width: 26px; border-radius: 6px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.04); color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-row-delete:hover { color: var(--danger, #ef4444); border-color: rgba(239, 68, 68, 0.5); }
+.dice-add-row .dice-formula-input { font-family: ui-monospace, monospace; }
+.dice-add-row .dice-formula-input.is-invalid { border-color: rgba(239, 68, 68, 0.7); }
+.dice-empty { margin: 0 0 var(--space-xs); color: var(--text-dim); font-size: 11px; line-height: 1.4; }
+.dice-error { margin: 0 0 var(--space-xs); color: #ff8a8a; font-size: 11px; line-height: 1.4; }
+.dice-error[hidden] { display: none; }
+.dice-policy { margin-top: var(--space-sm); }
+.dice-policy > summary { cursor: pointer; font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: var(--space-xs); }
+.dice-policy > summary:hover { color: var(--text-primary); }
+
 /* ─── v2.19 Dice in the feed ───────────────────────────────────────────────
    A roll is not a sentence, so it does not render as one: what it was called,
    what was rolled, what it came to — the total big enough to read across a

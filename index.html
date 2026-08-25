@@ -135,6 +135,86 @@
          = player↔player). Wire-up comes with the messaging revisit. -->
 
 
+    <!-- v2.19 Dice. The set belongs to the GAME, so it travels in the pack; the
+         policy rows underneath are the table's house rules about who sees what. -->
+    <section class="panel" id="dice-panel">
+      <div class="panel-header">
+        <button type="button" class="panel-title" aria-expanded="false">Dice</button>
+        <span class="panel-toggle-icon" aria-hidden="true" title="Players may roll"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.2"/><circle cx="15.5" cy="15.5" r="1.2"/><circle cx="12" cy="12" r="1.2"/></svg></span>
+        <label class="toggle-switch toggle-switch--bypass panel-toggle" title="Let players roll. Off = the tray disappears from every player view; your own dice keep working.">
+          <input type="checkbox" id="dice-enabled-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="panel-body" hidden>
+        <p class="panel-intro">Name the rolls your game asks for. Players tap them; one tap is one roll. The set travels with the pack.</p>
+        <div id="dice-set-rows" class="dice-rows"></div>
+        <div class="picker-row dice-add-row">
+          <input type="text" id="dice-add-label" class="select-full" placeholder="Attack" maxlength="24" aria-label="Roll name" />
+          <input type="text" id="dice-add-formula" class="select-full dice-formula-input" placeholder="1d20+5" maxlength="40" aria-label="Formula" />
+          <button type="button" id="dice-add-btn" class="btn btn--sm" title="Add this roll to the set">+</button>
+        </div>
+        <p id="dice-add-error" class="dice-error" hidden></p>
+        <div class="param-row" id="dice-preset-row">
+          <label for="dice-preset-select">Start from</label>
+          <div class="picker-row">
+            <select id="dice-preset-select" class="select-full picker-row__select" title="Fill the set with a ready-made spread">
+              <option value="">Preset…</option>
+              <option value="d20">d20 (D&amp;D / Pathfinder)</option>
+              <option value="d6pool">d6 pool</option>
+              <option value="fate">Fate / Blades</option>
+            </select>
+            <button type="button" id="dice-preset-apply" class="btn btn--sm btn--ghost" title="Add the preset's rolls to your set">Add</button>
+          </div>
+        </div>
+
+        <details class="dice-policy">
+          <summary>Who sees what</summary>
+          <div class="param-row">
+            <label for="dice-audience">Player rolls go to</label>
+            <select id="dice-audience" class="select-full">
+              <option value="table">The whole table</option>
+              <option value="gm">Only me</option>
+              <option value="roller">Only the roller</option>
+            </select>
+          </div>
+          <div class="param-row">
+            <label for="dice-table-detail">Table screen shows</label>
+            <select id="dice-table-detail" class="select-full">
+              <option value="full">The dice, rolling</option>
+              <option value="line">A line of text</option>
+              <option value="none">Nothing</option>
+            </select>
+          </div>
+          <div class="param-row">
+            <label for="dice-others-detail">Other players see</label>
+            <select id="dice-others-detail" class="select-full">
+              <option value="full">The dice, rolling</option>
+              <option value="line">A line of text</option>
+              <option value="none">Nothing</option>
+            </select>
+          </div>
+          <div class="param-row">
+            <label for="dice-roller-detail">The roller sees</label>
+            <select id="dice-roller-detail" class="select-full">
+              <option value="auto">A line if the table screen has it</option>
+              <option value="full">The dice, rolling</option>
+              <option value="line">A line of text</option>
+              <option value="none">Nothing</option>
+            </select>
+          </div>
+          <div class="param-row param-row--toggle">
+            <label for="dice-gm-public">My rolls are public</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="dice-gm-public" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="panel-intro">Every player can still turn their own dice down to lines, or off, on their own device. Your rolls stay private unless you switch that on, or mark one roll public with the star.</p>
+        </details>
+      </div>
+    </section>
+
     <section class="panel" id="markers-panel">
       <div class="panel-header">
         <button type="button" class="panel-title" aria-expanded="false">Markers</button>

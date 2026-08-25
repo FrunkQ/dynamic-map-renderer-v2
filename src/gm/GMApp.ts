@@ -32,6 +32,34 @@ import { PlayersPanel } from './PlayersPanel.ts';
 import { MessageThreads } from './MessageThreads.ts';
 import { buildMessageThreadPanel } from './MessageThreadPanel.ts';
 import { buildAllThreadsPanel, type AllThreadsFilter } from './AllThreadsPanel.ts';
+import { DicePanel } from './DicePanel.ts';
+import { rollFormula, describeRoll, type RollOutcome } from '../dice/roll.ts';
+import { detailFor } from '../dice/dicePolicy.ts';
+
+/** v2.19 — the GM's own rolls need a thread to live in; they have no player id.
+ *  Never collides with a real one (those are generated ids). */
+const GM_THREAD_KEY = '__gm__';
+
+/**
+ * A roll arrives already rolled — we trust the table, but not the bytes. Shape
+ * anything malformed away rather than rendering junk on the projector.
+ */
+function _sanitiseOutcome(raw: RollOutcome | undefined): RollOutcome | null {
+  if (!raw || !Array.isArray(raw.dice) || raw.dice.length === 0 || raw.dice.length > 100) return null;
+  if (typeof raw.total !== 'number' || !Number.isFinite(raw.total)) return null;
+  const dice = raw.dice
+    .filter((d) => d && typeof d.value === 'number' && Number.isFinite(d.value)
+      && (d.sides === 'F' || (typeof d.sides === 'number' && d.sides >= 2 && d.sides <= 1000)))
+    .map((d) => ({ sides: d.sides, value: Math.trunc(d.value), ...(d.dropped ? { dropped: true as const } : {}) }));
+  if (dice.length === 0) return null;
+  return {
+    formula: String(raw.formula ?? '').slice(0, 40),
+    dice,
+    modifier: Number.isFinite(raw.modifier) ? Math.trunc(raw.modifier) : 0,
+    total: Math.trunc(raw.total),
+    ...(raw.mode === 'adv' || raw.mode === 'dis' ? { mode: raw.mode } : {}),
+  };
+}
 import { PlayerRegistry } from '../players/PlayerRegistry.ts';
 import { assetToPlayerIcon } from '../players/playerIcon.ts';
 import { PingLayer } from '../rendering/PingLayer.ts';
@@ -54,7 +82,7 @@ import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode, generateInstanceId } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, getMap, saveMap, deleteMap, clearAssetLibraries, clearEverything, getActiveInstanceId } from '../storage/db.ts';
-import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag } from '../storage/localSettings.ts';
+import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet } from '../storage/localSettings.ts';
 import { seedDefaultMaps, reseedWelcomePack, WELCOME_PACK_VERSION } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
@@ -4064,6 +4092,26 @@ export class GMApp {
       this.host.broadcast({ type: 'ping_show', pingId: msg.pingId, x: msg.x, y: msg.y, color, name });
       return;
     }
+    if (msg.type === 'dice_roll') {
+      // v2.19 — the player already rolled; we relay, we never re-roll. Dropping
+      // it here is what "players may not roll" means for a stale client.
+      if (!areDiceEnabled()) return;
+      if (this._seenUpstream(msg.rollId)) return;
+      const outcome = _sanitiseOutcome(msg.roll);
+      if (!outcome) return;
+      const player = this.playerRegistry.playerForClient(msg.clientId);
+      this._publishRoll({
+        rollId: msg.rollId,
+        label: (msg.label || 'Roll').slice(0, 24),
+        outcome,
+        fromPlayerId: msg.playerId,
+        fromName: player?.characterName || player?.playerName || 'Player',
+        fromColor: player?.color ?? '#3b82f6',
+        whisper: msg.whisper === true,
+        fromGm: false,
+      });
+      return;
+    }
     if (msg.type === 'player_message') {
       if (!isMessagingEnabled()) return; // GM has messaging switched off
       if (this._seenUpstream(msg.messageId)) return;
@@ -7008,6 +7056,84 @@ export class GMApp {
     return false;
   }
 
+  // ── v2.19 Dice (docs/dice-design.md) ──────────────────────────────────────
+
+  /** The GM rolled one of their own set. Private unless the policy says
+   *  otherwise, or the entry is marked public. */
+  private _rollAsGm(entry: import('../types.ts').DiceButton): void {
+    const outcome = rollFormula(entry.formula);
+    if (!outcome) return;
+    this._publishRoll({
+      rollId: generateId(),
+      label: entry.label,
+      outcome,
+      fromPlayerId: null,
+      fromName: 'You',
+      fromColor: '#cfe0ff',
+      whisper: false,
+      fromGm: true,
+      forcePublic: entry.public === true,
+    });
+  }
+
+  /**
+   * The single place a roll becomes visible to anyone. Resolves the pack policy
+   * ONCE here and ships the answer, so no viewer needs a copy of the policy —
+   * it only reduces what it is told against its own preference and its device.
+   * The faces are never recomputed: whoever rolled decided them.
+   */
+  private _publishRoll(r: {
+    rollId: string; label: string; outcome: RollOutcome;
+    fromPlayerId: string | null; fromName: string; fromColor: string;
+    whisper: boolean; fromGm: boolean; forcePublic?: boolean;
+  }): void {
+    const ctx = {
+      policy: getDicePolicy(),
+      fromGm: r.fromGm,
+      whisper: r.whisper,
+      ...(r.forcePublic ? { forcePublic: true } : {}),
+    };
+    const detailGm     = detailFor('gm', ctx);
+    const detailOthers = detailFor('other', ctx);
+    const detailTable  = detailFor('table', ctx);
+    const detailRoller = detailFor('roller', ctx);
+
+    // The GM's own copy: a line in the feed, never a toast over the map.
+    if (detailGm !== 'none') {
+      const threadKey = r.fromPlayerId ?? GM_THREAD_KEY;
+      const entry = {
+        id: r.rollId,
+        fromKind: (r.fromGm ? 'gm' : 'player') as 'gm' | 'player',
+        fromPlayerId: r.fromPlayerId,
+        fromName: r.fromName,
+        fromColor: r.fromColor,
+        toPlayerId: null,
+        text: `${r.label}: ${describeRoll(r.outcome)}`,
+        at: Date.now(),
+        origin: 'gm-bound' as const,
+        kind: 'roll' as const,
+        roll: { label: r.label, outcome: r.outcome, whisper: r.whisper },
+      };
+      if (r.fromGm) this._messageThreads.addOutgoing(threadKey, entry);
+      else this._messageThreads.addIncoming(threadKey, entry, this._visibleThreadKey());
+    }
+
+    this.host.broadcast({
+      type: 'dice_show',
+      rollId: r.rollId,
+      label: r.label,
+      roll: r.outcome,
+      fromPlayerId: r.fromPlayerId,
+      fromName: r.fromName,
+      fromColor: r.fromColor,
+      whisper: r.whisper,
+      detailOthers,
+      detailTable,
+      detailRoller,
+      rollerClientId: null,
+    });
+  }
+
   /** Tell player views which Player-Voice interactions are currently allowed,
    *  so they can hide disabled affordances. */
   private _broadcastPlayerFeatures(): void {
@@ -7016,6 +7142,8 @@ export class GMApp {
       pings: arePingsEnabled(),
       messaging: isMessagingEnabled(),
       movableMarkers: arePlayerMarkersMovable(),
+      dice: areDiceEnabled(),
+      diceSet: getDiceSet(),
       measureUnitValue:  getMeasureUnitValue(),
       measureUnitSuffix: getMeasureUnitSuffix(),
     });
@@ -7300,7 +7428,16 @@ export class GMApp {
     const btn = document.getElementById('all-threads-btn');
     if (btn) btn.onclick = () => this._openAllThreads();
     this._refreshAllThreadsBadge();
+
+    // v2.19 Dice. Mounted here because it is the same subject: what the people
+    // at the table are doing, rather than what is on the map.
+    this._dicePanel = new DicePanel({
+      onRoll: (entry) => this._rollAsGm(entry),
+      onSetChanged: () => this._broadcastPlayerFeatures(),
+    });
+    this._dicePanel.mount();
   }
+  private _dicePanel: DicePanel | null = null;
 
   /** Which thread (if any) is already on screen — '*' when the All Players feed
    *  is open, since that shows every thread at once. */

@@ -1180,6 +1180,10 @@ export interface MsgPlayerFeatures {
   /** v2.19 — may players roll dice at all. Off hides the tray and the menu
    *  entry, and the GM drops any roll a stale client still sends. */
   dice?:           boolean;
+  /** v2.19 — the set itself: what the tray shows. Sent with the permission so
+   *  a player who joins mid-session gets the GM's vocabulary, and an edit
+   *  reaches every tray without a reload. */
+  diceSet?:        DiceButton[];
   /** v2.17.10 — distance scale for the "Measure from here" ruler, so remote
    *  player views measure on the GM's units. `measureUnitValue` per grid
    *  square, `measureUnitSuffix` tagged on the result (e.g. 5 + "'"). */

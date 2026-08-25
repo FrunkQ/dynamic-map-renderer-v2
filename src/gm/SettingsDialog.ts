@@ -19,6 +19,8 @@ import {
   UI_SCALE_MAX,
   UI_SCALE_DEFAULT,
   arePingsEnabled,
+  areDiceEnabled,
+  setDiceEnabled,
   setPingsEnabled,
   getInitiativeSortDirection,
   setInitiativeSortDirection,
@@ -607,6 +609,14 @@ export class SettingsDialog {
         'Players message you privately, or each other (copied to you). Messages arrive in the Player Voice panel with an unread count.',
       get: isMessagingEnabled,
       set: setMessagingEnabled,
+    }));
+
+    sec.appendChild(this._buildPerfToggle({
+      title: 'Allow player dice',
+      help:
+        'Players get a tray of the rolls you set up in the Dice panel — one tap is one roll. Results reach you as chat, so open All players to watch them. Off hides the tray everywhere; your own dice keep working.',
+      get: areDiceEnabled,
+      set: (v: boolean) => { setDiceEnabled(v); const t = document.getElementById('dice-enabled-toggle') as HTMLInputElement | null; if (t) t.checked = v; },
     }));
 
     sec.appendChild(this._buildPerfToggle({
