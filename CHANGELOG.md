@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.18.10 — 2026-08-25
+
+Fixed: after a refresh, players and the projector were stuck on Star System Explorer's default view (**The Guide**) instead of the Player View the map is for - while the GM's own preview showed the right one. A reconnecting viewer is handed the pre-warm hint and the live StarMap in the same breath, so it mounted the view with no Player View in the address and then tried to correct it with a message the frame was still too early in its boot to hear. It now mounts the right view outright, and any switch aimed at a frame that has not answered yet is held until it does.
+
+The **drive it from Star System Explorer** notice moves from the bottom of the canvas - where the Player View pip covered it - to the top, just under undo/redo, and is drawn to be noticed. The "Open Star System Explorer" / "wrong starmap loaded" banner shares that spot and stacks with it.
+
 ## v2.18.9 — 2026-08-25
 
 Add StarMap no longer makes you wait to be offered the thing you were going to do anyway. **Open Star System Explorer** and the paste box are on screen from the first frame, with the search reduced to a line of status that updates behind them. The search itself is shorter too: without a session id it can only ever succeed when both apps are on the same site, so it is now a single two-second check rather than up to four attempts across twenty-odd seconds. Reconnecting to a known session is unchanged — that one dials the broker and still gets its full patience.

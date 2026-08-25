@@ -278,6 +278,18 @@ resolves on the bridge's `ready` handshake with a hello retry; (2) the
 dialog redrew on EVERY announce (SSE re-announces on state ticks) and wiped
 the GM's ticks — it now redraws only when the announced identity changes.
 
+Fault found live at v2.18.9 and fixed at v2.18.10 (third of the same family):
+a RECONNECTING viewer gets `starMapPrewarm` and `starMap` in one `full_state`,
+so `StarMapLayer` mounted the presetless prewarm URL and then tried to correct
+it with a `setPreset` postMessage into a frame that had not hydrated - dropped,
+leaving players on SSE's `FALLBACK_PRESET_ID` ("The Guide") while the GM's own
+preview was right. The layer now mounts the preset in the URL when the frame has
+not answered a ping, queues a `setPreset` aimed at a silent frame until its
+`pong`, and the viewers skip the prewarm when the same message already carries
+the map they are about to show. Covered by `test/unit/starMapLayer.test.ts`.
+GENERAL RULE, three faults in: nothing may be posted at an SSE frame until that
+frame has spoken - `ready` for `/bridge`, `pong` for `/catalogue`.
+
 Deviations from the spec, deliberate: (a) player Ping is a corner button
 (drops at screen centre) rather than the map long-press gesture, because a
 cross-origin iframe swallows its own pointer events and MUST (players drive

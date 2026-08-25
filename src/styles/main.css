@@ -7667,9 +7667,18 @@ body.starmap-active #annotate-timers,
 body.starmap-active #annotate-notes,
 body.starmap-active #player-reset-view-btn { display: none !important; }
 .player-starmap-ping-btn { bottom: 90px; }
+/* v2.18.10 — ONE top-centre column for both StarMap notices, sitting just under the undo/redo
+   bar (which ends at ~52px). They are mutually exclusive on the happy path, but a late "wrong
+   starmap loaded" announce can raise the banner while the hint is still up, so they stack
+   instead of overlapping. The column is click-through; its children are not. */
+.starmap-top-slot {
+  position: absolute; left: 50%; top: 58px; transform: translateX(-50%);
+  z-index: 8; display: flex; flex-direction: column; align-items: center;
+  gap: 8px; width: max-content; max-width: min(92%, 720px); pointer-events: none;
+}
+.starmap-top-slot > * { pointer-events: auto; }
 .starmap-banner {
-  position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
-  z-index: 8; max-width: min(92%, 640px);
+  max-width: 100%;
   display: flex; align-items: center; gap: var(--space-sm);
   padding: 8px 12px; border-radius: 8px;
   background: rgba(20, 20, 26, 0.92); color: #ffcc80; border: 1px solid rgba(255, 204, 128, 0.35);
@@ -7677,16 +7686,20 @@ body.starmap-active #player-reset-view-btn { display: none !important; }
 }
 .starmap-banner[hidden] { display: none; }
 .starmap-filter-note[hidden] { display: none; }
+/* Deliberately more present than the old bottom pill: this is the one thing a GM must know about
+   a StarMap map (the controls are in the SSE tab, not here). Blue, because green/orange are
+   reserved for view identity and amber already means "something is wrong" on the banner above. */
 .starmap-gm-hint {
-  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
-  z-index: 8; max-width: min(92%, 720px);
+  max-width: 100%;
   display: flex; align-items: center; gap: var(--space-sm);
   padding: 8px 12px; border-radius: 8px;
-  background: rgba(20, 20, 26, 0.92); color: #e8ecf4; border: 1px solid rgba(255, 255, 255, 0.18);
-  font-size: 13px; line-height: 1.35; pointer-events: auto;
+  background: rgba(24, 28, 44, 0.96); color: #e8ecf4; border: 1px solid rgba(140, 170, 255, 0.45);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-size: 13px; line-height: 1.35;
 }
 .starmap-gm-hint[hidden] { display: none; }
 .starmap-gm-hint .btn { flex: 0 0 auto; }
+.starmap-gm-hint-glyph { flex: 0 0 auto; color: #9fc2ff; font-size: 15px; line-height: 1; }
 .starmap-filter-note-text { font-size: 12px; line-height: 1.35; color: #ffcc80; opacity: 0.95; }
 .starmap-banner .btn { flex: 0 0 auto; }
 .textmap-video {
