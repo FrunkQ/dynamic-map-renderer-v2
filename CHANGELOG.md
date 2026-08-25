@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.8 — 2026-08-25
+
+The duck puts a spacesuit on. While a StarMap is on screen, the logo in the corner of the GM view swaps to a helmeted Mappadux duck against a starfield, and swaps back when you leave. Same artwork placement, so nothing moves.
+
 ## v2.18.7 — 2026-08-25
 
 Reverted the duck glyph on StarMap rows - the map list keeps its neutral sparkle. The duck belongs in the logo, not the list: a spacesuit variant of the Mappadux duck, shown while a StarMap is live, is the better home for the joke.

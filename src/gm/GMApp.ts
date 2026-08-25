@@ -5527,6 +5527,13 @@ export class GMApp {
     const row = document.getElementById('filter-kind-row');
     if (note) note.hidden = !on;
     if (row) row.hidden = on;
+    // Easter egg: the duck puts a spacesuit on while a StarMap is live. Same canvas as the normal
+    // icon, so nothing shifts; falls back silently to the ordinary icon if the art is missing.
+    const brand = document.querySelector<HTMLImageElement>('#gm-brand-icon');
+    if (brand) {
+      const next = on ? '/icons/icon-192-sse.png' : '/icons/icon-192.png';
+      if (!brand.src.endsWith(next)) brand.src = next;
+    }
   }
 
   private _showStarMapBanner(text: string, actions: { label: string; primary?: boolean; onClick: () => void }[]): void {

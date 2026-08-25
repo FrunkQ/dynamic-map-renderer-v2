@@ -10,9 +10,13 @@
  *   public/apple-touch-icon.png   180×180
  *   public/icons/icon-192.png     192×192  (PWA manifest)
  *   public/icons/icon-512.png     512×512  (PWA manifest, also maskable)
+ *
+ * Also rasterises src/assets/Mappadux-SSE-Icon.png → public/icons/icon-192-sse.png, the
+ * duck-in-a-spacesuit the GM header wears while a StarMap is on screen. Same canvas as the
+ * main icon, so the swap does not shift a pixel.
  */
 import sharp from 'sharp';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,4 +45,18 @@ for (const { out, size } of targets) {
     .png()
     .toFile(out);
   console.log(`wrote ${out}`);
+}
+
+// The StarMap easter egg. Only the header size is needed: it is never a favicon or a PWA icon,
+// only the 40px brand image swapped in while a StarMap map is live.
+const sseSrcPath = resolve(root, 'src', 'assets', 'Mappadux-SSE-Icon.png');
+if (existsSync(sseSrcPath)) {
+  const sseOut = resolve(iconsDir, 'icon-192-sse.png');
+  await sharp(readFileSync(sseSrcPath))
+    .resize(192, 192, { fit: 'cover', position: 'centre' })
+    .png()
+    .toFile(sseOut);
+  console.log(`wrote ${sseOut}`);
+} else {
+  console.log('no Mappadux-SSE-Icon.png — skipped the StarMap header icon');
 }
