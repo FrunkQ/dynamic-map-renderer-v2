@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.19.1 - 2026-08-26
+
+Importing a pack now redraws the Dice panel, so you see the set the pack just handed you rather than the one you had before. Tests for the whisper timer.
+
 ## v2.19.0 - 2026-08-26
 
 **Dice.** You write the rolls your game asks for - "Attack", "1d20+5" - in the new **Dice** panel, and every player gets them as a tray of chips on their own screen. One tap is one roll. There is no formula to type, no modifier picker and no dialog: advantage and damage are their own chips, because you decided the vocabulary. Three presets (d20, d6 pool, Fate/Blades) fill the list in one click, and the whole set travels inside the pack, so handing someone your pack hands them the dice too.

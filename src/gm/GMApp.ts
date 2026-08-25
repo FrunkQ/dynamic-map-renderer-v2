@@ -8325,6 +8325,9 @@ export class GMApp {
       // the initiative event re-sorts the tracker to the imported direction.
       this._broadcastPlayerFeatures();
       this.initiativeTracker?.setSortDirection(getInitiativeSortDirection());
+      // v2.19 — the pack carries its own dice: redraw the panel so the GM sees
+      // the set they were just handed, rather than the one they had before.
+      this._dicePanel?.refresh();
 
       // Retrofit pass — auto-detect grid scale on any map in the loaded pack
       // that doesn't already carry one. Manually-calibrated maps and no-grid

@@ -184,4 +184,29 @@ Whatever draws it, the faces come down the wire. See section 4.
 
 ## 8. Build status
 
-Sections 1-5 shipped on beta at v2.19.0. Section 6 (3D) not started.
+Sections 1-5 shipped on beta at v2.19.0. Section 6 (3D) NOT started - it is a
+design choice, not just work: see below.
+
+Verified live (GM at localhost:5180, a real player window, and a projector
+window over the local channel):
+
+- the GM's set reaches a player's tray, and an edit reaches it without a reload
+- a tap rolls, draws on the roller's own screen, and lands in the GM's feed as
+  a chip with the same faces
+- with a projector connected, `auto` hands the show to the TABLE (44px dice,
+  40px total, staying put in the roller's lane) and drops the roller to a line
+  - the "everyone is looking up at it" rule, working
+- a whispered roll draws in full for the roller, is tagged `whisper` in the
+  GM's feed, and goes nowhere else
+- the device preference downgrades a roll to a line, over the pack's policy
+
+Not verified by a human: a SECOND player seeing someone else's roll as a line
+(same code path as the roller's line, fed `detailOthers`), and any of it over a
+real remote connection rather than the local channel.
+
+Open decision for section 6: "flashy 3D" could mean CSS/SVG pseudo-3D (dice
+shaped per die type, spinning with perspective, landing with a bounce - no
+dependency, fine on a stick PC) or genuine WebGL dice with physics (a new
+dependency, a real cost on the weakest screen in the house, and the thing most
+VTTs mean by the phrase). Both land as a lazy chunk behind the same `full`
+detail, so nothing above changes either way.
