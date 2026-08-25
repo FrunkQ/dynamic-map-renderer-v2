@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.6 — 2026-08-25
+
+StarMap maps now wear a duck in space in the map list, instead of a generic sparkle. Mappa + dux, out among the stars.
+
 ## v2.18.5 — 2026-08-24
 
 StarMap pairing without copying anything: **Open Star System Explorer** in the Add StarMap dialog now pairs with the tab it opens. Browsers deliberately keep separate sites from seeing each other's tabs, which is why Mappadux could never find a running Star System Explorer by itself and you had to paste a player link; the one channel that still works is the tab we opened ourselves, so SSE now introduces itself over it and the dialog fills in the moment you load a starmap there. Pasting a link still works and remains the way to pair with a tab you opened yourself. Needs Star System Explorer 3.0.34 or later.
