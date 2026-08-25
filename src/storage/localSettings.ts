@@ -12,6 +12,12 @@
  *   • Internal flags— migration / one-shot flags Mappadux uses itself.
  */
 
+import { isValidFormula } from '../dice/roll.ts';
+import {
+  DEFAULT_DICE_POLICY, normalisePolicy, asDetail,
+  type DicePolicy, type DiceDetail,
+} from '../dice/dicePolicy.ts';
+
 /** Suppress the default-bundle seed on next startup. Used by the "Delete DB
  *  (keep settings)" action so the user lands on an empty workspace rather
  *  than being re-seeded with the Getting Started pack. Cleared by the
@@ -232,6 +238,12 @@ export interface BundledGmPreferences {
   playerPingsEnabled?:      boolean;
   playerMessagingEnabled?:  boolean;
   playerMarkersMovable?:    boolean;
+  /** v2.19 — dice belong to the game: the set the GM authored, the house rules
+   *  about who sees what, and whether players may roll at all. The VIEWER's own
+   *  detail preference is deliberately absent — that is theirs, per device. */
+  playerDiceEnabled?:       boolean;
+  diceSet?:                 import('../types.ts').DiceButton[];
+  dicePolicy?:              DicePolicy;
 }
 
 /** Snapshot the bundle-portable preferences for an export. */
@@ -244,6 +256,9 @@ export function collectBundledPreferences(): BundledGmPreferences {
     playerPingsEnabled:      arePingsEnabled(),
     playerMessagingEnabled:  isMessagingEnabled(),
     playerMarkersMovable:    arePlayerMarkersMovable(),
+    playerDiceEnabled:       areDiceEnabled(),
+    diceSet:                 getDiceSet(),
+    dicePolicy:              getDicePolicy(),
   };
 }
 
@@ -260,6 +275,11 @@ export function applyBundledPreferences(p: BundledGmPreferences | undefined): vo
   if (typeof p.playerPingsEnabled === 'boolean')     setPingsEnabled(p.playerPingsEnabled);
   if (typeof p.playerMessagingEnabled === 'boolean') setMessagingEnabled(p.playerMessagingEnabled);
   if (typeof p.playerMarkersMovable === 'boolean')   setPlayerMarkersMovable(p.playerMarkersMovable);
+  if (typeof p.playerDiceEnabled === 'boolean')      setDiceEnabled(p.playerDiceEnabled);
+  // A pack with no dice must not wipe the set the GM already has: absent means
+  // "unchanged", the same rule every other field here follows.
+  if (Array.isArray(p.diceSet) && p.diceSet.length > 0) setDiceSet(p.diceSet);
+  if (p.dicePolicy) setDicePolicy(normalisePolicy(p.dicePolicy));
 }
 
 /** v2.16.76 — Annotate mute. When set, clocks + whiteboard + notes are
@@ -295,6 +315,102 @@ export function setPingsEnabled(enabled: boolean): void {
     if (enabled) localStorage.removeItem(PLAYER_PINGS_DISABLED_KEY);
     else         localStorage.setItem(PLAYER_PINGS_DISABLED_KEY, '1');
   } catch { /* private mode etc. — no-op */ }
+}
+
+/**
+ * v2.19 Dice — GM toggle for player dice. Same shape as pings: stored as '0'
+ * when DISABLED so the common case needs no key. The GM's OWN dice keep working
+ * when this is off; rolling for the table is still useful when players may not.
+ */
+export const PLAYER_DICE_DISABLED_KEY = 'mappadux:player_dice_disabled';
+
+export function areDiceEnabled(): boolean {
+  try { return localStorage.getItem(PLAYER_DICE_DISABLED_KEY) !== '1'; }
+  catch { return true; }
+}
+
+export function setDiceEnabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.removeItem(PLAYER_DICE_DISABLED_KEY);
+    else         localStorage.setItem(PLAYER_DICE_DISABLED_KEY, '1');
+  } catch { /* private mode etc. — no-op */ }
+}
+
+/**
+ * v2.19 Dice — the SET the GM authored: named formulas players tap. Travels in
+ * the pack (a set belongs to the game, not to a person), so it lives in the
+ * bundled preferences too. Entries are validated on the way in, so nothing
+ * unrollable can reach a player's tray.
+ */
+export const DICE_SET_KEY = 'mappadux:dice_set';
+
+export function getDiceSet(): import('../types.ts').DiceButton[] {
+  try {
+    const raw = localStorage.getItem(DICE_SET_KEY);
+    if (!raw) return [];
+    return normaliseDiceSet(JSON.parse(raw));
+  } catch { return []; }
+}
+
+export function setDiceSet(set: import('../types.ts').DiceButton[]): void {
+  try {
+    const clean = normaliseDiceSet(set);
+    if (clean.length === 0) localStorage.removeItem(DICE_SET_KEY);
+    else localStorage.setItem(DICE_SET_KEY, JSON.stringify(clean));
+  } catch { /* quota / disabled — ignore */ }
+}
+
+/** Drop anything malformed or unrollable — a pack from another build, a hand-
+ *  edited localStorage, a formula the grammar no longer accepts. */
+export function normaliseDiceSet(raw: unknown): import('../types.ts').DiceButton[] {
+  if (!Array.isArray(raw)) return [];
+  const out: import('../types.ts').DiceButton[] = [];
+  for (const entry of raw.slice(0, 24)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    const label = typeof e.label === 'string' ? e.label.trim().slice(0, 24) : '';
+    const formula = typeof e.formula === 'string' ? e.formula.trim().slice(0, 40) : '';
+    if (!label || !isValidFormula(formula)) continue;
+    out.push({
+      id: typeof e.id === 'string' && e.id ? e.id : `dice-${out.length}-${formula}`,
+      label, formula,
+      ...(e.public === true ? { public: true as const } : {}),
+    });
+  }
+  return out;
+}
+
+/** v2.19 Dice — the pack's house rules about who sees what. */
+export const DICE_POLICY_KEY = 'mappadux:dice_policy';
+
+export function getDicePolicy(): DicePolicy {
+  try { return normalisePolicy(JSON.parse(localStorage.getItem(DICE_POLICY_KEY) ?? 'null')); }
+  catch { return { ...DEFAULT_DICE_POLICY }; }
+}
+
+export function setDicePolicy(policy: DicePolicy): void {
+  try { localStorage.setItem(DICE_POLICY_KEY, JSON.stringify(normalisePolicy(policy))); }
+  catch { /* quota / disabled — ignore */ }
+}
+
+/**
+ * v2.19 Dice — THIS DEVICE's own appetite for dice. A pack sets the ceiling; a
+ * viewer may always turn spectacle down (and a phone that cannot cope says so
+ * for itself). Deliberately NOT in the bundle: importing a pack must never
+ * overwrite what someone chose for their own screen.
+ */
+export const DICE_DETAIL_KEY = 'mappadux:dice_detail';
+
+export function getDiceDetailPreference(): DiceDetail {
+  try { return asDetail(localStorage.getItem(DICE_DETAIL_KEY), 'full'); }
+  catch { return 'full'; }
+}
+
+export function setDiceDetailPreference(d: DiceDetail): void {
+  try {
+    if (d === 'full') localStorage.removeItem(DICE_DETAIL_KEY); // the default needs no key
+    else localStorage.setItem(DICE_DETAIL_KEY, d);
+  } catch { /* private mode etc. */ }
 }
 
 /** v2.17 Player Voice — GM toggle for player messaging (player↔GM and

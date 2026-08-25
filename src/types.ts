@@ -1177,6 +1177,9 @@ export interface MsgPlayerFeatures {
   pings?:          boolean;
   messaging?:      boolean;
   movableMarkers?: boolean;
+  /** v2.19 — may players roll dice at all. Off hides the tray and the menu
+   *  entry, and the GM drops any roll a stale client still sends. */
+  dice?:           boolean;
   /** v2.17.10 — distance scale for the "Measure from here" ruler, so remote
    *  player views measure on the GM's units. `measureUnitValue` per grid
    *  square, `measureUnitSuffix` tagged on the result (e.g. 5 + "'"). */
@@ -1524,6 +1527,59 @@ export interface MsgVideoPlayback {
   volume: number;
 }
 
+/**
+ * v2.19 Dice. One entry in the GM's dice set: a named formula a player taps.
+ * Travels with the pack, so a set belongs to the game rather than to a person.
+ */
+export interface DiceButton {
+  id: string;
+  label: string;
+  formula: string;
+  /** A GM entry that reaches the room even when GM rolls are private. */
+  public?: boolean;
+}
+
+/**
+ * v2.19 Dice. Player -> GM: a roll THE PLAYER ALREADY MADE. The faces travel;
+ * nothing downstream re-rolls them, or the table screen lands on 17 while the
+ * chat says 12. `label` is the set entry's name ("Attack"), kept alongside the
+ * formula so a feed line reads the way the GM wrote it.
+ */
+export interface MsgDiceRoll {
+  type: 'dice_roll';
+  playerId: string;
+  clientId: string;
+  rollId:   string;
+  label:    string;
+  roll:     import('./dice/roll.ts').RollOutcome;
+  /** GM + roller only, whatever the pack policy says. */
+  whisper:  boolean;
+}
+
+/**
+ * v2.19 Dice. GM -> everyone: the relay, exactly like `ping_show`. The GM has
+ * already resolved the pack policy, so a viewer never needs a copy of it — it
+ * reduces what it is told against its own preference and its device.
+ */
+export interface MsgDiceShow {
+  type: 'dice_show';
+  rollId:  string;
+  label:   string;
+  roll:    import('./dice/roll.ts').RollOutcome;
+  /** null when the GM rolled it. */
+  fromPlayerId: string | null;
+  fromName:  string;
+  fromColor: string;
+  whisper:   boolean;
+  /** How players who did NOT roll should show it. */
+  detailOthers: import('./dice/dicePolicy.ts').DiceDetail;
+  /** How the table screen (projector / scaled view) should show it. */
+  detailTable:  import('./dice/dicePolicy.ts').DiceDetail;
+  /** How the ROLLER's own window should show it, and which window that is. */
+  detailRoller:   import('./dice/dicePolicy.ts').DiceDetail;
+  rollerClientId: string | null;
+}
+
 export type GMMessage =
   | MsgFullState
   | MsgViewUpdate
@@ -1560,6 +1616,8 @@ export type GMMessage =
   | MsgPlayerRoster
   | MsgPlayerPing
   | MsgPingShow
+  | MsgDiceRoll
+  | MsgDiceShow
   | MsgPlayerFeatures
   | MsgPlayerMessage
   | MsgMessageDeliver
