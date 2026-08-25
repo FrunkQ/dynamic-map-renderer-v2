@@ -8,6 +8,7 @@
  */
 
 import type { ThreadMessage } from './MessageThreads.ts';
+import { describeRoll } from '../dice/roll.ts';
 
 export interface MessageThreadPanelOptions {
   /** Messages to render (chronological — caller passes them already
@@ -47,7 +48,7 @@ export function buildMessageThreadPanel(body: HTMLElement, opts: MessageThreadPa
     empty.textContent = 'No messages yet. Type below to start.';
     thread.appendChild(empty);
   } else {
-    for (const m of opts.messages) thread.appendChild(_buildBubble(m, m.at > opts.lastSeenAt));
+    for (const m of opts.messages) thread.appendChild(buildThreadRow(m, m.at > opts.lastSeenAt));
   }
   body.appendChild(thread);
 
@@ -145,10 +146,17 @@ export function buildMessageThreadPanel(body: HTMLElement, opts: MessageThreadPa
   requestAnimationFrame(() => input.focus());
 }
 
-function _buildBubble(m: ThreadMessage, isNew: boolean): HTMLElement {
+/**
+ * One row of a thread — a message bubble, or (v2.19) a dice roll chip. Exported
+ * because the All Players panel renders exactly the same rows; `onReply` adds
+ * the affordance that panel needs, since it has no composer of its own.
+ */
+export function buildThreadRow(m: ThreadMessage, isNew: boolean, onReply?: () => void): HTMLElement {
   const row = document.createElement('div');
   row.className = 'mt-msg '
     + (m.fromKind === 'gm' ? 'mt-msg--gm' : 'mt-msg--player')
+    + (m.kind === 'roll' ? ' mt-msg--roll' : '')
+    + (m.roll?.whisper ? ' mt-msg--whisper' : '')
     + (isNew ? ' mt-msg--new' : '');
 
   const head = document.createElement('div');
@@ -173,17 +181,65 @@ function _buildBubble(m: ThreadMessage, isNew: boolean): HTMLElement {
     to.textContent = m.toName;
     head.appendChild(to);
   }
+  if (m.roll?.whisper) {
+    // The GM sees the roll BECAUSE it was whispered — say so, or they will read
+    // it as something the table also saw.
+    const w = document.createElement('span');
+    w.className = 'mt-msg-whisper-tag';
+    w.textContent = 'whisper';
+    w.title = 'Only you and the roller saw this';
+    head.appendChild(w);
+  }
   const time = document.createElement('span');
   time.className = 'mt-msg-time';
   time.textContent = new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   head.appendChild(time);
+  if (onReply) {
+    const reply = document.createElement('button');
+    reply.type = 'button';
+    reply.className = 'mt-msg-reply';
+    reply.title = `Open the thread with ${m.fromName}`;
+    reply.textContent = 'Reply';
+    reply.addEventListener('click', onReply);
+    head.appendChild(reply);
+  }
   row.appendChild(head);
 
-  const text = document.createElement('div');
-  text.className = 'mt-msg-text';
-  text.textContent = m.text;
-  row.appendChild(text);
+  row.appendChild(m.kind === 'roll' && m.roll ? _buildRollBody(m.roll) : _buildTextBody(m.text));
   return row;
+}
+
+function _buildTextBody(text: string): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'mt-msg-text';
+  el.textContent = text;
+  return el;
+}
+
+/** A roll reads as: what they called it, what it was, what it came to. */
+function _buildRollBody(roll: NonNullable<ThreadMessage['roll']>): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'mt-roll';
+
+  const label = document.createElement('span');
+  label.className = 'mt-roll-label';
+  label.textContent = roll.label;
+
+  const formula = document.createElement('span');
+  formula.className = 'mt-roll-formula';
+  formula.textContent = roll.outcome.formula;
+
+  const breakdown = document.createElement('span');
+  breakdown.className = 'mt-roll-breakdown';
+  // describeRoll ends in "= total"; the total is shown big on its own, so trim it.
+  breakdown.textContent = describeRoll(roll.outcome).replace(/\s*=\s*-?\d+$/, '');
+
+  const total = document.createElement('span');
+  total.className = 'mt-roll-total';
+  total.textContent = String(roll.outcome.total);
+
+  el.append(label, formula, breakdown, total);
+  return el;
 }
 
 function _renderChips(host: HTMLElement, options: string[], input: HTMLTextAreaElement): void {

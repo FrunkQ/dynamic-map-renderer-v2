@@ -7183,6 +7183,65 @@ option.select-option--add {
   word-break: break-word;
 }
 
+/* ─── v2.19 Dice in the feed ───────────────────────────────────────────────
+   A roll is not a sentence, so it does not render as one: what it was called,
+   what was rolled, what it came to — the total big enough to read across a
+   table. Indigo marks a whisper here and on the player tray, because green and
+   orange are reserved for view identity and red/yellow already mean danger and
+   caution. */
+.mt-msg--roll .mt-msg-head { margin-bottom: 2px; }
+.mt-roll {
+  display: flex; align-items: baseline; gap: var(--space-xs); flex-wrap: wrap;
+  padding: 4px 8px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--roll-color, rgba(255, 255, 255, 0.25));
+}
+.mt-roll-label     { font-weight: 700; color: var(--text-primary); font-size: var(--font-size-sm); }
+.mt-roll-formula   { color: var(--text-dim); font-size: 11px; font-family: ui-monospace, monospace; }
+.mt-roll-breakdown { color: var(--text-secondary); font-size: 11px; font-family: ui-monospace, monospace; }
+.mt-roll-total {
+  margin-left: auto; font-size: 20px; font-weight: 800; line-height: 1;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.mt-msg--whisper .mt-roll {
+  background: rgba(129, 140, 248, 0.12);
+  border-left-color: #818cf8;
+}
+.mt-msg-whisper-tag {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #a5b4fc; border: 1px solid rgba(165, 180, 252, 0.45);
+  border-radius: 999px; padding: 0 6px;
+}
+.mt-msg-reply {
+  background: none; border: 0; padding: 0 4px; cursor: pointer;
+  color: var(--text-dim); font-size: 11px; text-decoration: underline;
+}
+.mt-msg-reply:hover { color: var(--text-primary); }
+
+/* All Players feed — filters across the top, one merged thread below. */
+.mt-filterbar {
+  flex: 0 0 auto; display: flex; gap: 4px;
+  padding: var(--space-sm) var(--space-sm) 0;
+}
+.mt-filter {
+  padding: 2px 10px; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.06); color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.14); font-size: 11px;
+}
+.mt-filter:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
+.mt-filter.is-active {
+  background: rgba(255, 255, 255, 0.16); color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.all-threads-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 15px; height: 15px;
+  padding: 0 3px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28); color: var(--text-primary);
+  font-size: 9px; line-height: 15px; text-align: center; font-weight: 700;
+}
+.all-threads-badge[hidden] { display: none; }
+#all-threads-btn { position: relative; }
+
 .mt-composer {
   flex: 0 0 auto;
   display: flex;

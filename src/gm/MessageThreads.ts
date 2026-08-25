@@ -36,6 +36,12 @@ export interface ThreadMessage {
   toColor?:  string;
   text:      string;
   at:        number;
+  /** v2.19 — a dice roll rather than a sentence. Rolls render as a chip, are
+   *  filterable in the All Players panel, and never bump the red unread badge:
+   *  a GM watching a busy table would otherwise have it lit all evening. The
+   *  `text` field still carries a readable fallback. */
+  kind?:     'roll';
+  roll?:     { label: string; outcome: import('../dice/roll.ts').RollOutcome; whisper: boolean };
   /** Pre-fetched LLM reply suggestions for GM-bound messages, if the
    *  assistant was configured at arrival time. */
   suggestionsPromise?: Promise<string[]>;
@@ -47,6 +53,9 @@ interface Thread {
   messages: ThreadMessage[];
   unreadGm:   number;
   unreadPeer: number;
+  /** v2.19 — rolls counted quietly, away from the badge that means "someone
+   *  is talking to you". */
+  unreadRolls: number;
   /** Timestamp when the GM last CLOSED the thread side panel for this
    *  player. Messages with at > lastSeenAt render BOLD ("new since you
    *  last looked"). 0 = never opened. v2.16.49. */
@@ -72,9 +81,12 @@ export class MessageThreads {
   addIncoming(playerId: string, msg: ThreadMessage, alreadyOpenPlayerId: string | null): void {
     const t = this._ensure(playerId);
     t.messages.push(msg);
-    if (alreadyOpenPlayerId !== playerId) {
-      if (msg.origin === 'gm-bound')   t.unreadGm   += 1;
-      if (msg.origin === 'peer-bound') t.unreadPeer += 1;
+    // '*' — the All Players panel is open, so everything is already on screen.
+    const visible = alreadyOpenPlayerId === '*' || alreadyOpenPlayerId === playerId;
+    if (!visible) {
+      if (msg.kind === 'roll')              t.unreadRolls += 1;
+      else if (msg.origin === 'gm-bound')   t.unreadGm    += 1;
+      else if (msg.origin === 'peer-bound') t.unreadPeer  += 1;
     }
     this._fire();
   }
@@ -92,10 +104,38 @@ export class MessageThreads {
   markRead(playerId: string): void {
     const t = this.byPlayer.get(playerId);
     if (!t) return;
-    if (t.unreadGm === 0 && t.unreadPeer === 0) return;
-    t.unreadGm   = 0;
-    t.unreadPeer = 0;
+    if (t.unreadGm === 0 && t.unreadPeer === 0 && t.unreadRolls === 0) return;
+    t.unreadGm    = 0;
+    t.unreadPeer  = 0;
+    t.unreadRolls = 0;
     this._fire();
+  }
+
+  /** Clear every thread's counters — the All Players panel shows the lot. */
+  markAllRead(): void {
+    let changed = false;
+    for (const t of this.byPlayer.values()) {
+      if (t.unreadGm || t.unreadPeer || t.unreadRolls) changed = true;
+      t.unreadGm = 0; t.unreadPeer = 0; t.unreadRolls = 0;
+    }
+    if (changed) this._fire();
+  }
+
+  /** v2.19 — every thread merged chronologically for the All Players panel.
+   *  Each row keeps its player id so the panel can label it and offer a reply
+   *  that opens that player's own thread. */
+  snapshotAll(): { playerId: string; lastSeenAt: number; message: ThreadMessage }[] {
+    const rows: { playerId: string; lastSeenAt: number; message: ThreadMessage }[] = [];
+    for (const [playerId, t] of this.byPlayer) {
+      for (const message of t.messages) rows.push({ playerId, lastSeenAt: t.lastSeenAt, message });
+    }
+    return rows.sort((a, b) => a.message.at - b.message.at);
+  }
+
+  /** Mark every thread seen — the All Players panel closing. */
+  markAllSeen(): void {
+    const now = Date.now();
+    for (const t of this.byPlayer.values()) t.lastSeenAt = now;
   }
 
   /** Read accessor — returns the thread's messages (copy) or [] if none. */
@@ -126,9 +166,16 @@ export class MessageThreads {
   }
 
   /** Unread counts — red (gm-bound) and orange (peer-bound). */
-  unreadFor(playerId: string): { gm: number; peer: number } {
+  unreadFor(playerId: string): { gm: number; peer: number; rolls: number } {
     const t = this.byPlayer.get(playerId);
-    return { gm: t?.unreadGm ?? 0, peer: t?.unreadPeer ?? 0 };
+    return { gm: t?.unreadGm ?? 0, peer: t?.unreadPeer ?? 0, rolls: t?.unreadRolls ?? 0 };
+  }
+
+  /** Totals across every thread, for the All Players button's badge. */
+  unreadTotals(): { gm: number; peer: number; rolls: number } {
+    let gm = 0, peer = 0, rolls = 0;
+    for (const t of this.byPlayer.values()) { gm += t.unreadGm; peer += t.unreadPeer; rolls += t.unreadRolls; }
+    return { gm, peer, rolls };
   }
 
   /** Forget a thread entirely — e.g. when the GM removes a player. */
@@ -139,7 +186,7 @@ export class MessageThreads {
   private _ensure(playerId: string): Thread {
     let t = this.byPlayer.get(playerId);
     if (!t) {
-      t = { messages: [], unreadGm: 0, unreadPeer: 0, lastSeenAt: 0 };
+      t = { messages: [], unreadGm: 0, unreadPeer: 0, unreadRolls: 0, lastSeenAt: 0 };
       this.byPlayer.set(playerId, t);
     }
     return t;

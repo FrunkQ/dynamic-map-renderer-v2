@@ -31,6 +31,7 @@ import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts'
 import { PlayersPanel } from './PlayersPanel.ts';
 import { MessageThreads } from './MessageThreads.ts';
 import { buildMessageThreadPanel } from './MessageThreadPanel.ts';
+import { buildAllThreadsPanel, type AllThreadsFilter } from './AllThreadsPanel.ts';
 import { PlayerRegistry } from '../players/PlayerRegistry.ts';
 import { assetToPlayerIcon } from '../players/playerIcon.ts';
 import { PingLayer } from '../rendering/PingLayer.ts';
@@ -415,6 +416,11 @@ export class GMApp {
   /** The playerId whose thread side panel is currently open, or null.
    *  Read by addIncoming to skip unread bumps for the active thread. */
   private _openThreadPlayerId: string | null = null;
+  /** v2.19 — the All Players feed is open, so EVERY thread is on screen and
+   *  nothing should bump an unread counter. Passed to addIncoming as '*'. */
+  private _allThreadsOpen = false;
+  private _allThreadsPanel: import('./SidePanel.ts').SidePanelHandle | null = null;
+  private _allThreadsFilter: AllThreadsFilter = 'all';
   /** Handle to the open thread SidePanel (one at a time). */
   private _threadSidePanel: import('./SidePanel.ts').SidePanelHandle | null = null;
   /** Ping pulses relayed from players — persist on the GM until dismissed. */
@@ -4095,7 +4101,7 @@ export class GMApp {
         origin: msg.toPlayerId ? 'peer-bound' : 'gm-bound',
         ...(suggestionsPromise ? { suggestionsPromise } : {}),
       };
-      this._messageThreads.addIncoming(senderPlayerId, entry, this._openThreadPlayerId);
+      this._messageThreads.addIncoming(senderPlayerId, entry, this._visibleThreadKey());
       // v2.16.49 — peer-bound messages also land in the RECIPIENT's
       // thread so the GM can monitor both sides from either badge.
       // Orange unread bumps on the recipient row; the message reads
@@ -4103,7 +4109,7 @@ export class GMApp {
       // recipient is the player whose thread is currently open, the
       // bump is skipped and the body refresh handles the live update.
       if (msg.toPlayerId) {
-        this._messageThreads.addIncoming(msg.toPlayerId, entry, this._openThreadPlayerId);
+        this._messageThreads.addIncoming(msg.toPlayerId, entry, this._visibleThreadKey());
         // Player→player: relay to the addressed player so their PlayerApp
         // shows the toast.
         this.host.broadcast({
@@ -7288,7 +7294,58 @@ export class GMApp {
       // If the open side panel's thread changed, refresh its body so the
       // new message shows up immediately.
       this._threadSidePanel?.refresh();
+      this._allThreadsPanel?.refresh();
+      this._refreshAllThreadsBadge();
     });
+    const btn = document.getElementById('all-threads-btn');
+    if (btn) btn.onclick = () => this._openAllThreads();
+    this._refreshAllThreadsBadge();
+  }
+
+  /** Which thread (if any) is already on screen — '*' when the All Players feed
+   *  is open, since that shows every thread at once. */
+  private _visibleThreadKey(): string | null {
+    return this._allThreadsOpen ? '*' : this._openThreadPlayerId;
+  }
+
+  /** v2.19 — every player's messages and rolls in one feed. Rolls are why this
+   *  exists: they must not arrive as toasts over the GM's map, so they arrive
+   *  here, and a GM who wants to watch the table leaves this open. */
+  private _openAllThreads(): void {
+    void import('./SidePanel.ts').then(({ openSidePanel }) => {
+      this._threadSidePanel?.close();
+      this._allThreadsOpen = true;
+      this._messageThreads.markAllRead();
+      this._allThreadsPanel = openSidePanel({
+        title: 'All players',
+        populate: (body) => buildAllThreadsPanel(body, {
+          rows: this._messageThreads.snapshotAll(),
+          filter: this._allThreadsFilter,
+          onFilter: (f) => { this._allThreadsFilter = f; this._allThreadsPanel?.refresh(); },
+          // Replying means picking someone: hand off to that player's own thread.
+          onOpenThread: (playerId) => this._openMessageThread(playerId),
+        }),
+        onClose: () => {
+          this._messageThreads.markAllSeen();
+          this._allThreadsOpen = false;
+          this._allThreadsPanel = null;
+          this._refreshAllThreadsBadge();
+        },
+      });
+      this._refreshAllThreadsBadge();
+    });
+  }
+
+  /** A quiet count on the All Players button. Rolls are included here — this is
+   *  the one place they are counted — but they never reach a player row's red
+   *  badge, which still means "someone is talking to you". */
+  private _refreshAllThreadsBadge(): void {
+    const badge = document.getElementById('all-threads-badge');
+    if (!badge) return;
+    const { gm, peer, rolls } = this._messageThreads.unreadTotals();
+    const n = gm + peer + rolls;
+    badge.hidden = n === 0;
+    badge.textContent = n > 99 ? '99+' : String(n);
   }
 
   /** Open / refresh the thread SidePanel for a given player. Clears that
