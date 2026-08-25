@@ -119,9 +119,14 @@ In the map-switch flow, branch on `asset.source === 'starmap'` BEFORE the
    - no announce → banner "Open Star System Explorer to power this map" +
      Open button; auto-proceed when an announce with the right id arrives.
 2. Broadcast `starmap_show` (+ set it as the `full_state` representation).
-3. Local GM preview: `StarMapLayer` in `mode:'gm'` over the GM canvas;
-   `Renderer` paused (§6). The GM's control surface remains the SSE2 tab —
-   the preview is "what players see".
+3. GM canvas: SUPERSEDED at v2.18.11. Was a local `StarMapLayer` in
+   `mode:'gm'`; that meant TWO live SSE sessions on the GM's machine (this
+   preview, plus the one inside the Player View PiP) for one picture. The GM
+   now gets an opaque stand-in (`#starmap-standin`), a notice strip naming the
+   live starmap + Player View with the way back to the SSE tab, and the Player
+   View PiP switched to LARGE mode — that is the GM's preview. `Renderer`
+   stays paused (§6). Map-anchored tooling (Markers, Fog/MapFX, Annotate,
+   player tokens) greys out; audio, map transitions and Player Views stay live.
 4. `MapAssetStore.getBlob()` gains an early `null` return for `'starmap'`
    (never called on the happy path, but belt-and-braces for thumbnail code).
 5. `_dropdownKindForAsset` (GMApp.ts ~175) gains a `'starmap'` arm + glyph

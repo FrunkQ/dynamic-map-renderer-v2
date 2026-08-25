@@ -1,6 +1,9 @@
 /**
  * StarMapLayer (v2.18) — the full-bleed Star System Explorer player view for a
- * StarMap map, on GM canvas, player and projector alike.
+ * StarMap map, on the player and projector surfaces.
+ *
+ * NOT on the GM canvas: since v2.18.11 the GM sees a notice strip and an enlarged Player View
+ * window instead, because a GM-side copy meant a SECOND live SSE session on the same machine.
  *
  * Follows TextMapVideoLayer's lifecycle discipline (a managed cross-origin
  * iframe in a dedicated overlay slot, rebuilt on fullscreen because browsers

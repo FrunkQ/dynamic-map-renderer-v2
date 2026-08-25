@@ -736,22 +736,27 @@
            clocks float as a draggable HUD above it. -->
       <!-- v2.16.91 — live YouTube videos placed on a text-map page. -->
       <div id="textmap-video-layer" class="textmap-video-layer"></div>
-      <!-- v2.18 — StarMap: the GM's preview of the live Star System Explorer
-           view players see (drive it from the SSE tab), plus a status banner
-           for "SSE not open / wrong starmap loaded". -->
-      <div id="starmap-layer" hidden></div>
+      <!-- v2.18.11 — a StarMap is drawn BY Star System Explorer, and the GM canvas no longer
+           carries a copy of it: a second live SSE view on this machine cost bandwidth and frames
+           for a picture the enlarged Player View window already shows. What is left here is an
+           opaque ground (so no stale map texture shows through), the notice strip below, and the
+           Player View window enlarged over it. -->
+      <div id="starmap-standin" class="starmap-standin" hidden></div>
       <!-- v2.18.10 — both StarMap notices share ONE top-centre column, directly under the
            undo/redo bar. The GM's eye is already up there, and the hint's old bottom placement
            sat behind the Player View pip. -->
       <div class="starmap-top-slot">
         <div id="starmap-banner" class="starmap-banner" hidden></div>
-        <!-- v2.18 — the GM's StarMap surface IS the players' view; the controls are in the SSE
-             tab. Say so, every time, until dismissed for this session. -->
-        <div id="starmap-gm-hint" class="starmap-gm-hint" hidden>
-          <span class="starmap-gm-hint-glyph" aria-hidden="true">✦</span>
-          <span class="starmap-gm-hint-text">This is what your players see. Drive it — focus, time, Player View — from your <strong>Star System Explorer</strong> tab.</span>
-          <button type="button" id="starmap-gm-hint-open" class="btn btn--sm btn--primary">Open SSE tab</button>
-          <button type="button" id="starmap-gm-hint-close" class="btn btn--sm btn--ghost" aria-label="Dismiss">×</button>
+        <!-- v2.18.11 — with no view drawn on the GM canvas, this strip IS the GM's StarMap
+             chrome: which starmap and Player View is live, and the way back to the tab that
+             drives it. Not dismissible for that reason. -->
+        <div id="starmap-strip" class="starmap-strip" hidden>
+          <span class="starmap-strip-glyph" aria-hidden="true">✦</span>
+          <span class="starmap-strip-text">
+            <strong id="starmap-strip-name">StarMap</strong>
+            <span id="starmap-strip-state">Looking for Star System Explorer…</span>
+          </span>
+          <button type="button" id="starmap-strip-open" class="btn btn--sm btn--primary">Open SSE tab</button>
         </div>
       </div>
       <canvas id="annotate-whiteboard" class="annotate-whiteboard" hidden></canvas>

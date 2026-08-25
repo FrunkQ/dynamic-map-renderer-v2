@@ -7656,6 +7656,33 @@ option.select-option--add {
 .starmap-layer { position: absolute; inset: 0; z-index: 5; background: #000; }
 .starmap-layer[hidden] { display: none; }
 .starmap-layer .starmap-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #000; }
+/* v2.18.11 — a StarMap has no map texture, so the map-anchored tooling has nothing to act on.
+   Greyed rather than hidden: the GM should see that the tools still exist and why they are asleep.
+   AUDIO IS DELIBERATELY EXEMPT — soundboard and soundtracks still reach players over a StarMap,
+   as do map transitions and everything in Player Views (join QR, projector display). */
+body.starmap-active #markers-panel,
+body.starmap-active #fog-panel,
+body.starmap-active #annotate-panel { opacity: 0.45; }
+body.starmap-active #markers-panel .panel-body,
+body.starmap-active #fog-panel .panel-body,
+body.starmap-active #annotate-panel .panel-body,
+body.starmap-active #markers-panel .panel-toggle,
+body.starmap-active #fog-panel .panel-toggle,
+body.starmap-active #annotate-panel .panel-toggle { pointer-events: none; }
+body.starmap-active #markers-panel .panel-title,
+body.starmap-active #fog-panel .panel-title,
+body.starmap-active #annotate-panel .panel-title { cursor: not-allowed; }
+body.starmap-active #markers-panel .panel-title::after,
+body.starmap-active #fog-panel .panel-title::after,
+body.starmap-active #annotate-panel .panel-title::after {
+  content: ' - not on a StarMap'; font-size: 10px; font-weight: 400; opacity: 0.85;
+}
+/* Player tokens are map-anchored too: no map, nowhere to put one. The rest of a player's row
+   (name, character, colour, threads, initiative) is about the PERSON and stays live. */
+body.starmap-active .player-row-marker,
+body.starmap-active .player-row-tokensize,
+body.starmap-active .player-row-cancelmove { opacity: 0.4; pointer-events: none; }
+
 /* While a StarMap is showing, chrome that only makes sense over a map texture steps aside. */
 body.starmap-active #player-grid,
 body.starmap-active #marker-overlay,
@@ -7686,10 +7713,11 @@ body.starmap-active #player-reset-view-btn { display: none !important; }
 }
 .starmap-banner[hidden] { display: none; }
 .starmap-filter-note[hidden] { display: none; }
-/* Deliberately more present than the old bottom pill: this is the one thing a GM must know about
-   a StarMap map (the controls are in the SSE tab, not here). Blue, because green/orange are
-   reserved for view identity and amber already means "something is wrong" on the banner above. */
-.starmap-gm-hint {
+/* v2.18.11 — the GM's whole StarMap chrome, since nothing is drawn on the canvas any more: which
+   starmap and Player View is live, and the way back to the tab that drives it. Blue, because
+   green/orange are reserved for view identity and amber already means "something is wrong" on the
+   banner above. */
+.starmap-strip {
   max-width: 100%;
   display: flex; align-items: center; gap: var(--space-sm);
   padding: 8px 12px; border-radius: 8px;
@@ -7697,9 +7725,16 @@ body.starmap-active #player-reset-view-btn { display: none !important; }
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   font-size: 13px; line-height: 1.35;
 }
-.starmap-gm-hint[hidden] { display: none; }
-.starmap-gm-hint .btn { flex: 0 0 auto; }
-.starmap-gm-hint-glyph { flex: 0 0 auto; color: #9fc2ff; font-size: 15px; line-height: 1; }
+.starmap-strip[hidden] { display: none; }
+.starmap-strip .btn { flex: 0 0 auto; }
+.starmap-strip-glyph { flex: 0 0 auto; color: #9fc2ff; font-size: 16px; line-height: 1; }
+.starmap-strip-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.starmap-strip-text strong { color: #cfe0ff; }
+#starmap-strip-state { opacity: 0.85; }
+/* The ground the GM canvas shows instead of a second live Star System Explorer view. Opaque, so a
+   stale map texture underneath never shows through; the enlarged Player View window sits over it. */
+.starmap-standin { position: absolute; inset: 0; z-index: 5; background: #07090f; }
+.starmap-standin[hidden] { display: none; }
 .starmap-filter-note-text { font-size: 12px; line-height: 1.35; color: #ffcc80; opacity: 0.95; }
 .starmap-banner .btn { flex: 0 0 auto; }
 .textmap-video {

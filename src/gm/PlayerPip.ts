@@ -25,6 +25,10 @@
  * unless the iframe is later moved cross-origin.
  */
 
+/** Large mode (StarMap maps): clearance for the notice strip, and the canvas margin. */
+const LARGE_TOP = 112;
+const LARGE_MARGIN = 12;
+
 const STORAGE_POSITION = 'dmr_pip_position';
 const STORAGE_VISIBLE  = 'dmr_pip_visible';
 const STORAGE_WIDTH    = 'dmr_pip_width';
@@ -63,19 +67,72 @@ export class PlayerPip {
     else this._buildShowButton();
   }
 
-  /** Open the inline PiP. No-op if already open. */
-  show(): void {
+  /** Open the inline PiP. No-op if already open. `persist` false for an open WE forced (large
+   *  mode on a StarMap): the GM's own show/hide preference must survive it. */
+  show(persist = true): void {
     if (this.pipFrame) return;
     this._removeShowButton();
     this._buildPipFrame();
-    localStorage.setItem(STORAGE_VISIBLE, '1');
+    if (persist) localStorage.setItem(STORAGE_VISIBLE, '1');
   }
 
   /** Close the inline PiP. The pill button reappears at bottom-left. */
-  hide(): void {
+  hide(persist = true): void {
     this._removePipFrame();
     this._buildShowButton();
-    localStorage.setItem(STORAGE_VISIBLE, '0');
+    if (persist) localStorage.setItem(STORAGE_VISIBLE, '0');
+  }
+
+  /** v2.18.11 — LARGE mode, for a StarMap map: Mappadux draws nothing on the GM canvas there
+   *  (Star System Explorer is drawing the players' view), so this preview stops being a
+   *  picture-in-picture and becomes the GM's view of the table. It fills the canvas below the
+   *  StarMap notice strip, opens itself if the GM had it minimised, and restores exactly what was
+   *  there before on the way out — including their remembered size, which large mode never saves
+   *  over. Restoring is a geometry change, never a rebuild: rebuilding would reload the player
+   *  frame and, with it, the Star System Explorer session inside it. */
+  setLargeMode(on: boolean): void {
+    if (on === this.largeMode) return;
+    this.largeMode = on;
+    if (on) {
+      this.wasHiddenBeforeLarge = !this.pipFrame;
+      this.show(false);
+      this.pipFrame?.classList.add('player-pip-frame--large');
+      this._applyLargeGeometry();
+      // Watch the CANVAS, not the window: collapsing the sidebar or opening a panel resizes the
+      // canvas without a window resize event, and a stale large geometry would hang off the edge.
+      this.largeObserver = new ResizeObserver(() => this._applyLargeGeometry());
+      this.largeObserver.observe(this.wrapper);
+      return;
+    }
+    this.largeObserver?.disconnect();
+    this.largeObserver = null;
+    if (this.wasHiddenBeforeLarge) { this.hide(false); return; }
+    const frame = this.pipFrame;
+    if (!frame) return;
+    frame.classList.remove('player-pip-frame--large');
+    const w = this._loadWidth();
+    frame.style.width = w !== null ? `${w}px` : '';
+    const pos = this._loadPosition();
+    if (pos) { frame.style.left = `${pos.x}%`; frame.style.top = `${pos.y}%`; frame.style.bottom = ''; }
+    else { frame.style.left = '12px'; frame.style.top = ''; frame.style.bottom = '12px'; }
+  }
+  private largeMode = false;
+  private wasHiddenBeforeLarge = false;
+  private largeObserver: ResizeObserver | null = null;
+
+  /** As wide as the canvas allows while staying 16:9 and clearing the notice strip at the top. */
+  private _applyLargeGeometry(): void {
+    const frame = this.pipFrame;
+    if (!frame) return;
+    const wrap = this.wrapper.getBoundingClientRect();
+    if (wrap.width <= 0 || wrap.height <= 0) return; // not laid out yet
+    const availW = Math.max(240, wrap.width - LARGE_MARGIN * 2);
+    const availH = Math.max(180, wrap.height - LARGE_TOP - LARGE_MARGIN);
+    const w = Math.round(Math.min(availW, availH * (16 / 9)));
+    frame.style.width = `${w}px`;
+    frame.style.left = `${Math.round((wrap.width - w) / 2)}px`;
+    frame.style.top = `${LARGE_TOP}px`;
+    frame.style.bottom = ''; frame.style.right = '';
   }
 
   /** Pop the inline PiP out into a standalone window. The inline frame
@@ -218,6 +275,7 @@ export class PlayerPip {
     // the new width on a short debounce so we don't hammer localStorage
     // during the drag.
     this._resizeObserver = new ResizeObserver(() => {
+      if (this.largeMode) return; // large mode is ours, not a size the GM chose — never persist it
       if (this._resizeSaveTimer !== null) clearTimeout(this._resizeSaveTimer);
       this._resizeSaveTimer = setTimeout(() => {
         if (this.pipFrame) this._saveWidth(this.pipFrame.offsetWidth);
