@@ -1,8 +1,8 @@
 # Changelog
 
-## v2.18.6 — 2026-08-25
+## v2.18.7 — 2026-08-25
 
-StarMap maps now wear a duck in space in the map list, instead of a generic sparkle. Mappa + dux, out among the stars.
+Reverted the duck glyph on StarMap rows - the map list keeps its neutral sparkle. The duck belongs in the logo, not the list: a spacesuit variant of the Mappadux duck, shown while a StarMap is live, is the better home for the joke.
 
 ## v2.18.5 — 2026-08-24
 

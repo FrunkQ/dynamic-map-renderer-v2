@@ -125,7 +125,7 @@ In the map-switch flow, branch on `asset.source === 'starmap'` BEFORE the
 4. `MapAssetStore.getBlob()` gains an early `null` return for `'starmap'`
    (never called on the happy path, but belt-and-braces for thumbnail code).
 5. `_dropdownKindForAsset` (GMApp.ts ~175) gains a `'starmap'` arm + glyph
-   (a duck in space — mappa + dux among the stars: `🦆`).
+   (pick at build; a star glyph, e.g. `✦`).
 
 ### 4.4 Disable gates (per decision log Q4/Q5)
 

@@ -154,7 +154,7 @@ const COMPOSITE_MAP_PREFIX = '▦ ';
 // loading it.
 const MISSING_MAP_PREFIX   = '⚠ ';
 // v2.18 — ✦ for a StarMap: a live Star System Explorer view, not an image.
-const STARMAP_PREFIX       = '🦆 '; // a duck in space: mappa + dux, out among the stars
+const STARMAP_PREFIX       = '✦ ';
 
 type MapDropdownKind = 'image' | 'animated' | 'text' | 'composite' | 'starmap' | 'missing';
 /** The ONE place a dropdown kind becomes its glyph prefix (was duplicated in
@@ -177,7 +177,7 @@ function _cleanMapDisplayName(name: string): string {
     // Strip any decorative leading prefix: the legacy "[T] " variant
     // first, then any glyph in the set we've ever used.
     .replace(/^\[T\]\s+/, '')
-    .replace(/^(?:[▣▶▤▦¶≡⚠✦]|🦆)\s+/, '')
+    .replace(/^[▣▶▤▦¶≡⚠✦]\s+/, '')
     // Legacy trailing " [T]" decoration.
     .replace(/(?: \[T\])+$/, '')
     .trim();
