@@ -71,6 +71,17 @@ describe('PlayerPip large mode', () => {
     expect(localStorage.getItem('dmr_pip_visible')).toBe('0'); // their choice, untouched
   });
 
+  it('comes back large when re-opened from the pill during a StarMap', () => {
+    const wrap = makeWrapper();
+    const pip = new PlayerPip({ canvasWrapper: wrap, getPlayerUrl: () => 'https://gm.example/player.html?room=abc' });
+    pip.setLargeMode(true);
+    pip.hide();   // the GM minimises mid-StarMap
+    pip.show();   // ...and brings it back from the pill
+    const frame = frameOf(wrap)!;
+    expect(frame.classList.contains('player-pip-frame--large')).toBe(true);
+    expect(parseFloat(frame.style.top)).toBe(112);
+  });
+
   it('never persists the large size over the size the GM chose', async () => {
     localStorage.setItem('dmr_pip_width', '420');
     let notifyResize: (() => void) | null = null;

@@ -299,6 +299,13 @@ export class PlayerPip {
     frame.addEventListener('contextmenu', stop);
 
     this._bindDrag(header, frame);
+
+    // Minimised and re-opened WHILE a StarMap is up (the pill is still there in large mode):
+    // the frame comes back large, because the canvas behind it is still empty.
+    if (this.largeMode) {
+      frame.classList.add('player-pip-frame--large');
+      this._applyLargeGeometry();
+    }
   }
 
   private _removePipFrame(): void {

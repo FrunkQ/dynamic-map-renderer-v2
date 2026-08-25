@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.12 — 2026-08-25
+
+Minimising the Player View window while a StarMap is up and bringing it back from the pill now returns it large, where the empty canvas is, instead of small.
+
 ## v2.18.11 — 2026-08-25
 
 **StarMap maps stop drawing the players' view on the GM canvas.** It was a second live Star System Explorer session on the same machine - the same picture, twice, for bandwidth and frames - when the Player View window was already showing it. The GM canvas now carries the notice instead: which starmap and Player View is live, and the button back to the tab that drives it. The Player View window goes **large** for a StarMap, filling the canvas below that notice, so you still see what the table sees; it opens itself if you had it minimised and goes back to exactly the size, place and open/closed state you left it in when you leave the StarMap.
