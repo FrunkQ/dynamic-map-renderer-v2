@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.9 — 2026-08-25
+
+Add StarMap no longer makes you wait to be offered the thing you were going to do anyway. **Open Star System Explorer** and the paste box are on screen from the first frame, with the search reduced to a line of status that updates behind them. The search itself is shorter too: without a session id it can only ever succeed when both apps are on the same site, so it is now a single two-second check rather than up to four attempts across twenty-odd seconds. Reconnecting to a known session is unchanged — that one dials the broker and still gets its full patience.
+
 ## v2.18.8 — 2026-08-25
 
 The duck puts a spacesuit on. While a StarMap is on screen, the logo in the corner of the GM view swaps to a helmeted Mappadux duck against a starfield, and swaps back when you leave. Same artwork placement, so nothing moves.

@@ -73,12 +73,16 @@ export class StarMapDialog {
   private pastedPreset: string | null = null;
 
   private async _search(): Promise<void> {
-    this._renderSearching();
+    // Actions go up FIRST; the probe resolves a line of status behind them. A GM who already knows
+    // they will open SSE (or paste a link) should never wait on a check to be allowed to do it.
+    this._renderPairing('Checking whether anything on this machine can see a session…');
     const a = await sse2Bridge.hello(this.origin, this.knownSid);
     if (!this.overlay) return;
-    if (a) { this.announce = a; this._renderFound(); }
-    else if (sse2Bridge.lastFailure === 'unreachable') this._renderUnreachable();
-    else this._renderNotFound();
+    if (a) { this.announce = a; this._renderFound(); return; }
+    if (sse2Bridge.lastFailure === 'unreachable') { this._renderUnreachable(); return; }
+    this._setStatus(this.knownSid
+      ? '<strong>The saved session is not answering.</strong> Open Star System Explorer and load this starmap — this dialog picks it up by itself.'
+      : '<strong>Nothing visible from here.</strong> Browsers keep separate sites apart, so Mappadux cannot spot a session it has never met. Open Star System Explorer below and the tab it opens introduces itself — or paste a player link from one you already have open.');
   }
 
   /** The address answered nothing at all: /bridge is missing there (an SSE build older than the
@@ -225,51 +229,29 @@ export class StarMapDialog {
 
   private _clear(): HTMLElement { const b = this.body!; b.replaceChildren(); return b; }
 
-  private _renderSearching(): void {
+  /** The one first-pairing view: a status line on top, and BOTH ways in underneath, available from
+   *  the first frame. Re-rendering would wipe a half-typed paste, so the status mutates in place. */
+  private statusEl: HTMLElement | null = null;
+  private _renderPairing(statusHtml: string): void {
     const b = this._clear();
     b.append(this._intro(), this._originRow());
     const p = document.createElement('p');
-    p.style.margin = '0';
-    p.textContent = 'Looking for a running Star System Explorer in this browser…';
-    b.append(p, this._actions(this._btn('Cancel', 'btn--ghost', () => this._resolve(null))));
-  }
-
-  private _renderNotFound(): void {
-    const b = this._clear();
-    b.append(this._intro(), this._originRow());
-    const p = document.createElement('p');
-    p.style.cssText = 'margin:0;color:#ffcc80;';
-    p.innerHTML = '<strong>No Star System Explorer session found.</strong><br>' +
-      (this.knownSid
-        ? 'The saved session is not reachable — open Star System Explorer, load this starmap, and this dialog will pick it up automatically.'
-        : 'Nothing on this machine can see a running session by itself (browsers keep sites apart). ' +
-          '<strong>Open Star System Explorer from here</strong> and the tab it opens will introduce itself — no copying needed. ' +
-          'Already have it open in another tab? Paste one of its player links instead.');
+    p.style.cssText = 'margin:0;min-height:2.4em;';
+    p.innerHTML = statusHtml;
+    this.statusEl = p;
     b.append(p);
     if (!this.knownSid) b.append(this._pasteRow());
     b.append(this._actions(
       this._btn('Cancel', 'btn--ghost', () => this._resolve(null)),
       this._btn('Retry', 'btn--ghost', () => void this._search()),
-      this._btn('Open Star System Explorer', 'btn--primary', () => { sse2Bridge.openSse(this.origin); this._renderOpening(); }),
+      this._btn('Open Star System Explorer', 'btn--primary', () => {
+        sse2Bridge.openSse(this.origin);
+        this._setStatus('<strong>Star System Explorer is opening…</strong> Load the starmap you want in that tab and this fills itself in — leave it open. (If the tab was blocked, allow pop-ups for Mappadux, or paste a player link.)');
+      }),
     ));
   }
-
-  /** v2.18.5 — we opened the tab; it announces itself when its starmap is loaded (openSse), so the
-   *  only thing left to do is say so. `onAnnounce` re-renders this into the found state by itself. */
-  private _renderOpening(): void {
-    const b = this._clear();
-    b.append(this._intro(), this._originRow());
-    const p = document.createElement('p');
-    p.style.margin = '0';
-    p.innerHTML = '<strong>Star System Explorer is opening…</strong><br>' +
-      'Load the starmap you want in that tab. This dialog fills itself in as soon as it does — ' +
-      'leave it open. (If the tab was blocked by your browser, allow pop-ups for Mappadux, or paste a player link below.)';
-    b.append(p);
-    if (!this.knownSid) b.append(this._pasteRow());
-    b.append(this._actions(
-      this._btn('Cancel', 'btn--ghost', () => this._resolve(null)),
-      this._btn('Retry', 'btn--ghost', () => void this._search()),
-    ));
+  private _setStatus(html: string): void {
+    if (this.statusEl) this.statusEl.innerHTML = html;
   }
 
   private _renderFound(): void {

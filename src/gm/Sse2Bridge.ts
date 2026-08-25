@@ -130,11 +130,16 @@ export class Sse2Bridge {
     await this.ensure(origin, sid);
     const frame = this.frames.get(this._key(origin, sid));
     if (!frame?.contentWindow) return null;
-    const wait = timeoutMs ?? (sid ? 14000 : 3000);
+    // A probe WITHOUT a session id can only ever succeed same-site (the frame and the SSE tab
+    // share a BroadcastChannel). Cross-site it is a foregone conclusion, so keep it short and
+    // single-shot: the dialog shows the real actions immediately and this just resolves a line
+    // of status behind them. WITH a sid we are dialling the broker and that deserves patience.
+    const wait = timeoutMs ?? (sid ? 14000 : 2000);
     // Two attempts: the first can race the frame's hydration on a slow load
     // even after `ready` (or after the fallback timer). Cheap and honest.
     const key = this._key(origin, sid);
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const attempts = sid ? 2 : 1;
+    for (let attempt = 0; attempt < attempts; attempt++) {
       const requestId = `h${++this.seq}`;
       const a = await new Promise<SseAnnounce | null>((resolve) => {
         const timer = setTimeout(() => { this.pending.delete(requestId); resolve(null); }, wait);
@@ -147,7 +152,10 @@ export class Sse2Bridge {
     // The frame never spoke at all => the route is missing or blocked at that address — OR a stale
     // service worker / cold edge served a 404 once. Remount the frame ONCE and try again before
     // declaring it unreachable; the second load is usually fine.
-    if (!this.spoken.has(key) && !this.remounted.has(key)) {
+    // The remount-once exists for a frame served a stale 404 by an old service worker. That is
+    // worth a second chance on a RECONNECT (we know the sid, the GM is not watching a dialog);
+    // during first pairing it just doubles a wait the GM does not have to sit through.
+    if (sid && !this.spoken.has(key) && !this.remounted.has(key)) {
       this.remounted.add(key);
       this.frames.get(key)?.remove();
       this.frames.delete(key); this.ready.delete(key); this.readyResolvers.delete(key);
