@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.18.13 — 2026-08-25
+
+Dropped the "not on a StarMap" label from the greyed panels - the ghosting already says it.
+
 ## v2.18.12 — 2026-08-25
 
 Minimising the Player View window while a StarMap is up and bringing it back from the pill now returns it large, where the empty canvas is, instead of small.

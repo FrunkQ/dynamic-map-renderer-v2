@@ -7657,7 +7657,7 @@ option.select-option--add {
 .starmap-layer[hidden] { display: none; }
 .starmap-layer .starmap-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #000; }
 /* v2.18.11 — a StarMap has no map texture, so the map-anchored tooling has nothing to act on.
-   Greyed rather than hidden: the GM should see that the tools still exist and why they are asleep.
+   Greyed rather than hidden or labelled: the ghosting says it, and the panels stay where they are.
    AUDIO IS DELIBERATELY EXEMPT — soundboard and soundtracks still reach players over a StarMap,
    as do map transitions and everything in Player Views (join QR, projector display). */
 body.starmap-active #markers-panel,
@@ -7672,11 +7672,6 @@ body.starmap-active #annotate-panel .panel-toggle { pointer-events: none; }
 body.starmap-active #markers-panel .panel-title,
 body.starmap-active #fog-panel .panel-title,
 body.starmap-active #annotate-panel .panel-title { cursor: not-allowed; }
-body.starmap-active #markers-panel .panel-title::after,
-body.starmap-active #fog-panel .panel-title::after,
-body.starmap-active #annotate-panel .panel-title::after {
-  content: ' - not on a StarMap'; font-size: 10px; font-weight: 400; opacity: 0.85;
-}
 /* Player tokens are map-anchored too: no map, nowhere to put one. The rest of a player's row
    (name, character, colour, threads, initiative) is about the PERSON and stays live. */
 body.starmap-active .player-row-marker,
