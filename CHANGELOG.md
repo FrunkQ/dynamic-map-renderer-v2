@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.19.0 - 2026-08-26
+
+**Dice.** You write the rolls your game asks for - "Attack", "1d20+5" - in the new **Dice** panel, and every player gets them as a tray of chips on their own screen. One tap is one roll. There is no formula to type, no modifier picker and no dialog: advantage and damage are their own chips, because you decided the vocabulary. Three presets (d20, d6 pool, Fate/Blades) fill the list in one click, and the whole set travels inside the pack, so handing someone your pack hands them the dice too.
+
+**Rolls reach you as chat, not as toasts.** A roll lands in that player's message thread as a chip - what they called it, what it was, and the total big enough to read across a table - and never covers your map. The new **All players** button beside the Players count opens one feed of every message and every roll from everyone, with All / Rolls / Chat filters. It is meant to be left open; while it is, nothing counts as unread.
+
+**Who sees what is yours to set**, under "Who sees what" in the Dice panel: where player rolls go, and whether the table screen, the other players and the roller each get the dice rolling, a line of text, or nothing. The table screen is a dice target - with one connected, dice land there, big, and stay until that person rolls again, one lane per roller, and the roller keeps a line on their own phone because everyone is looking up anyway. Your own rolls stay private unless you say otherwise, or star one entry as the loud one.
+
+**Whisper.** A player can arm Whisper on their tray and the next roll goes to you and nobody else - not to the table screen, not to another player, and not onto the wire at all. The whole tray glows while it is armed, and it disarms itself after ten minutes and says so, because a mode you have forgotten you are in is the one that leaks a secret roll.
+
+Every player can also turn dice down on their own device - the dice, a line, or nothing at all - from the right-click menu, and no pack can override that. Dice can be switched off for the table entirely in Settings > Player Permissions; your own dice keep working.
+
 ## v2.18.13 — 2026-08-25
 
 Dropped the "not on a StarMap" label from the greyed panels - the ghosting already says it.

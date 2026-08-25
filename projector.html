@@ -19,6 +19,10 @@
        map canvas, below pings and status). Kept warm when hidden. -->
   <div id="starmap-layer" hidden></div>
 
+  <!-- v2.19 Dice. Screen space, not map space: dice mean a person, not a place,
+       so they belong to the surface and must not swim when the GM pans. -->
+  <div id="dice-layer"></div>
+
   <!-- Transition overlay — used by TransitionEngine when the GM has
        enabled animations on the Scaled View (Settings → Scaled View
        → Enable transitions). The canvas is inert until the engine

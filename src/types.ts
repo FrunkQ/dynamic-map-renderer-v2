@@ -1184,6 +1184,11 @@ export interface MsgPlayerFeatures {
    *  a player who joins mid-session gets the GM's vocabulary, and an edit
    *  reaches every tray without a reload. */
   diceSet?:        DiceButton[];
+  /** v2.19 — how a roller sees their OWN roll, resolved from the pack policy
+   *  by the GM (including 'auto'). Standing policy, not per-roll: the roller
+   *  draws immediately rather than waiting for the relay, so it has to know
+   *  this in advance. A whisper always overrides it to 'full' locally. */
+  diceRollerDetail?: import('./dice/dicePolicy.ts').DiceDetail;
   /** v2.17.10 — distance scale for the "Measure from here" ruler, so remote
    *  player views measure on the GM's units. `measureUnitValue` per grid
    *  square, `measureUnitSuffix` tagged on the result (e.g. 5 + "'"). */
@@ -1579,8 +1584,8 @@ export interface MsgDiceShow {
   detailOthers: import('./dice/dicePolicy.ts').DiceDetail;
   /** How the table screen (projector / scaled view) should show it. */
   detailTable:  import('./dice/dicePolicy.ts').DiceDetail;
-  /** How the ROLLER's own window should show it, and which window that is. */
-  detailRoller:   import('./dice/dicePolicy.ts').DiceDetail;
+  /** The window that rolled it, so it can ignore this echo: a roller draws
+   *  their own roll immediately rather than waiting for the relay. */
   rollerClientId: string | null;
 }
 

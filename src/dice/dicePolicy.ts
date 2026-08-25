@@ -58,6 +58,12 @@ export interface RollContext {
   whisper: boolean;
   /** Per-chip override: this GM entry is public even when GM rolls are not. */
   forcePublic?: boolean;
+  /** Is a table screen actually connected? `rollerDetail: 'auto'` hands the
+   *  show to the table and drops the roller to a line — but only if there IS
+   *  a table. With none connected, "everyone is looking up at it" is false and
+   *  the roller would be left with a line and nothing to look at. Undefined
+   *  counts as connected, so a caller that does not know keeps the old rule. */
+  tableConnected?: boolean;
 }
 
 const RANK: Record<DiceDetail, number> = { none: 0, line: 1, full: 2 };
@@ -91,7 +97,9 @@ export function detailFor(recipient: DiceRecipient, ctx: RollContext): DiceDetai
     // A whisper cannot be staged on the table, so the roller keeps the show.
     if (ctx.whisper) return 'full';
     if (policy.rollerDetail !== 'auto') return policy.rollerDetail;
-    const tableShowsIt = audience === 'table' && policy.tableDetail === 'full';
+    const tableShowsIt = audience === 'table'
+      && policy.tableDetail === 'full'
+      && ctx.tableConnected !== false;
     return tableShowsIt ? 'line' : 'full';
   }
 

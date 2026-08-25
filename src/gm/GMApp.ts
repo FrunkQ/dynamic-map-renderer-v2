@@ -4109,6 +4109,7 @@ export class GMApp {
         fromColor: player?.color ?? '#3b82f6',
         whisper: msg.whisper === true,
         fromGm: false,
+        rollerClientId: msg.clientId,
       });
       return;
     }
@@ -4257,6 +4258,9 @@ export class GMApp {
       const primary = this._primaryProjector();
       if (primary) this.projectorEditor?.setConnection(primary);
       this.refreshProjectorStatus();
+      // v2.19 — with a table screen present, a roller's own dice go to the
+      // table and they keep a line. Tell the trays that changed.
+      if (wasNew) this._broadcastPlayerFeatures();
       // A new projector might have just calibrated — re-read the setup list
       // so the picker reflects what's now in localStorage.
       this.refreshProjectorSetupSelect();
@@ -7086,17 +7090,19 @@ export class GMApp {
     rollId: string; label: string; outcome: RollOutcome;
     fromPlayerId: string | null; fromName: string; fromColor: string;
     whisper: boolean; fromGm: boolean; forcePublic?: boolean;
+    /** The window that rolled it, so its own echo can be ignored there. */
+    rollerClientId?: string | null;
   }): void {
     const ctx = {
       policy: getDicePolicy(),
       fromGm: r.fromGm,
       whisper: r.whisper,
+      tableConnected: this.projectorConnections.size > 0,
       ...(r.forcePublic ? { forcePublic: true } : {}),
     };
     const detailGm     = detailFor('gm', ctx);
     const detailOthers = detailFor('other', ctx);
     const detailTable  = detailFor('table', ctx);
-    const detailRoller = detailFor('roller', ctx);
 
     // The GM's own copy: a line in the feed, never a toast over the map.
     if (detailGm !== 'none') {
@@ -7118,6 +7124,12 @@ export class GMApp {
       else this._messageThreads.addIncoming(threadKey, entry, this._visibleThreadKey());
     }
 
+    // A whisper is NOT broadcast at all. Sending it with "do not look" flags
+    // would leave the secret on the wire for anyone with a console open; the
+    // GM has it in the feed above and the roller drew it themselves.
+    // Likewise a roll nobody would render: the relay would be pure noise.
+    if (r.whisper || (detailOthers === 'none' && detailTable === 'none')) return;
+
     this.host.broadcast({
       type: 'dice_show',
       rollId: r.rollId,
@@ -7129,8 +7141,7 @@ export class GMApp {
       whisper: r.whisper,
       detailOthers,
       detailTable,
-      detailRoller,
-      rollerClientId: null,
+      rollerClientId: r.rollerClientId ?? null,
     });
   }
 
@@ -7144,6 +7155,12 @@ export class GMApp {
       movableMarkers: arePlayerMarkersMovable(),
       dice: areDiceEnabled(),
       diceSet: getDiceSet(),
+      // Standing policy: a roller draws their own roll without waiting for the
+      // relay, so it needs this in advance. 'auto' is resolved here.
+      diceRollerDetail: detailFor('roller', {
+        policy: getDicePolicy(), fromGm: false, whisper: false,
+        tableConnected: this.projectorConnections.size > 0,
+      }),
       measureUnitValue:  getMeasureUnitValue(),
       measureUnitSuffix: getMeasureUnitSuffix(),
     });

@@ -26,6 +26,16 @@ describe('dice visibility', () => {
     expect(detailFor('roller', ctx({}, { rollerDetail: 'full' }))).toBe('full');
   });
 
+  it('auto hands the show to the table only when there IS a table screen', () => {
+    // No projector connected: "everyone is looking up at it" is false, so the
+    // roller would otherwise be left with a line and nothing to look at.
+    expect(detailFor('roller', ctx({ tableConnected: false }))).toBe('full');
+    expect(detailFor('roller', ctx({ tableConnected: true }))).toBe('line');
+    // Not knowing counts as connected, so a caller that cannot tell keeps the
+    // documented rule.
+    expect(detailFor('roller', ctx())).toBe('line');
+  });
+
   it('the GM never gets an animation, only a feed line', () => {
     for (const c of [ctx(), ctx({ fromGm: true }), ctx({ whisper: true }), ctx({}, { othersDetail: 'full' })]) {
       expect(detailFor('gm', c)).toBe('line');

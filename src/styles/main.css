@@ -7183,6 +7183,122 @@ option.select-option--add {
   word-break: break-word;
 }
 
+/* ─── v2.19 Dice: the tray, and where dice land ────────────────────────────
+   Screen space on every surface. The tray is the player's whole interaction:
+   a rail of chips, one tap per roll. Indigo means WHISPER here and in the GM's
+   feed — green and orange are reserved for view identity, and red/yellow
+   already mean danger and caution. */
+.dice-tray {
+  position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+  /* Clears the fullscreen button (bottom-right) on a phone, symmetrically, so
+     the rail scrolls rather than sliding under it. */
+  z-index: 9; max-width: min(calc(100vw - 110px), 900px);
+  padding: 5px; border-radius: 12px;
+  background: rgba(16, 19, 28, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  opacity: 0.9; transition: opacity 140ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.dice-tray:hover { opacity: 1; }
+.dice-tray[hidden] { display: none; }
+.dice-tray-rail { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: thin; }
+.dice-chip {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  min-width: 58px; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.07); color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.dice-chip:hover  { background: rgba(255, 255, 255, 0.15); }
+.dice-chip:active { transform: translateY(1px); }
+.dice-chip-label   { font-weight: 650; font-size: 13px; line-height: 1.1; }
+.dice-chip-formula { font-size: 10px; color: var(--text-dim); font-family: ui-monospace, monospace; }
+.dice-whisper-toggle {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 8px; cursor: pointer; font-size: 11px;
+  background: rgba(255, 255, 255, 0.04); color: var(--text-dim);
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+}
+.dice-whisper-toggle:hover { color: var(--text-primary); }
+.dice-whisper-toggle.is-on {
+  color: #c7d2fe; background: rgba(129, 140, 248, 0.18);
+  border-style: solid; border-color: rgba(165, 180, 252, 0.65);
+}
+/* Armed: the WHOLE tray changes, not just the toggle — this is a mode, and a
+   mode you have forgotten you are in is the one that leaks a secret roll. */
+.dice-tray.is-whisper {
+  border-color: rgba(165, 180, 252, 0.6);
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.35), 0 0 18px rgba(99, 102, 241, 0.45);
+  background: rgba(23, 23, 45, 0.9);
+}
+.dice-tray.is-whisper .dice-chip { filter: saturate(0.55); border-color: rgba(165, 180, 252, 0.3); }
+
+/* Where dice land. Lanes sit along the bottom; one per roller, so two people
+   rolling at once do not collide. */
+.dice-layer { position: absolute; inset: 0; z-index: 8; pointer-events: none; overflow: hidden; }
+.dice-lanes {
+  position: absolute; left: 0; right: 0; bottom: 74px;
+  display: flex; justify-content: center; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  padding: 0 12px;
+}
+.dice-lane {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 12px; border-radius: 10px;
+  background: rgba(12, 14, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 3px solid var(--roller-color, rgba(255, 255, 255, 0.4));
+}
+.dice-lane.is-whisper { border-color: rgba(165, 180, 252, 0.6); background: rgba(24, 24, 48, 0.8); }
+.dice-lane-name  { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+.dice-lane-label { font-size: 10px; color: var(--text-dim); }
+.dice-faces { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin: 2px 0; }
+.die {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px; padding: 0 3px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.9); color: #10131c;
+  font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.die--dropped { opacity: 0.4; text-decoration: line-through; }
+.dice-lane-total {
+  font-size: 22px; font-weight: 800; line-height: 1;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.dice-lane.is-settled .dice-lane-total { animation: dice-pop 260ms ease-out; }
+@keyframes dice-pop { from { transform: scale(0.7); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
+/* The table screen is read from across a room. */
+.dice-layer--table .dice-lanes { bottom: 40px; gap: 24px; }
+.dice-layer--table .die { min-width: 44px; height: 44px; font-size: 24px; border-radius: 9px; }
+.dice-layer--table .dice-lane-total { font-size: 40px; }
+.dice-layer--table .dice-lane-name  { font-size: 15px; }
+.dice-layer--table .dice-lane-label { font-size: 13px; }
+
+/* A line: someone else rolled. Enough to follow, never enough to take over. */
+.dice-lines {
+  position: absolute; right: 10px; bottom: 74px;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+}
+.dice-line {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(12, 14, 20, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid var(--roller-color, rgba(255, 255, 255, 0.4));
+  font-size: 12px; color: var(--text-secondary);
+  animation: dice-line-in 180ms ease-out;
+  transition: opacity 380ms ease, transform 380ms ease;
+}
+.dice-line.is-whisper { border-color: rgba(165, 180, 252, 0.6); }
+.dice-line.is-leaving { opacity: 0; transform: translateY(-4px); }
+.dice-line-who   { font-weight: 700; }
+.dice-line-what  { color: var(--text-primary); }
+.dice-line-faces { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); }
+.dice-line-total { font-weight: 800; font-size: 15px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+@keyframes dice-line-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.dice-layer--table .dice-line { font-size: 16px; }
+.dice-layer--table .dice-line-total { font-size: 22px; }
+/* A StarMap fills the surface with someone else's app; dice still belong to
+   the people at the table, so they stay on top of it. */
+body.starmap-active .dice-layer { z-index: 8; }
+
 /* ─── v2.19 Dice: the GM's set editor ──────────────────────────────────────
    One row per entry. The row IS the roll button — a GM reaching for their own
    dice should not have to find a separate control — with the public star and

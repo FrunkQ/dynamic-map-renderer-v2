@@ -19,7 +19,12 @@ import { StarMapLayer } from '../rendering/StarMapLayer.ts';
 import { parseIceParam } from '../p2p/iceConfig.ts';
 import { TextMapAltText } from '../rendering/TextMapAltText.ts';
 import { PlayerInitiativeRollModal } from './PlayerInitiativeRollModal.ts';
-import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix } from '../storage/localSettings.ts';
+import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix,
+  getDiceDetailPreference, setDiceDetailPreference } from '../storage/localSettings.ts';
+import { DiceLayer } from '../rendering/DiceLayer.ts';
+import { PlayerDiceTray } from './PlayerDiceTray.ts';
+import { rollFormula } from '../dice/roll.ts';
+import { reduceDetail, type DiceDetail } from '../dice/dicePolicy.ts';
 import { Viewer } from '../viewers/Viewer.ts';
 import { PROFILE_PLAYER } from '../viewers/profiles.ts';
 import { drawGrid } from '../viewers/strategies/drawGrid.ts';
@@ -262,7 +267,13 @@ export class PlayerApp {
   private roster: Array<{ id: string; playerName: string; characterName: string; color: string; connected: boolean }> = [];
   /** Player-Voice features the GM currently allows. Default-on until the GM
    *  says otherwise (mirrors the default-enabled settings). */
-  private features = { pings: true, messaging: true, movableMarkers: true };
+  private features = { pings: true, messaging: true, movableMarkers: true, dice: true };
+  /** v2.19 Dice. The tray is the GM's set; the layer is where a roll is shown.
+   *  `diceRollerDetail` is standing policy from the GM, because a roller draws
+   *  their own roll immediately rather than waiting for the relay. */
+  private _diceTray: PlayerDiceTray | null = null;
+  private _diceLayer: DiceLayer | null = null;
+  private _diceRollerDetail: DiceDetail = 'full';
   /** v2.17.10 — measurement scale received from the GM (player_features), so
    *  the ruler reads in the GM's units. Null until received → falls back to
    *  this browser's local setting (same-browser views) or the 5' default. */
@@ -409,6 +420,27 @@ export class PlayerApp {
     // what players may do inside SSE); kept warm when hidden.
     const starMapEl = document.getElementById('starmap-layer');
     if (starMapEl) this._starMap = new StarMapLayer(starMapEl, 'viewer');
+
+    // v2.19 Dice. Both surfaces are screen-space overlays; the tray is inert
+    // until the GM sends a set, so a table that does not use dice sees nothing.
+    const diceLayerEl = document.getElementById('dice-layer');
+    if (diceLayerEl) this._diceLayer = new DiceLayer(diceLayerEl, 'viewer');
+    const diceTrayEl = document.getElementById('dice-tray');
+    if (diceTrayEl && !this._isPreviewMode()) {
+      this._diceTray = new PlayerDiceTray(diceTrayEl, {
+        onRoll: (entry, whisper) => void this._rollDice(entry, whisper),
+        onWhisperChange: (armed, reason) => {
+          // Never let the mode change silently: the first they would know is a
+          // secret roll on the table screen.
+          if (!armed && reason === 'timeout') this._diceLayer?.showLine({
+            rollId: `whisper-off-${Date.now()}`,
+            label: 'Whisper off',
+            outcome: { formula: 'after ten minutes', dice: [], modifier: 0, total: 0 },
+            rollerKey: '__notice__', rollerName: 'Dice', rollerColor: '#a5b4fc',
+          });
+        },
+      });
+    }
     // v2.16.77 — read-only whiteboard mirrored from the GM.
     const boardEl = document.getElementById('annotate-whiteboard') as HTMLCanvasElement | null;
     if (boardEl) this._annotateBoard = new WhiteboardLayer(boardEl, (x, y) => this.renderer.mapNormToCanvasCss(x, y));
@@ -1315,6 +1347,17 @@ export class PlayerApp {
     if (resetBtn && !resetBtn.hidden) {
       items.push({ label: 'Reset view to GM\'s', onSelect: () => resetBtn.click() });
     }
+    // v2.19 — a pack sets the ceiling for dice; this is how a player lowers it
+    // on their own screen. Cycles rather than nesting a submenu.
+    if (this.features.dice) {
+      const current = getDiceDetailPreference();
+      const nextOf: Record<DiceDetail, DiceDetail> = { full: 'line', line: 'none', none: 'full' };
+      const wording: Record<DiceDetail, string> = { full: 'the dice', line: 'a line of text', none: 'nothing' };
+      items.push({
+        label: `Dice show me: ${wording[current]}`,
+        onSelect: () => setDiceDetailPreference(nextOf[current]),
+      });
+    }
     // v2.17.21 — connection/activity log on demand only (no corner indicator).
     items.push({ label: 'Show activity', onSelect: () => this.messageLog?.show({ x: clientX, y: clientY }) });
     this._actionMenu.open(clientX, clientY, items);
@@ -1348,6 +1391,49 @@ export class PlayerApp {
       return;
     }
     this._emitPing(x, y);
+  }
+
+  // ── v2.19 Dice (docs/dice-design.md) ──────────────────────────────────────
+
+  /** Tap to roll. We roll HERE, draw it here, and tell the GM what it came to —
+   *  the faces are decided once, by whoever rolled. Identity first, so the GM
+   *  can attribute it, exactly as pings do. */
+  private async _rollDice(entry: import('../types.ts').DiceButton, whisper: boolean): Promise<void> {
+    if (!this.features.dice) return;
+    if (!this.identity) {
+      await this.openIdentityModal();
+      if (!this.identity) return;
+    }
+    const outcome = rollFormula(entry.formula);
+    if (!outcome) return;
+    const rollId = generateId();
+    this.guest.send({
+      type: 'dice_roll',
+      playerId: this.playerId,
+      clientId: this.clientId,
+      rollId,
+      label: entry.label,
+      roll: outcome,
+      whisper,
+    });
+    // A whisper is never relayed, so this local draw is the only one there is —
+    // and a whisper always shows in full, because the table cannot show it.
+    this._showDice(whisper ? 'full' : this._diceRollerDetail, {
+      rollId,
+      label: entry.label,
+      outcome,
+      rollerKey: this.playerId,
+      rollerName: this.identity.characterName || this.identity.playerName || 'You',
+      rollerColor: this.identity.color,
+      whisper,
+    });
+  }
+
+  /** Policy says how much; this device may always say less. */
+  private _showDice(detail: DiceDetail, show: import('../rendering/DiceLayer.ts').DiceShow): void {
+    const effective = reduceDetail(detail, getDiceDetailPreference());
+    if (effective === 'full') this._diceLayer?.showFull(show);
+    else if (effective === 'line') this._diceLayer?.showLine(show);
   }
 
   private _emitPing(x: number, y: number): void {
@@ -1853,6 +1939,22 @@ export class PlayerApp {
         break;
       }
 
+      case 'dice_show': {
+        // v2.19 — our OWN roll comes back as an echo; we drew it when we rolled
+        // it, so that the tap feels instant. Everyone else's is drawn here.
+        if (msg.rollerClientId && msg.rollerClientId === this.clientId) break;
+        this._showDice(msg.detailOthers, {
+          rollId: msg.rollId,
+          label: msg.label,
+          outcome: msg.roll,
+          rollerKey: msg.fromPlayerId ?? 'gm',
+          rollerName: msg.fromName,
+          rollerColor: msg.fromColor,
+          whisper: msg.whisper,
+        });
+        break;
+      }
+
       case 'ping_show': {
         // v2.17 Player Voice — a ping relayed by the GM; pulse it on our map.
         this.pingLayer?.add({ id: msg.pingId, x: msg.x, y: msg.y, color: msg.color, name: msg.name });
@@ -1864,6 +1966,11 @@ export class PlayerApp {
         if (typeof msg.pings === 'boolean')          this.features.pings          = msg.pings;
         if (typeof msg.messaging === 'boolean')      this.features.messaging      = msg.messaging;
         if (typeof msg.movableMarkers === 'boolean') this.features.movableMarkers = msg.movableMarkers;
+        if (typeof msg.dice === 'boolean')          this.features.dice           = msg.dice;
+        if (msg.diceRollerDetail) this._diceRollerDetail = msg.diceRollerDetail;
+        if (msg.diceSet || typeof msg.dice === 'boolean') {
+          this._diceTray?.update(msg.diceSet, this.features.dice);
+        }
         // v2.17.10 — adopt the GM's measurement scale.
         if (typeof msg.measureUnitValue === 'number' && msg.measureUnitValue > 0) this._measureUnitValue = msg.measureUnitValue;
         if (typeof msg.measureUnitSuffix === 'string') this._measureUnitSuffix = msg.measureUnitSuffix;

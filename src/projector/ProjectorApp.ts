@@ -24,7 +24,9 @@ import { Viewer } from '../viewers/Viewer.ts';
 import { PROFILE_SCALED } from '../viewers/profiles.ts';
 import { computeView } from '../viewers/strategies/computeView.ts';
 import { drawGrid } from '../viewers/strategies/drawGrid.ts';
-import { isScaledViewTransitionsEnabled } from '../storage/localSettings.ts';
+import { isScaledViewTransitionsEnabled, getDiceDetailPreference } from '../storage/localSettings.ts';
+import { DiceLayer } from '../rendering/DiceLayer.ts';
+import { reduceDetail } from '../dice/dicePolicy.ts';
 import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import type { TransitionConfig, CompositeWirePayload } from '../types.ts';
 import { decodeImageBitmap } from '../utils/decodeImageBitmap.ts';
@@ -130,6 +132,9 @@ export class ProjectorApp {
   // v2.17 Player Voice — token / ping / initiative rendering, mirroring PlayerApp.
   private playerMarkerLayer: PlayerMarkerLayer | null = null;
   private pingLayer:         PingLayer         | null = null;
+  /** v2.19 — the table screen is a dice TARGET: when the policy says the table
+   *  shows rolls in full, the dice land here rather than on five phones. */
+  private diceLayer:         DiceLayer         | null = null;
   private initiativeRail:    PlayerInitiativeRail | null = null;
   private _annotateClocks:   ClocksLayer | null = null;
   private _annotateTimers:   TimersLayer | null = null;
@@ -297,6 +302,8 @@ export class ProjectorApp {
     // v2.16.76 — read-only progress clocks mirrored from the GM.
     const anchor = { project: (x: number, y: number) => this.renderer.mapNormToCanvasCss(x, y), unproject: () => null };
     const clocksEl = document.getElementById('annotate-clocks');
+    const diceLayerEl = document.getElementById('dice-layer');
+    if (diceLayerEl) this.diceLayer = new DiceLayer(diceLayerEl, 'table');
     if (clocksEl) this._annotateClocks = new ClocksLayer(clocksEl, false, anchor);
     const timersEl = document.getElementById('annotate-timers');
     if (timersEl) this._annotateTimers = new TimersLayer(timersEl, false, anchor);
@@ -859,6 +866,25 @@ export class ProjectorApp {
           'markersKnown?', this._lastPlayerMarkers.length,
         );
         this._reRenderPlayerMarkers();
+        break;
+      }
+      case 'dice_show': {
+        // v2.19 Dice — the GM already resolved the policy; this screen only
+        // reduces it against its own setting (a stick PC under a table may be
+        // set to text). Dice land in screen space and stay until that person
+        // rolls again, because a table behaves like a table.
+        const detail = reduceDetail(msg.detailTable, getDiceDetailPreference());
+        const show = {
+          rollId: msg.rollId,
+          label: msg.label,
+          outcome: msg.roll,
+          rollerKey: msg.fromPlayerId ?? 'gm',
+          rollerName: msg.fromName,
+          rollerColor: msg.fromColor,
+          whisper: msg.whisper,
+        };
+        if (detail === 'full') this.diceLayer?.showFull(show);
+        else if (detail === 'line') this.diceLayer?.showLine(show);
         break;
       }
       case 'ping_show': {

@@ -24,6 +24,12 @@
        map canvas, below pings and status). Kept warm when hidden. -->
   <div id="starmap-layer" hidden></div>
 
+  <!-- v2.19 Dice. Screen space, not map space: dice mean a person, not a place,
+       so they belong to the surface and must not swim when the GM pans. -->
+  <div id="dice-layer"></div>
+  <!-- The tray: one tap is one roll. Hidden until the GM sends a set. -->
+  <div id="dice-tray" hidden></div>
+
   <!-- Transition overlay canvas — drawn on by TransitionEngine during map changes -->
   <canvas id="transition-canvas"></canvas>
 
