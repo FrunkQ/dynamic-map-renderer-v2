@@ -285,6 +285,10 @@ thrown, and the roll appears on screen exactly as a tapped one would. Every rule
 and every part of the look is unchanged — same lanes, same colours, same crit
 flares, same fade, same sentence in the GM's feed.
 
+- PAIRING IS SETUP, so it happens once a game and lives with the settings: the
+  GM's in Settings > Dice, a player's in their action menu (their equivalent of
+  a settings screen). The dice tray carries no pairing button — that rail is for
+  playing.
 - `physicalRoll.ts` is pure and holds the rules: the collection window and how a
   handful becomes a roll. `pixelsLink.ts` holds the Bluetooth and is imported
   LAZILY, so nobody without dice downloads the library (its own ~120 kB chunk).

@@ -7500,13 +7500,12 @@ export class GMApp {
     if (layerEl && !this._diceLayer) this._diceLayer = new DiceLayer(layerEl, 'viewer');
     const trayEl = document.getElementById('dice-tray');
     if (trayEl && !this._diceTray) {
+      // A GM may want both: their own dice for the moments that deserve them,
+      // and the rail for everything else. Pairing is in Settings > Dice — once
+      // a game, not something to trip over mid-play.
       this._diceTray = new PlayerDiceTray(trayEl, {
         onRoll: (entry) => this._rollAsGm(entry),
-        onConnectDice: () => void this._connectGmDice(),
       });
-      // A GM may want both: their own dice for the moments that deserve them,
-      // and the rail for everything else.
-      this._diceTray.setPairingAvailable(isPhysicalDiceSupported());
       void this._reconnectGmDice();
     }
     this._refreshDiceOverlay();

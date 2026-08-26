@@ -31,7 +31,6 @@ describe('PlayerDiceTray', () => {
     tray = new PlayerDiceTray(root, {
       onRoll: (entry, whisper) => rolls.push({ label: entry.label, whisper }),
       onWhisperChange: (armed, reason) => whisperEvents.push({ armed, reason }),
-      onConnectDice: () => { /* pairing is exercised in the app, not here */ },
     });
   });
   afterEach(() => { tray.destroy(); vi.useRealTimers(); });
@@ -159,17 +158,12 @@ describe('PlayerDiceTray', () => {
     expect(root.querySelector('.dice-physical-status')?.textContent).toContain('connected');
   });
 
-  it('offers pairing only where it could work, and shows the tray for it alone', () => {
-    tray.update([], true);                       // no set at all
-    expect(root.hidden).toBe(true);
-    tray.setPairingAvailable(true);
-    // Worth showing the tray for the pairing button by itself: a player with
-    // their own dice does not need the GM to have written a set first.
-    expect(root.hidden).toBe(false);
-    expect(root.querySelector('.dice-pair-btn')).not.toBeNull();
-    tray.setPairingAvailable(false);
+  it('carries no pairing button: that is setup, and lives with the settings', () => {
+    tray.update(SET, true);
     expect(root.querySelector('.dice-pair-btn')).toBeNull();
-    expect(root.hidden).toBe(true);
+    // ...but a paired die still drives the tray, which is where it is USED.
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle', status: 'ready' }]);
+    expect(root.querySelector('.dice-physical-status')).not.toBeNull();
   });
 
   it('keeps the set when hidden for another reason', () => {

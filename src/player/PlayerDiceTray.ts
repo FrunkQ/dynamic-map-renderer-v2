@@ -6,6 +6,9 @@
  * than options hidden inside one. That is the whole interaction, and it is the
  * point — a player at a table should not be operating software.
  *
+ * Pairing physical dice is NOT here: that is setup, done once at the start of a
+ * game, and it lives with the other settings. This rail is for playing.
+ *
  * WHISPER is a mode, not a per-chip flag: arm it, and whatever you roll next
  * goes to the GM and nobody else. It resets itself after ten minutes so nobody
  * spends an evening whispering by accident, and it says so when it does — a
@@ -23,9 +26,6 @@ export interface PlayerDiceTrayOptions {
   onRoll: (entry: DiceButton, whisper: boolean) => void;
   /** Whisper armed / disarmed — the caller says so on screen when it lapses. */
   onWhisperChange?: (armed: boolean, reason: 'user' | 'timeout') => void;
-  /** v2.19.5 — the player asked to pair a physical die. Only offered where Web
-   *  Bluetooth can actually work. */
-  onConnectDice?: () => void;
 }
 
 export class PlayerDiceTray {
@@ -37,7 +37,6 @@ export class PlayerDiceTray {
   private physicalDice: { id: string; name: string; status?: 'connecting' | 'ready' | 'lost' }[] = [];
   private collecting = 0;
   private rerolled: string | null = null;
-  private canPair = false;
   private whisper = false;
   private whisperTimer: ReturnType<typeof setTimeout> | null = null;
   private rail: HTMLElement;
@@ -61,13 +60,6 @@ export class PlayerDiceTray {
   }
 
   get isWhispering(): boolean { return this.whisper; }
-
-  /** Offer pairing at all? False where Web Bluetooth cannot work, and then the
-   *  player is never shown a button that would only disappoint them. */
-  setPairingAvailable(available: boolean): void {
-    this.canPair = available;
-    this._render();
-  }
 
   /** The dice this player has on the table now, and how each is doing. */
   setPhysicalDice(dice: { id: string; name: string; status?: 'connecting' | 'ready' | 'lost' }[]): void {
@@ -107,7 +99,7 @@ export class PlayerDiceTray {
     this.rail.replaceChildren();
     // With real dice paired there is nothing to tap, but the tray still has a
     // job: it says the dice are live, and it holds the whisper toggle.
-    this.root.hidden = !this.enabled || (this.set.length === 0 && this.physicalDice.length === 0 && !this.canPair);
+    this.root.hidden = !this.enabled || (this.set.length === 0 && this.physicalDice.length === 0);
     this.root.classList.toggle('is-whisper', this.whisper);
     if (this.root.hidden) return;
 
@@ -152,19 +144,8 @@ export class PlayerDiceTray {
       + '</svg><span>Whisper</span>';
     toggle.addEventListener('click', () => this._setWhisper(!this.whisper, 'user'));
     this.rail.appendChild(toggle);
-
-    // Pairing lives at the end of the rail, and only where it can work.
-    if (this.canPair && this.opts.onConnectDice) {
-      const pair = document.createElement('button');
-      pair.type = 'button';
-      pair.className = 'dice-pair-btn';
-      pair.title = this.physicalDice.length > 0
-        ? 'Add another of your own dice'
-        : 'Use your own Pixels dice instead of these buttons';
-      pair.textContent = this.physicalDice.length > 0 ? '+ die' : 'My dice';
-      pair.addEventListener('click', () => this.opts.onConnectDice?.());
-      this.rail.appendChild(pair);
-    }
+    // No pairing button here on purpose: pairing dice is a once-a-game thing
+    // and belongs with the rest of the setup, not on the rail you use mid-play.
   }
 
   private _statusText(): string {

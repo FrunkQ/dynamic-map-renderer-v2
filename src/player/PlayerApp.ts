@@ -433,7 +433,6 @@ export class PlayerApp {
     if (diceTrayEl && !this._isPreviewMode()) {
       this._diceTray = new PlayerDiceTray(diceTrayEl, {
         onRoll: (entry, whisper) => void this._rollDice(entry, whisper),
-        onConnectDice: () => void this._connectPhysicalDice(),
         onWhisperChange: (armed, reason) => {
           // Never let the mode change silently: the first they would know is a
           // secret roll on the table screen.
@@ -445,9 +444,8 @@ export class PlayerApp {
           });
         },
       });
-      // Real dice are only offered where Web Bluetooth can actually work.
-      this._diceTray.setPairingAvailable(isPhysicalDiceSupported());
-      // ...and dice already known to this browser come back by themselves.
+      // Dice already known to this browser come back by themselves; pairing a
+      // new one is in the action menu, since it is a once-a-game thing.
       void this._reconnectKnownDice();
     }
     // v2.16.77 — read-only whiteboard mirrored from the GM.
@@ -1366,6 +1364,15 @@ export class PlayerApp {
         label: `Dice show me: ${wording[current]}`,
         onSelect: () => setDiceDetailPreference(nextOf[current]),
       });
+      // Pairing your own dice: once a game, so it lives here rather than on the
+      // rail. Only offered where Web Bluetooth can actually work.
+      if (isPhysicalDiceSupported()) {
+        const paired = this._pixels?.connected.length ?? 0;
+        items.push({
+          label: paired > 0 ? `Pair another die (${paired} connected)` : 'Use my own Pixels dice…',
+          onSelect: () => void this._connectPhysicalDice(),
+        });
+      }
       // The other axis: not how much, but what they look like. Only worth
       // offering when this player is actually being shown dice.
       if (current === 'full') {

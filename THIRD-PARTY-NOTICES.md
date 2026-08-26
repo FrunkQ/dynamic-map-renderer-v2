@@ -53,15 +53,6 @@ The workspace database. <https://github.com/jakearchibald/idb>
 
 > Copyright (c) 2016, Jake Archibald
 
-### @vercel/analytics (MPL-2.0)
-
-**Only in builds produced by Vercel's CI** — that is mappadux.com and
-beta.mappadux.com. The import is gated behind `__VERCEL_DEPLOY__`, so a
-self-hosted or local build tree-shakes it out entirely and ships no analytics
-code at all. Used unmodified; source at
-<https://github.com/vercel/analytics>, and the MPL-2.0 text travels with the
-package.
-
 ---
 
 ## Fonts
@@ -105,6 +96,5 @@ Full licence: <https://www.apache.org/licenses/LICENSE-2.0>
 
 Anything added from here on goes in this file WHEN it is added, rather than
 being audited back in later. `npm ls --omit=dev --depth=0` shows what actually
-ships; a dependency that is only imported behind a build flag (as
-`@vercel/analytics` is) should say so rather than implying every build carries
-it.
+ships. A dependency imported only behind a build flag is not part of every
+distribution, and this file covers what a Mappadux build actually contains.

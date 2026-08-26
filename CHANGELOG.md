@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.19.11 - 2026-08-26
+
+Pairing dice is a once-a-game thing, so it now lives with the rest of the setup rather than on the dice rail: yours in Settings > Dice, a player's in their right-click menu. The rail is for playing.
+
 ## v2.19.10 - 2026-08-26
 
 Third-party notices completed: every runtime dependency and all twelve bundled font families now carry their copyright line. Two of the fonts turn out to be Apache-2.0 rather than OFL, and are listed as such.
