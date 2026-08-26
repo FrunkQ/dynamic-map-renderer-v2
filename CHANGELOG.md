@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.7 - 2026-08-26
+
+**Dice roll across the map.** They come in from an edge, bounce off the sides a couple of times and settle where they fall, with the total catching up underneath them - instead of lining up in a corner. It is all theatre: the result is decided before anything moves, so the dice only have to look like they are rolling. Nothing ever lands under the tray or off the edge, on any screen size.
+
+**The GM gets the players' rail.** Your dice are an overlay along the bottom of your canvas now - the same one players get, and where your own Pixels dice pair. Your own rolls land on your canvas; everyone else's still go quietly to the feed. It can be switched off per screen.
+
+**Dice setup moved out of the sidebar into Settings > Dice**, because that is what it is: the set, the systems, who sees what, the colours and the celebration direction all live there, and the sidebar has one less panel. Eight ready-made systems to start from - d20, d6 pool, Fate/Blades, Shadowrun, L5R, World of Darkness, Savage Worlds and roll-under - and the formula box tells you what a roll can come to as you type it.
+
 ## v2.19.6 - 2026-08-26
 
 **More dice systems, written in plain words.** Alongside `adv` and `dis`, a formula can now say what it does: `1d6 burst` (a die at its maximum rolls again and adds - exploding dice), `4d6 keep 3` (or `keep low 3`), and `12d6 target 5` (a success pool, where the result is how many dice reached 5 rather than their sum). They combine, so L5R roll-and-keep is `5d10 burst keep 3` and World of Darkness is `8d10 burst target 8`. Pools also notice a Shadowrun glitch when more than half the dice come up 1, and say so.

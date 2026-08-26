@@ -143,6 +143,19 @@ chips, because the GM authored the vocabulary.
 Mirrored in the player action menu (the established second route), which also
 carries the viewer's own **Dice display** cycle: full -> lines -> off.
 
+### 5.1b GM — an overlay, not a panel
+
+The GM rolls from the SAME rail the players get, along the bottom of their
+canvas, and their own Pixels dice pair there too. Everything else about dice is
+SETUP and lives in Settings > Dice: the set, the systems, who sees what, the
+colours, the celebration direction. That is the split — once a game is running
+you need the dice, not the rules that made them, and the sidebar got its space
+back. The rail can be switched off per screen ("Show my dice on the map").
+
+The GM's OWN roll lands on their canvas like anyone's; everyone else's stays in
+the feed. Those are different things: a GM asked not to have the table's dice
+thrown at their screen, not to be denied their own.
+
 ### 5.2 GM — rolls are chat
 
 A roll becomes a `ThreadMessage` with `kind: 'roll'` in the existing
@@ -171,8 +184,18 @@ there, not on five phones.
 - **Screen space, not map space.** PingLayer is map-anchored; dice must not be,
   or they swim when the GM pans and can land in the letterbox or outside the
   calibrated crop. Dice belong to the surface: a tray zone along the bottom.
-- One lane per roller, in that roller's colour and captioned with their name,
-  so two people rolling at once do not collide.
+- Dice are THROWN across the surface: in from an edge, two or three bounces off
+  the sides, slowing to a stop where they fall (`dicePath.ts`). It is pure
+  theatre — the result was decided before anything moved, and the path is
+  generated from a seed, so all the animation does is look like a roll. Web
+  Animations, transforms only, and a browser without them simply shows the dice
+  where they landed.
+- The total catches up with them: a caption parked under wherever the handful
+  came to rest, rather than a fixed corner. One throw per roller, in their
+  colour, so two people rolling at once keep their own dice and their own total.
+- Nothing lands under the tray or off the edge, on any surface: the path takes
+  insets and clamps, which is the part `dicePath.test.ts` pins down (including a
+  phone in portrait with dice too big for it).
 - Landed dice FADE after a few seconds (7s on a player's screen, 12s on the
   table, which people look up at a beat later). Dice are a moment; the record
   is the sentence in the GM's feed. Rolling again catches a fading hand and
@@ -201,6 +224,19 @@ Marked per DIE, and only once it has LANDED — a flare during the tumble would
 fire on every face flickering past. When EVERY counted die is at its best the
 lane itself lights and the total pulses, because that is a different event from
 one die being lucky.
+
+### 5.6 Mechanics, in words
+
+The grammar grew past `NdM` because tables do not all roll the same way, but it
+grew in WORDS rather than symbols — `adv` and `dis` set the pattern, so:
+`burst` (exploding), `keep 3` / `keep low 3`, `target 5` (a success pool). They
+combine: `5d10 burst keep 3` is L5R, `8d10 burst target 8` is World of Darkness.
+A GM has to be able to read their own set back a month later, which `5d10!k3`
+does not allow.
+
+Ready-made systems in Settings > Dice: d20, d6 pool, Fate/Blades, Shadowrun,
+L5R, World of Darkness, Savage Worlds, and roll-under (which also flips the
+celebration, because that is the whole point of the system).
 
 ## 6. Rendering fidelity
 
