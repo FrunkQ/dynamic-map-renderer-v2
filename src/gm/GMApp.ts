@@ -32,8 +32,11 @@ import { PlayersPanel } from './PlayersPanel.ts';
 import { MessageThreads } from './MessageThreads.ts';
 import { buildMessageThreadPanel } from './MessageThreadPanel.ts';
 import { buildAllThreadsPanel, type AllThreadsFilter } from './AllThreadsPanel.ts';
-import { DicePanel } from './DicePanel.ts';
+
 import { rollFormula, describeRollSentence, type RollOutcome } from '../dice/roll.ts';
+import { DiceLayer } from '../rendering/DiceLayer.ts';
+import { PlayerDiceTray } from '../player/PlayerDiceTray.ts';
+import { isPhysicalDiceSupported } from '../dice/physicalRoll.ts';
 import { detailFor } from '../dice/dicePolicy.ts';
 import { GM_DIE_BASE, GM_DIE_INK } from '../rendering/dieColors.ts';
 
@@ -83,7 +86,7 @@ import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode, generateInstanceId } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, getMap, saveMap, deleteMap, clearAssetLibraries, clearEverything, getActiveInstanceId } from '../storage/db.ts';
-import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet } from '../storage/localSettings.ts';
+import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet, isGmDiceTrayShown } from '../storage/localSettings.ts';
 import { seedDefaultMaps, reseedWelcomePack, WELCOME_PACK_VERSION } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
@@ -7069,16 +7072,39 @@ export class GMApp {
   private _rollAsGm(entry: import('../types.ts').DiceButton): void {
     const outcome = rollFormula(entry.formula);
     if (!outcome) return;
+    this._publishGmRoll(entry.label, outcome, entry.public === true);
+  }
+
+  /** One path for the GM's dice, whether tapped on the rail or thrown. */
+  private _publishGmRoll(label: string, outcome: RollOutcome, forcePublic: boolean): void {
+    const rollId = generateId();
+    const policy = getDicePolicy();
     this._publishRoll({
-      rollId: generateId(),
-      label: entry.label,
+      rollId,
+      label,
       outcome,
       fromPlayerId: null,
       fromName: 'You',
       fromColor: '#cfe0ff',
       whisper: false,
       fromGm: true,
-      forcePublic: entry.public === true,
+      forcePublic,
+    });
+    // The GM does not want everyone ELSE's dice thrown at their screen — that
+    // is what the feed is for — but their OWN roll they just made is worth
+    // watching land.
+    this._diceLayer?.showFull({
+      rollId,
+      label,
+      outcome,
+      rollerKey: GM_THREAD_KEY,
+      rollerName: 'You',
+      rollerColor: '#cfe0ff',
+      celebrate: policy.celebrate,
+      skin: {
+        base: policy.gmDieBase ?? GM_DIE_BASE,
+        ...(policy.gmDieInk ?? GM_DIE_INK ? { ink: policy.gmDieInk ?? GM_DIE_INK } : {}),
+      },
     });
   }
 
@@ -7457,15 +7483,56 @@ export class GMApp {
     if (btn) btn.onclick = () => this._openAllThreads();
     this._refreshAllThreadsBadge();
 
-    // v2.19 Dice. Mounted here because it is the same subject: what the people
-    // at the table are doing, rather than what is on the map.
-    this._dicePanel = new DicePanel({
-      onRoll: (entry) => this._rollAsGm(entry),
-      onSetChanged: () => this._broadcastPlayerFeatures(),
-    });
-    this._dicePanel.mount();
+    this._mountDiceOverlay();
   }
-  private _dicePanel: DicePanel | null = null;
+
+  /**
+   * v2.19.7 — the GM's dice are an OVERLAY, the same rail the players get.
+   * Everything else about dice is setup and lives in Settings; mid-game the
+   * only thing you need is the dice themselves.
+   */
+  private _diceTray: PlayerDiceTray | null = null;
+  private _diceLayer: DiceLayer | null = null;
+  private _gmPixels: import('../dice/pixelsLink.ts').PixelsLink | null = null;
+
+  private _mountDiceOverlay(): void {
+    const layerEl = document.getElementById('dice-layer');
+    if (layerEl && !this._diceLayer) this._diceLayer = new DiceLayer(layerEl, 'viewer');
+    const trayEl = document.getElementById('dice-tray');
+    if (trayEl && !this._diceTray) {
+      this._diceTray = new PlayerDiceTray(trayEl, {
+        onRoll: (entry) => this._rollAsGm(entry),
+        onConnectDice: () => void this._connectGmDice(),
+      });
+      // A GM may want both: their own dice for the moments that deserve them,
+      // and the rail for everything else.
+      this._diceTray.setPairingAvailable(isPhysicalDiceSupported());
+    }
+    this._refreshDiceOverlay();
+  }
+
+  /** Keep the overlay in step with the set. Note the GM's rail does NOT follow
+   *  the player permission: switching players' dice off is about players, and
+   *  rolling for the table is still useful when they may not. */
+  private _refreshDiceOverlay(): void {
+    this._diceTray?.update(getDiceSet(), isGmDiceTrayShown());
+  }
+
+  /** The GM's own physical dice — same mirror the players get. */
+  private async _connectGmDice(): Promise<void> {
+    if (!isPhysicalDiceSupported()) return;
+    try {
+      if (!this._gmPixels) {
+        const { PixelsLink } = await import('../dice/pixelsLink.ts');
+        this._gmPixels = new PixelsLink({
+          onRoll: (outcome) => this._publishGmRoll(outcome.formula, outcome, false),
+          onCollecting: (count) => this._diceTray?.setCollecting(count),
+          onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(dice.map((d) => ({ id: d.id, name: d.name }))),
+        });
+      }
+      await this._gmPixels.addDie();
+    } catch { /* chooser cancelled, or the die would not connect */ }
+  }
 
   /** Which thread (if any) is already on screen — '*' when the All Players feed
    *  is open, since that shows every thread at once. */
@@ -8109,6 +8176,10 @@ export class GMApp {
         await clearEverything();
         location.reload();
       },
+      onDiceChanged: () => {
+        this._broadcastPlayerFeatures();
+        this._refreshDiceOverlay();
+      },
       onDeleteAllData: async () => {
         // Nuke everything: IDB + ALL local settings (including API keys,
         // projector setups, and the suppress-seed flag). On reload init
@@ -8336,9 +8407,9 @@ export class GMApp {
       // the initiative event re-sorts the tracker to the imported direction.
       this._broadcastPlayerFeatures();
       this.initiativeTracker?.setSortDirection(getInitiativeSortDirection());
-      // v2.19 — the pack carries its own dice: redraw the panel so the GM sees
-      // the set they were just handed, rather than the one they had before.
-      this._dicePanel?.refresh();
+      // v2.19 — the pack carries its own dice: the overlay shows the set the GM
+      // was just handed rather than the one they had before.
+      this._refreshDiceOverlay();
 
       // Retrofit pass — auto-detect grid scale on any map in the loaded pack
       // that doesn't already carry one. Manually-calibrated maps and no-grid

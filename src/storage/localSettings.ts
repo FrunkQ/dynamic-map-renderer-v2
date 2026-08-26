@@ -415,6 +415,25 @@ export function setDiceDetailPreference(d: DiceDetail): void {
 }
 
 /**
+ * v2.19.7 Dice — show the GM's own dice rail over their canvas. Their screen,
+ * their choice, so it does not travel with the pack. On by default: a GM who
+ * has set dice up presumably wants to roll them.
+ */
+export const GM_DICE_TRAY_KEY = 'mappadux:gm_dice_tray';
+
+export function isGmDiceTrayShown(): boolean {
+  try { return localStorage.getItem(GM_DICE_TRAY_KEY) !== '0'; }
+  catch { return true; }
+}
+
+export function setGmDiceTrayShown(shown: boolean): void {
+  try {
+    if (shown) localStorage.removeItem(GM_DICE_TRAY_KEY);
+    else localStorage.setItem(GM_DICE_TRAY_KEY, '0');
+  } catch { /* private mode etc. */ }
+}
+
+/**
  * v2.19.3 Dice — what dice LOOK like on this screen: shaped and shaded, or
  * plain numbered tiles. Separate axis from how MUCH you see (full / line /
  * none): this is fidelity and taste, that is attention. Per device and never

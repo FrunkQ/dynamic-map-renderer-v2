@@ -7200,6 +7200,9 @@ option.select-option--add {
   opacity: 0.9; transition: opacity 140ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 .dice-tray:hover { opacity: 1; }
+/* On the GM screen the tray lives INSIDE the canvas, so it centres over the map
+   rather than over the window (which the sidebar makes a different thing). */
+#canvas-wrapper .dice-tray { position: absolute; max-width: min(calc(100% - 24px), 900px); }
 .dice-tray[hidden] { display: none; }
 .dice-tray-rail { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: thin; }
 .dice-chip {
@@ -7249,22 +7252,27 @@ option.select-option--add {
 }
 .dice-tray.is-whisper .dice-chip { filter: saturate(0.55); border-color: rgba(165, 180, 252, 0.3); }
 
-/* Where dice land. Lanes sit along the bottom; one per roller, so two people
-   rolling at once do not collide. */
+/* v2.19.8 — dice are THROWN across the surface and come to rest where they
+   fall, rather than lining up in a slot. The lane is now the whole surface: one
+   per roller, so two people rolling at once keep their own dice and their own
+   total. Everything is transform-positioned, so nothing reflows mid-throw. */
 .dice-layer { position: absolute; inset: 0; z-index: 8; pointer-events: none; overflow: hidden; }
-.dice-lanes {
-  position: absolute; left: 0; right: 0; bottom: 74px;
-  display: flex; justify-content: center; align-items: flex-end; gap: 12px; flex-wrap: wrap;
-  padding: 0 12px;
-}
-.dice-lane {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 8px 12px; border-radius: 10px;
-  background: rgba(12, 14, 20, 0.72);
+.dice-lanes { position: absolute; inset: 0; }
+.dice-lane { position: absolute; inset: 0; }
+.dice-faces { position: absolute; inset: 0; }
+.die { position: absolute; top: 0; left: 0; will-change: transform; }
+/* The total catches up with the dice: parked under where they landed. */
+.dice-caption {
+  position: absolute; top: 0; left: 0;
+  display: flex; align-items: baseline; gap: 6px; white-space: nowrap;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(12, 14, 20, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top: 3px solid var(--roller-color, rgba(255, 255, 255, 0.4));
+  border-left: 3px solid var(--roller-color, rgba(255, 255, 255, 0.4));
+  opacity: 0; transition: opacity 220ms ease 120ms;
 }
-.dice-lane.is-whisper { border-color: rgba(165, 180, 252, 0.6); background: rgba(24, 24, 48, 0.8); }
+.dice-lane.is-settled .dice-caption { opacity: 1; }
+.dice-lane.is-whisper .dice-caption { border-color: rgba(165, 180, 252, 0.6); background: rgba(24, 24, 48, 0.86); }
 /* Dice are a moment, not a record: they fade a few seconds after landing and
    the roll survives as a sentence in the GM's feed. Rolling again catches a
    fading hand and brings it back. */
@@ -7278,14 +7286,14 @@ option.select-option--add {
 .dice-lane.is-settled .die--good .die-rim { stroke: #f2c14e; stroke-width: 5; }
 .dice-lane.is-settled .die--bad .die-rim { stroke: #7c8698; stroke-width: 4; }
 /* Every die at its best is a different event from one of them being lucky. */
-.dice-lane.is-allgood {
-  border-top-color: #f2c14e;
+.dice-lane.is-allgood .dice-caption {
+  border-color: #f2c14e;
   box-shadow: 0 0 18px rgba(242, 193, 78, 0.35);
 }
 .dice-lane.is-allgood .dice-lane-total { color: #f7d98a; animation: dice-crit 700ms ease-out; }
 .dice-lane.is-allbad .dice-lane-total { color: #97a2b4; }
 /* A pool mostly showing ones: Shadowrun's glitch, and its cousins. */
-.dice-lane.is-glitch { border-top-color: #b0788f; }
+.dice-lane.is-glitch .dice-caption { border-color: #b0788f; }
 .dice-lane.is-glitch .dice-lane-label::after { content: ' - glitch'; color: #d09ab0; }
 @keyframes dice-crit {
   0%   { transform: scale(1.35); text-shadow: 0 0 18px rgba(242, 193, 78, 0.9); }
@@ -7296,7 +7304,6 @@ option.select-option--add {
 }
 .dice-lane-name  { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
 .dice-lane-label { font-size: 10px; color: var(--text-dim); }
-.dice-faces { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin: 3px 0; }
 
 /* v2.19.2 — a die that looks like a die. The silhouette comes from a clip-path
    the shape table also draws the facets from (src/rendering/dieShapes.ts), so
@@ -7348,10 +7355,7 @@ option.select-option--add {
   transform: translate3d(-130%, 0, 0);
 }
 .dice-lane:not(.is-settled) .die::after { animation: die-shine 850ms linear infinite; }
-.dice-lane:not(.is-settled) .die { animation: die-wobble 300ms ease-in-out infinite alternate; }
-/* Out of lockstep, or a handful of dice reads as one object. */
-.dice-lane:not(.is-settled) .die:nth-child(2n) { animation-delay: -110ms; }
-.dice-lane:not(.is-settled) .die:nth-child(3n) { animation-delay: -190ms; }
+
 /* The shadow arrives only once they land: no filter runs during the animation. */
 .dice-lane.is-settled .die { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
 /* A die at its best glows instead. Must come AFTER the rule above: same
@@ -7361,23 +7365,21 @@ option.select-option--add {
    artwork, so turning the dice down to tiles must not turn the moment off. */
 .dice-lane.is-plain.is-settled .die--good { filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.8)); }
 .dice-lane.is-plain.is-settled .die--bad  { filter: none; }
-.dice-lane.is-settled .die { animation: die-land 220ms ease-out; }
 @keyframes die-shine  { from { transform: translate3d(-130%, 0, 0); } to { transform: translate3d(130%, 0, 0); } }
-@keyframes die-wobble { from { transform: rotate(-9deg) scale(0.94); } to { transform: rotate(9deg) scale(1.05); } }
-@keyframes die-land   { 0% { transform: scale(1.18) rotate(4deg); } 60% { transform: scale(0.96); } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .dice-lane .die, .dice-lane .die::after { animation: none !important; }
 }
 .dice-lane-total {
-  font-size: 22px; font-weight: 800; line-height: 1;
+  font-size: 18px; font-weight: 800; line-height: 1;
   color: var(--text-primary); font-variant-numeric: tabular-nums;
 }
 .dice-lane.is-settled .dice-lane-total { animation: dice-pop 260ms ease-out; }
 @keyframes dice-pop { from { transform: scale(0.7); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
 /* The table screen is read from across a room. */
-.dice-layer--table .dice-lanes { bottom: 40px; gap: 24px; }
-.dice-layer--table .dice-faces { gap: 8px; }
-.dice-layer--table .die { width: 54px; height: 54px; }
+.dice-layer--table .dice-caption { padding: 5px 14px; gap: 10px; }
+.dice-layer--table .dice-lane-total { font-size: 30px; }
+.dice-layer--table .dice-lane-name  { font-size: 15px; }
+.dice-layer--table .dice-lane-label { font-size: 13px; }
 .dice-layer--table .dice-lane.is-settled .die { filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.5)); }
 .dice-layer--table .dice-lane-total { font-size: 40px; }
 .dice-layer--table .dice-lane-name  { font-size: 15px; }

@@ -57,6 +57,7 @@ import {
 } from '../stagecraft/stagecraftStorage.ts';
 import { loadStoredIce, saveStoredIce, parseIceText, iceToText } from '../p2p/iceConfig.ts';
 import { getSseOrigin, setSseOrigin, SSE_ORIGIN_DEFAULT } from '../storage/localSettings.ts';
+import { buildDiceSettings } from './DiceSettings.ts';
 import { fetchInfo as fetchWledInfo, normaliseEndpoint } from '../stagecraft/wledClient.ts';
 import { fetchInfo as fetchQlcInfo, normaliseQlcEndpoint } from '../stagecraft/qlcClient.ts';
 import { wledConfigUrl, haConfigUrl, qlcConfigUrl } from '../stagecraft/configUrls.ts';
@@ -90,6 +91,10 @@ import { LLMClient } from '../ai/LLMClient.ts';
 export interface SettingsDialogCallbacks {
   onDeleteDb:        () => Promise<void> | void;
   onDeleteAllData:   () => Promise<void> | void;
+  /** v2.19.7 — the dice set, permission or policy changed in here. Viewers
+   *  need telling straight away: a GM editing the set mid-session expects it
+   *  on the players' trays before they close the dialog. */
+  onDiceChanged?:    () => void;
 }
 
 export class SettingsDialog {
@@ -100,6 +105,7 @@ export class SettingsDialog {
   };
 
   open(cb: SettingsDialogCallbacks): Promise<void> {
+    this._onDiceChanged = cb.onDiceChanged;
     this.overlay = this._build(cb);
     document.body.appendChild(this.overlay);
     document.addEventListener('keydown', this.onKey);
@@ -169,6 +175,7 @@ export class SettingsDialog {
     // ── Player Permissions / Game System / Reply Assistant ───────────────
     // v2.16.109 — split the old "Player Voice" section into three focused
     // ones so each reads on its own.
+    body.appendChild(this._buildDiceSection());
     body.appendChild(this._buildPlayerPermissionsSection());
     body.appendChild(this._buildGameSystemSection());
     body.appendChild(this._buildReplyAssistantSection());
@@ -627,6 +634,18 @@ export class SettingsDialog {
   }
 
   // ─── Player Voice ─────────────────────────────────────────────────────────
+
+  /** v2.19.7 — dice SETUP: sets, systems, who sees what, colours. Rolling is an
+   *  overlay on the canvas, because that is the only part you need mid-game. */
+  private _buildDiceSection(): HTMLElement {
+    const sec = mkSection(
+      'Dice',
+      'The rolls your game asks for, and the house rules about who sees them. Both travel with the pack.',
+    );
+    buildDiceSettings(sec, { onChanged: () => this._onDiceChanged?.() });
+    return sec;
+  }
+  private _onDiceChanged: (() => void) | undefined;
 
   private _buildPlayerPermissionsSection(): HTMLElement {
     const sec = mkSection(
