@@ -163,13 +163,33 @@ there, not on five phones.
 
 ## 6. Rendering fidelity
 
-`full` is animated. v2.19 draws that in 2D (a short tumble, then the faces),
-with `prefers-reduced-motion` skipping straight to the result. The optional 3D
-version lands later as a **lazy chunk** loaded only when policy and device both
-say so — never in the main bundle, because the table screen is usually the
-weakest device in the house (a stick PC or a smart TV browser) and a player's
-phone is the second weakest. A per-device `diceRender` setting arrives with it;
-until then there is nothing for it to choose between.
+`full` is animated: the dice tumble, catch the light, and land.
+
+**Faked, not simulated** — and that is the point. There is no geometry, no
+physics and no dependency. Each die is one `<span>` clipped to its silhouette
+with a handful of flat SVG polygons inside it, shaded in three tones from one
+tint with the light coming from the top left. The shine is a static rim
+highlight plus one gradient sweep that runs while the die is in the air. The
+result is known before anything moves, so all the animation has to do is look
+like a roll.
+
+`src/rendering/dieShapes.ts` holds one table of shapes: d4 triangle, d6
+bevelled cube face, d8 diamond, d10 kite, d12 pentagon, d20 hexagon-with-a-
+triangle, Fate as a cube, anything else as a cube. The outline drives BOTH the
+SVG facets and the CSS clip-path, so silhouette and shading cannot drift apart.
+
+Rules that keep it cheap enough for the weakest screen in the house — usually
+the table's stick PC, with a player's phone second:
+
+- Only `transform` and `opacity` animate. No SVG filters anywhere.
+- The drop shadow appears only once a die has LANDED, so no filter is being
+  recomputed while anything moves.
+- `prefers-reduced-motion` skips straight to the faces.
+- The tumble is timed by the CLOCK, not by counting ticks: a browser throttles
+  timers in a hidden tab to about one a second, and a player who looks away
+  must come back to dice that landed, not to a roll still tumbling.
+- Nothing filters dice from outside either: the visual filter is applied to the
+  map shader and the marker/video layers, never to `#dice-layer`.
 
 Whatever draws it, the faces come down the wire. See section 4.
 
@@ -184,8 +204,7 @@ Whatever draws it, the faces come down the wire. See section 4.
 
 ## 8. Build status
 
-Sections 1-5 shipped on beta at v2.19.0. Section 6 (3D) NOT started - it is a
-design choice, not just work: see below.
+Sections 1-6 shipped on beta (1-5 at v2.19.0, the faceted dice at v2.19.2).
 
 Verified live (GM at localhost:5180, a real player window, and a projector
 window over the local channel):
@@ -204,9 +223,9 @@ Not verified by a human: a SECOND player seeing someone else's roll as a line
 (same code path as the roller's line, fed `detailOthers`), and any of it over a
 real remote connection rather than the local channel.
 
-Open decision for section 6: "flashy 3D" could mean CSS/SVG pseudo-3D (dice
-shaped per die type, spinning with perspective, landing with a bounce - no
-dependency, fine on a stick PC) or genuine WebGL dice with physics (a new
-dependency, a real cost on the weakest screen in the house, and the thing most
-VTTs mean by the phrase). Both land as a lazy chunk behind the same `full`
-detail, so nothing above changes either way.
+Section 6 settled as CSS/SVG with faked lighting rather than WebGL physics:
+cheap everywhere, no dependency, and the result was never in doubt anyway. The
+shapes, facet tones, clip-paths, the no-filter-while-moving rule and the
+throttled-tab landing are covered by tests; how it LOOKS has not been seen by a
+human - the preview pane cannot render (0x0 viewport, `visibilityState:
+hidden`), so that is a thirty-second eyeball on a real screen.

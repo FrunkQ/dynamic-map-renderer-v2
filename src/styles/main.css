@@ -7250,14 +7250,59 @@ option.select-option--add {
 .dice-lane.is-whisper { border-color: rgba(165, 180, 252, 0.6); background: rgba(24, 24, 48, 0.8); }
 .dice-lane-name  { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
 .dice-lane-label { font-size: 10px; color: var(--text-dim); }
-.dice-faces { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin: 2px 0; }
-.die {
-  display: flex; align-items: center; justify-content: center;
-  min-width: 26px; height: 26px; padding: 0 3px; border-radius: 6px;
-  background: rgba(255, 255, 255, 0.9); color: #10131c;
-  font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums;
+.dice-faces { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin: 3px 0; }
+
+/* v2.19.2 — a die that looks like a die. The silhouette comes from a clip-path
+   the shape table also draws the facets from (src/rendering/dieShapes.ts), so
+   the two can never drift. Three tones from ONE tint, light from the top left:
+   no geometry, no physics, no dependency, and nothing filters while anything
+   moves — the table screen is the weakest device in the house. */
+.dice-layer {
+  --die-hi: #f6f8ff; --die-mid: #dde3f1; --die-lo: #b7c0d6; --die-ink: #0e1119;
 }
-.die--dropped { opacity: 0.4; text-decoration: line-through; }
+.dice-lane {
+  /* Plain values first so a browser without color-mix still gets bone-white
+     dice; the tint below is a bonus, not a requirement. */
+  --die-hi: #f7f9ff; --die-mid: #dde3f1; --die-lo: #aeb8d0;
+  --die-hi: color-mix(in srgb, var(--roller-color) 12%, #f7f9ff);
+  --die-mid: color-mix(in srgb, var(--roller-color) 20%, #dde3f1);
+  --die-lo: color-mix(in srgb, var(--roller-color) 30%, #aeb8d0);
+}
+.die { position: relative; flex: 0 0 auto; width: 30px; height: 30px; }
+.die-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.die-text {
+  fill: var(--die-ink); font-weight: 800; font-variant-numeric: tabular-nums;
+  font-family: inherit; paint-order: stroke;
+}
+.die-slash { stroke: rgba(16, 19, 28, 0.6); stroke-width: 7; stroke-linecap: round; }
+.die--dropped { opacity: 0.45; }
+/* The shine. A static rim highlight where the light is, plus a sweep across the
+   facets while the die is still in the air. */
+.die::before,
+.die::after { content: ''; position: absolute; pointer-events: none; }
+.die::before {
+  inset: 0; z-index: 1;
+  background: radial-gradient(120% 90% at 20% 10%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 55%);
+}
+.die::after {
+  inset: -40%; z-index: 2;
+  background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.75) 50%, transparent 58%);
+  transform: translate3d(-130%, 0, 0);
+}
+.dice-lane:not(.is-settled) .die::after { animation: die-shine 850ms linear infinite; }
+.dice-lane:not(.is-settled) .die { animation: die-wobble 300ms ease-in-out infinite alternate; }
+/* Out of lockstep, or a handful of dice reads as one object. */
+.dice-lane:not(.is-settled) .die:nth-child(2n) { animation-delay: -110ms; }
+.dice-lane:not(.is-settled) .die:nth-child(3n) { animation-delay: -190ms; }
+/* The shadow arrives only once they land: no filter runs during the animation. */
+.dice-lane.is-settled .die { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+.dice-lane.is-settled .die { animation: die-land 220ms ease-out; }
+@keyframes die-shine  { from { transform: translate3d(-130%, 0, 0); } to { transform: translate3d(130%, 0, 0); } }
+@keyframes die-wobble { from { transform: rotate(-9deg) scale(0.94); } to { transform: rotate(9deg) scale(1.05); } }
+@keyframes die-land   { 0% { transform: scale(1.18) rotate(4deg); } 60% { transform: scale(0.96); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .dice-lane .die, .dice-lane .die::after { animation: none !important; }
+}
 .dice-lane-total {
   font-size: 22px; font-weight: 800; line-height: 1;
   color: var(--text-primary); font-variant-numeric: tabular-nums;
@@ -7266,7 +7311,9 @@ option.select-option--add {
 @keyframes dice-pop { from { transform: scale(0.7); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
 /* The table screen is read from across a room. */
 .dice-layer--table .dice-lanes { bottom: 40px; gap: 24px; }
-.dice-layer--table .die { min-width: 44px; height: 44px; font-size: 24px; border-radius: 9px; }
+.dice-layer--table .dice-faces { gap: 8px; }
+.dice-layer--table .die { width: 54px; height: 54px; }
+.dice-layer--table .dice-lane.is-settled .die { filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.5)); }
 .dice-layer--table .dice-lane-total { font-size: 40px; }
 .dice-layer--table .dice-lane-name  { font-size: 15px; }
 .dice-layer--table .dice-lane-label { font-size: 13px; }

@@ -19,6 +19,7 @@
  */
 
 import type { RollOutcome } from '../dice/roll.ts';
+import { buildDie, type DieElement } from './dieShapes.ts';
 
 export interface DiceShow {
   rollId: string;
@@ -41,6 +42,10 @@ const MAX_LANES = 4;
 
 export class DiceLayer {
   private lanes = new Map<string, HTMLElement>();
+  /** The tumble running in each lane. Rolling again before the last one lands
+   *  must STOP it: it holds the old dice, and its finish would mark the new
+   *  roll settled early — dice sitting still while their numbers flicker. */
+  private tumbles = new Map<string, ReturnType<typeof setInterval>>();
   private lineHost: HTMLElement;
   private laneHost: HTMLElement;
   private timers = new Set<ReturnType<typeof setTimeout>>();
@@ -73,14 +78,11 @@ export class DiceLayer {
 
     const faces = document.createElement('div');
     faces.className = 'dice-faces';
-    const dieEls: HTMLElement[] = [];
+    const dieEls: DieElement[] = [];
     for (const die of d.outcome.dice) {
-      const el = document.createElement('span');
-      el.className = 'die' + (die.dropped ? ' die--dropped' : '');
-      el.dataset.sides = String(die.sides);
-      el.textContent = faceText(die.sides, die.value);
-      faces.appendChild(el);
-      dieEls.push(el);
+      const built = buildDie(die.sides, faceText(die.sides, die.value), die.dropped === true);
+      faces.appendChild(built.el);
+      dieEls.push(built);
     }
 
     const total = document.createElement('div');
@@ -96,24 +98,33 @@ export class DiceLayer {
     }
 
     // The tumble: flicker plausible faces, then land on the ones we were given.
+    // While `is-settled` is absent the dice wobble and a highlight sweeps across
+    // them; both are transforms, and the drop shadow only appears once they
+    // land, so nothing filters while anything moves.
+    // Timed by the CLOCK, not by counting ticks. A browser throttles timers in
+    // a hidden tab to about one a second, and a player who looks away mid-roll
+    // must come back to dice that landed — not to a tumble still going nine
+    // seconds later.
     const finals = d.outcome.dice.map((die) => faceText(die.sides, die.value));
-    let elapsed = 0;
-    const spin = setInterval(() => {
-      elapsed += TUMBLE_STEP_MS;
+    const startedAt = now();
+    const spin: ReturnType<typeof setInterval> = setInterval(() => {
+      const elapsed = now() - startedAt;
       for (let i = 0; i < dieEls.length; i++) {
         const die = d.outcome.dice[i]!;
-        dieEls[i]!.textContent = die.sides === 'F'
+        dieEls[i]!.setValue(die.sides === 'F'
           ? faceText('F', Math.floor(Math.random() * 3) - 1)
-          : String(Math.floor(Math.random() * (die.sides as number)) + 1);
+          : String(Math.floor(Math.random() * (die.sides as number)) + 1));
       }
       total.textContent = '…';
       if (elapsed >= TUMBLE_MS) {
         clearInterval(spin);
-        for (let i = 0; i < dieEls.length; i++) dieEls[i]!.textContent = finals[i]!;
+        this.tumbles.delete(d.rollerKey);
+        for (let i = 0; i < dieEls.length; i++) dieEls[i]!.setValue(finals[i]!);
         total.textContent = String(d.outcome.total);
         lane.classList.add('is-settled');
       }
     }, TUMBLE_STEP_MS);
+    this.tumbles.set(d.rollerKey, spin);
   }
 
   /** A line: someone else rolled, here is what it came to. Fades by itself. */
@@ -159,6 +170,8 @@ export class DiceLayer {
   clear(): void {
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
+    for (const t of this.tumbles.values()) clearInterval(t);
+    this.tumbles.clear();
     this.lanes.clear();
     this.laneHost.replaceChildren();
     this.lineHost.replaceChildren();
@@ -171,6 +184,8 @@ export class DiceLayer {
 
   /** One lane per roller, so two people rolling at once do not collide. */
   private _lane(d: DiceShow): HTMLElement {
+    const running = this.tumbles.get(d.rollerKey);
+    if (running !== undefined) { clearInterval(running); this.tumbles.delete(d.rollerKey); }
     const existing = this.lanes.get(d.rollerKey);
     if (existing) {
       existing.classList.remove('is-settled', 'is-whisper');
@@ -187,9 +202,16 @@ export class DiceLayer {
       if (oldestKey === undefined) break;
       this.lanes.get(oldestKey)?.remove();
       this.lanes.delete(oldestKey);
+      const stale = this.tumbles.get(oldestKey);
+      if (stale !== undefined) { clearInterval(stale); this.tumbles.delete(oldestKey); }
     }
     return lane;
   }
+}
+
+/** Monotonic where available; Date.now() is fine as a fallback here. */
+function now(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
 /** Fate dice read as +/-/0; everything else is its number. */

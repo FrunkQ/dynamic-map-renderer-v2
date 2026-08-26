@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.2 - 2026-08-26
+
+**Dice that look like dice.** Each one is now cut to its own silhouette - the d20 hexagon with a triangle looking at you, the d4 triangle, the d8 diamond, the d10 kite, the d12 pentagon, the d6 bevelled cube - and shaded across facets with the light coming from the top left, tinted towards the roller's colour. They wobble and catch a moving highlight while they are in the air, then land with a bounce and a shadow. A die advantage threw away is struck through rather than hidden, because seeing what you beat is half the pleasure.
+
+It is faked, deliberately: no 3D geometry, no physics, no new dependency, and no filter running while anything moves - the table screen is usually the weakest device in the house. The result was decided before the roll started; the animation only has to look like one.
+
+Also fixed: rolling again before the last roll landed now belongs entirely to the new roll, and a tab that was hidden mid-tumble comes back to dice that have landed rather than a roll still going.
+
 ## v2.19.1 - 2026-08-26
 
 Importing a pack now redraws the Dice panel, so you see the set the pack just handed you rather than the one you had before. Tests for the whisper timer.
