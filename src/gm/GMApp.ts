@@ -35,6 +35,7 @@ import { buildAllThreadsPanel, type AllThreadsFilter } from './AllThreadsPanel.t
 import { DicePanel } from './DicePanel.ts';
 import { rollFormula, describeRoll, type RollOutcome } from '../dice/roll.ts';
 import { detailFor } from '../dice/dicePolicy.ts';
+import { GM_DIE_BASE, GM_DIE_INK } from '../rendering/dieColors.ts';
 
 /** v2.19 — the GM's own rolls need a thread to live in; they have no player id.
  *  Never collides with a real one (those are generated ids). */
@@ -7142,6 +7143,9 @@ export class GMApp {
       detailOthers,
       detailTable,
       rollerClientId: r.rollerClientId ?? null,
+      // The GM's dice are their own thing; a player's are that player's colour,
+      // which every viewer already has in `fromColor`.
+      ...(r.fromGm ? { dieBase: ctx.policy.gmDieBase ?? GM_DIE_BASE, dieInk: ctx.policy.gmDieInk ?? GM_DIE_INK } : {}),
     });
   }
 

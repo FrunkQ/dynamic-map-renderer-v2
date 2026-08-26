@@ -1963,6 +1963,7 @@ export class PlayerApp {
           rollerName: msg.fromName,
           rollerColor: msg.fromColor,
           whisper: msg.whisper,
+          ...(msg.dieBase ? { skin: { base: msg.dieBase, ...(msg.dieInk ? { ink: msg.dieInk } : {}) } } : {}),
         });
         break;
       }

@@ -882,6 +882,7 @@ export class ProjectorApp {
           rollerName: msg.fromName,
           rollerColor: msg.fromColor,
           whisper: msg.whisper,
+          ...(msg.dieBase ? { skin: { base: msg.dieBase, ...(msg.dieInk ? { ink: msg.dieInk } : {}) } } : {}),
         };
         if (detail === 'full') this.diceLayer?.showFull(show);
         else if (detail === 'line') this.diceLayer?.showLine(show);

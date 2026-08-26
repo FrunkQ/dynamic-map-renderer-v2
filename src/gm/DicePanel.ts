@@ -14,6 +14,7 @@
 import type { DiceButton } from '../types.ts';
 import { isValidFormula, parseFormula } from '../dice/roll.ts';
 import { asDetail, type DiceDetail, type DicePolicy, type RollAudience } from '../dice/dicePolicy.ts';
+import { GM_DIE_BASE, GM_DIE_INK } from '../rendering/dieColors.ts';
 import {
   getDiceSet, setDiceSet, getDicePolicy, setDicePolicy, areDiceEnabled, setDiceEnabled,
 } from '../storage/localSettings.ts';
@@ -154,6 +155,23 @@ export class DicePanel {
     bind<DiceDetail>('dice-others-detail', policy.othersDetail, (v) => save({ othersDetail: asDetail(v, 'line') }));
     bind<string>('dice-roller-detail', policy.rollerDetail, (v) =>
       save({ rollerDetail: v === 'auto' ? 'auto' : asDetail(v, 'full') }));
+
+    // The GM's own dice. Black with gold by default: not one of the players'
+    // colours, and it should never read as one.
+    const base = document.getElementById('dice-gm-base') as HTMLInputElement | null;
+    const ink  = document.getElementById('dice-gm-ink') as HTMLInputElement | null;
+    if (base && ink) {
+      base.value = policy.gmDieBase ?? GM_DIE_BASE;
+      ink.value  = policy.gmDieInk  ?? GM_DIE_INK;
+      if (!valuesOnly) {
+        base.addEventListener('change', () => save({ gmDieBase: base.value }));
+        ink.addEventListener('change', () => save({ gmDieInk: ink.value }));
+        document.getElementById('dice-gm-colors-reset')?.addEventListener('click', () => {
+          base.value = GM_DIE_BASE; ink.value = GM_DIE_INK;
+          save({ gmDieBase: GM_DIE_BASE, gmDieInk: GM_DIE_INK });
+        });
+      }
+    }
 
     const pub = document.getElementById('dice-gm-public') as HTMLInputElement | null;
     if (pub) {

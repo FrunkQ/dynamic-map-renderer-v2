@@ -148,6 +148,35 @@ export function chooseDieStyle(pref: DieStylePreference, env: DeviceHints = {}):
   return 'shaped';
 }
 
+/**
+ * The mottle: a few soft blobs of light and shade across the face, so a die
+ * reads as cast resin rather than flat colour. DETERMINISTIC from a seed, so a
+ * given die keeps its markings while it tumbles instead of boiling, and two
+ * dice in the same hand are not identical twins.
+ *
+ * Kept to five blobs at under 15% — enough to catch the eye at table distance,
+ * far too little to fight the numeral for it.
+ */
+const MOTTLE_BLOBS = 5;
+
+function mottleFor(seed: number): { cx: number; cy: number; rx: number; ry: number; light: boolean; alpha: number }[] {
+  // A tiny LCG: same seed, same markings, no dependency.
+  let s = (seed * 1103515245 + 12345) >>> 0;
+  const next = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
+  const out = [];
+  for (let i = 0; i < MOTTLE_BLOBS; i++) {
+    out.push({
+      cx: 18 + next() * 64,
+      cy: 18 + next() * 64,
+      rx: 10 + next() * 22,
+      ry: 8 + next() * 20,
+      light: next() > 0.45,
+      alpha: 0.05 + next() * 0.09,
+    });
+  }
+  return out;
+}
+
 export interface DieElement {
   el: HTMLElement;
   /** Set the numeral — used by the tumble and to land on the real face. */
@@ -163,6 +192,8 @@ export function buildDie(
   faceText: string,
   dropped = false,
   style: DieStyle = 'shaped',
+  /** Varies the mottling between dice in the same hand. */
+  seed = 0,
 ): DieElement {
   const shape = shapeFor(sides);
   const plain = style === 'plain';
@@ -197,6 +228,22 @@ export function buildDie(
     poly.setAttribute('stroke', `var(--die-${facet.tone})`);
     poly.setAttribute('stroke-width', '0.6');
     svg.appendChild(poly);
+  }
+
+  // Mottling goes on AFTER the facets and BEFORE the numeral: it belongs to the
+  // material, and it must never come between a player and their number.
+  if (!plain) {
+    for (const blob of mottleFor(seed + (typeof sides === 'number' ? sides : 7))) {
+      const el2 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      el2.setAttribute('cx', blob.cx.toFixed(1));
+      el2.setAttribute('cy', blob.cy.toFixed(1));
+      el2.setAttribute('rx', blob.rx.toFixed(1));
+      el2.setAttribute('ry', blob.ry.toFixed(1));
+      el2.setAttribute('fill', blob.light ? '#ffffff' : '#000000');
+      el2.setAttribute('opacity', blob.alpha.toFixed(3));
+      el2.setAttribute('class', 'die-mottle');
+      svg.appendChild(el2);
+    }
   }
 
   const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');

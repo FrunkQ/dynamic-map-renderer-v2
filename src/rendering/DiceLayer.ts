@@ -20,6 +20,7 @@
 
 import type { RollOutcome } from '../dice/roll.ts';
 import { buildDie, type DieElement } from './dieShapes.ts';
+import { skinFor } from './dieColors.ts';
 import { resolveDiceRender } from '../storage/localSettings.ts';
 
 export interface DiceShow {
@@ -31,6 +32,10 @@ export interface DiceShow {
   rollerName: string;
   rollerColor: string;
   whisper?: boolean;
+  /** What the dice are MADE of. Defaults to the roller's own colour — at a real
+   *  table you know whose dice those are before you read them. The GM's arrive
+   *  with their own (black and gold, unless the pack says otherwise). */
+  skin?: { base: string; ink?: string };
 }
 
 /** How long a `line` sits before fading. Long enough to read across a table. */
@@ -83,9 +88,17 @@ export class DiceLayer {
     // next roll rather than on the next reload.
     const style = resolveDiceRender();
     lane.classList.toggle('is-plain', style === 'plain');
+    // One skin for the hand: facet tones and ink, derived once.
+    const skin = skinFor(d.skin?.base ?? d.rollerColor, d.skin?.ink);
+    lane.style.setProperty('--die-base', skin.base);
+    lane.style.setProperty('--die-hi', skin.hi);
+    lane.style.setProperty('--die-mid', skin.mid);
+    lane.style.setProperty('--die-lo', skin.lo);
+    lane.style.setProperty('--die-ink', skin.ink);
     const dieEls: DieElement[] = [];
+    let seed = 0;
     for (const die of d.outcome.dice) {
-      const built = buildDie(die.sides, faceText(die.sides, die.value), die.dropped === true, style);
+      const built = buildDie(die.sides, faceText(die.sides, die.value), die.dropped === true, style, seed++);
       faces.appendChild(built.el);
       dieEls.push(built);
     }

@@ -7260,20 +7260,22 @@ option.select-option--add {
 .dice-layer {
   --die-hi: #f6f8ff; --die-mid: #dde3f1; --die-lo: #b7c0d6; --die-ink: #0e1119;
 }
-.dice-lane {
-  /* Plain values first so a browser without color-mix still gets bone-white
-     dice; the tint below is a bonus, not a requirement. */
-  --die-hi: #f7f9ff; --die-mid: #dde3f1; --die-lo: #aeb8d0;
-  --die-hi: color-mix(in srgb, var(--roller-color) 12%, #f7f9ff);
-  --die-mid: color-mix(in srgb, var(--roller-color) 20%, #dde3f1);
-  --die-lo: color-mix(in srgb, var(--roller-color) 30%, #aeb8d0);
-}
+/* The tones are computed per hand in dieColors.ts and set on the lane inline —
+   a player's dice ARE their colour, and the GM's are black with gold. These are
+   only the fallbacks for a lane that somehow arrives without a skin. */
+.dice-lane { --die-base: #dde3f1; --die-hi: #f7f9ff; --die-mid: #dde3f1; --die-lo: #aeb8d0; }
 .die { position: relative; flex: 0 0 auto; width: 30px; height: 30px; }
 .die-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .die-text {
   fill: var(--die-ink); font-weight: 800; font-variant-numeric: tabular-nums;
-  font-family: inherit; paint-order: stroke;
+  font-family: inherit;
+  /* A hairline of the die's own colour around the glyph, drawn UNDER it: the
+     mottling never gets to touch a numeral, so the number stays the clearest
+     thing on the die at table distance. */
+  paint-order: stroke; stroke: var(--die-base); stroke-width: 3px; stroke-linejoin: round;
 }
+/* Cast, not painted: soft blobs of light and shade in the material itself. */
+.die-mottle { pointer-events: none; }
 .die-slash { stroke: rgba(16, 19, 28, 0.6); stroke-width: 7; stroke-linecap: round; }
 .die--dropped { opacity: 0.45; }
 /* The shine. A static rim highlight where the light is, plus a sweep across the
@@ -7389,6 +7391,11 @@ body.starmap-active .dice-layer { z-index: 8; }
 .dice-policy { margin-top: var(--space-sm); }
 .dice-policy > summary { cursor: pointer; font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: var(--space-xs); }
 .dice-policy > summary:hover { color: var(--text-primary); }
+.dice-color-pair { display: flex; align-items: center; gap: 6px; }
+.dice-color {
+  width: 34px; height: 26px; padding: 0; cursor: pointer;
+  background: none; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 5px;
+}
 
 /* ─── v2.19 Dice in the feed ───────────────────────────────────────────────
    A roll is not a sentence, so it does not render as one: what it was called,

@@ -40,6 +40,11 @@ export interface DicePolicy {
   /** How the ROLLER sees their own roll. 'auto' = a line when the table screen
    *  is already showing it in full, because everyone is looking up at it. */
   rollerDetail: DiceDetail | 'auto';
+  /** v2.19.4 — the GM's own dice. Black with gold by default, because they are
+   *  not one of the players' colours and should not read as one. Players' dice
+   *  need no field: they are that player's colour, which they already choose. */
+  gmDieBase?: string;
+  gmDieInk?:  string;
 }
 
 export const DEFAULT_DICE_POLICY: DicePolicy = {
@@ -125,5 +130,7 @@ export function normalisePolicy(raw: Partial<DicePolicy> | undefined | null): Di
     othersDetail:       asDetail(p.othersDetail, DEFAULT_DICE_POLICY.othersDetail),
     tableDetail:        asDetail(p.tableDetail, DEFAULT_DICE_POLICY.tableDetail),
     rollerDetail:       roller,
+    ...(typeof p.gmDieBase === 'string' && p.gmDieBase ? { gmDieBase: p.gmDieBase } : {}),
+    ...(typeof p.gmDieInk === 'string' && p.gmDieInk ? { gmDieInk: p.gmDieInk } : {}),
   };
 }

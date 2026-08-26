@@ -1587,6 +1587,10 @@ export interface MsgDiceShow {
   /** The window that rolled it, so it can ignore this echo: a roller draws
    *  their own roll immediately rather than waiting for the relay. */
   rollerClientId: string | null;
+  /** v2.19.4 — what the dice are made of. Absent means "the roller's colour",
+   *  which is what a player's dice always are; the GM's carry their own. */
+  dieBase?: string;
+  dieInk?:  string;
 }
 
 export type GMMessage =
