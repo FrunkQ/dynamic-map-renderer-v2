@@ -7278,6 +7278,13 @@ option.select-option--add {
 .die--dropped { opacity: 0.45; }
 /* The shine. A static rim highlight where the light is, plus a sweep across the
    facets while the die is still in the air. */
+/* Plain numbers: a rounded tile and the numeral, nothing else. No shine, no
+   wobble, no bounce — the option for a weak screen or a GM who wants the number
+   and not the theatre. */
+.die--plain::before,
+.die--plain::after { display: none; }
+.dice-lane.is-plain:not(.is-settled) .die { animation: none; }
+.dice-lane.is-plain.is-settled .die { animation: none; filter: none; }
 .die::before,
 .die::after { content: ''; position: absolute; pointer-events: none; }
 .die::before {

@@ -20,6 +20,7 @@
 
 import type { RollOutcome } from '../dice/roll.ts';
 import { buildDie, type DieElement } from './dieShapes.ts';
+import { resolveDiceRender } from '../storage/localSettings.ts';
 
 export interface DiceShow {
   rollId: string;
@@ -78,9 +79,13 @@ export class DiceLayer {
 
     const faces = document.createElement('div');
     faces.className = 'dice-faces';
+    // Read per roll, not per session: changing the setting takes effect on the
+    // next roll rather than on the next reload.
+    const style = resolveDiceRender();
+    lane.classList.toggle('is-plain', style === 'plain');
     const dieEls: DieElement[] = [];
     for (const die of d.outcome.dice) {
-      const built = buildDie(die.sides, faceText(die.sides, die.value), die.dropped === true);
+      const built = buildDie(die.sides, faceText(die.sides, die.value), die.dropped === true, style);
       faces.appendChild(built.el);
       dieEls.push(built);
     }

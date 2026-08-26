@@ -13,6 +13,7 @@
  */
 
 import { isValidFormula } from '../dice/roll.ts';
+import { chooseDieStyle, type DieStyle, type DieStylePreference } from '../rendering/dieShapes.ts';
 import {
   DEFAULT_DICE_POLICY, normalisePolicy, asDetail,
   type DicePolicy, type DiceDetail,
@@ -411,6 +412,41 @@ export function setDiceDetailPreference(d: DiceDetail): void {
     if (d === 'full') localStorage.removeItem(DICE_DETAIL_KEY); // the default needs no key
     else localStorage.setItem(DICE_DETAIL_KEY, d);
   } catch { /* private mode etc. */ }
+}
+
+/**
+ * v2.19.3 Dice — what dice LOOK like on this screen: shaped and shaded, or
+ * plain numbered tiles. Separate axis from how MUCH you see (full / line /
+ * none): this is fidelity and taste, that is attention. Per device and never
+ * bundled — a pack cannot tell someone's phone how hard to work.
+ */
+export const DICE_RENDER_KEY = 'mappadux:dice_render';
+
+export function getDiceRenderPreference(): DieStylePreference {
+  try {
+    const v = localStorage.getItem(DICE_RENDER_KEY);
+    return v === 'shaped' || v === 'plain' ? v : 'auto';
+  } catch { return 'auto'; }
+}
+
+export function setDiceRenderPreference(v: DieStylePreference): void {
+  try {
+    if (v === 'auto') localStorage.removeItem(DICE_RENDER_KEY); // the default needs no key
+    else localStorage.setItem(DICE_RENDER_KEY, v);
+  } catch { /* private mode etc. */ }
+}
+
+/** What this device will actually draw, asking the device only when nobody
+ *  has chosen. Read at every roll, so a change needs no reload. */
+export function resolveDiceRender(): DieStyle {
+  const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }) : undefined;
+  let reducedMotion = false;
+  try { reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* old browser */ }
+  return chooseDieStyle(getDiceRenderPreference(), {
+    reducedMotion,
+    ...(typeof nav?.deviceMemory === 'number' ? { deviceMemory: nav.deviceMemory } : {}),
+    ...(typeof nav?.hardwareConcurrency === 'number' ? { cores: nav.hardwareConcurrency } : {}),
+  });
 }
 
 /** v2.17 Player Voice — GM toggle for player messaging (player↔GM and

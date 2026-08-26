@@ -4,7 +4,7 @@
  * table, so a die can never be clipped to one shape and shaded as another.
  */
 import { describe, it, expect } from 'vitest';
-import { buildDie, clipPathFor, shapeFor, shapeNameFor } from '../../src/rendering/dieShapes.ts';
+import { buildDie, chooseDieStyle, clipPathFor, shapeFor, shapeNameFor } from '../../src/rendering/dieShapes.ts';
 
 describe('die shapes', () => {
   it('gives each die type its own silhouette', () => {
@@ -53,6 +53,32 @@ describe('die shapes', () => {
     const size = (face: string) => Number(buildDie(100, face).el.querySelector('text')!.getAttribute('font-size'));
     expect(size('7')).toBeGreaterThan(size('17'));
     expect(size('17')).toBeGreaterThan(size('100'));
+  });
+
+  it('draws plain numbers as a tile with no facets and no silhouette', () => {
+    const die = buildDie(20, '17', false, 'plain');
+    expect(die.el.classList.contains('die--plain')).toBe(true);
+    expect(die.el.dataset.shape).toBe('plain');
+    expect(die.el.style.clipPath).toBe('');                       // nothing to clip to
+    expect(die.el.querySelectorAll('polygon')).toHaveLength(0);   // no facets to shade
+    expect(die.el.querySelector('rect')).not.toBeNull();
+    expect(die.el.querySelector('text')!.textContent).toBe('17'); // still the same numeral
+    die.setValue('4');
+    expect(die.el.querySelector('text')!.textContent).toBe('4');
+  });
+
+  it('an explicit appearance always beats the device guess', () => {
+    // Taste, not just capability: plain on a fast machine is a valid choice.
+    expect(chooseDieStyle('shaped', { reducedMotion: true, deviceMemory: 1, cores: 1 })).toBe('shaped');
+    expect(chooseDieStyle('plain', { deviceMemory: 32, cores: 32 })).toBe('plain');
+  });
+
+  it('automatic falls back to plain on a modest device, or when motion is unwelcome', () => {
+    expect(chooseDieStyle('auto', {})).toBe('shaped');                  // knows nothing: be nice
+    expect(chooseDieStyle('auto', { deviceMemory: 8, cores: 8 })).toBe('shaped');
+    expect(chooseDieStyle('auto', { reducedMotion: true })).toBe('plain');
+    expect(chooseDieStyle('auto', { deviceMemory: 2 })).toBe('plain');  // the stick PC under a table
+    expect(chooseDieStyle('auto', { cores: 2 })).toBe('plain');
   });
 
   it('strikes a dropped die through rather than hiding it', () => {

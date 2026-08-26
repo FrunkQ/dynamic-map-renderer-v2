@@ -52,8 +52,22 @@ because everyone is looking up at the table instead of down at their phone.
 
 ### 2.3 The viewer's own choice (per device, never travels)
 
-`mappadux:dice_detail` — `full` | `line` | `none`. A player may always turn
-spectacle DOWN. It is a device setting, so importing a pack never overwrites it.
+TWO axes, and they are not the same question:
+
+- `mappadux:dice_detail` — `full` | `line` | `none`. How MUCH of a roll reaches
+  you. A viewer may always turn spectacle DOWN, never up past the pack's
+  ceiling.
+- `mappadux:dice_render` — `auto` | `shaped` | `plain`. What dice LOOK like:
+  shaped and shaded, or plain numbered tiles. `auto` picks plain when the person
+  asked for reduced motion, or the device reports <= 2 GB / <= 2 cores; an
+  explicit choice always wins, because this is taste as much as capability.
+
+Both are device settings, so importing a pack never overwrites either.
+`resolveDiceRender()` is read at every roll, so a change lands on the next one
+rather than on the next reload.
+
+Where they live: the GM's own screen in Settings > Performance ("Dice
+appearance"); a player's in their right-click menu, next to "Dice show me".
 
 ### 2.4 Permission
 
@@ -184,7 +198,10 @@ the table's stick PC, with a player's phone second:
 - Only `transform` and `opacity` animate. No SVG filters anywhere.
 - The drop shadow appears only once a die has LANDED, so no filter is being
   recomputed while anything moves.
-- `prefers-reduced-motion` skips straight to the faces.
+- `prefers-reduced-motion` skips straight to the faces, and `auto` picks plain
+  tiles for that person as well.
+- Plain is genuinely plain: no facets, no clip-path, no shine, no wobble, no
+  bounce, no shadow — a tile and a numeral.
 - The tumble is timed by the CLOCK, not by counting ticks: a browser throttles
   timers in a hidden tab to about one a second, and a player who looks away
   must come back to dice that landed, not to a roll still tumbling.

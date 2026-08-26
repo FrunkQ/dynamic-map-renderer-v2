@@ -21,6 +21,8 @@ import {
   arePingsEnabled,
   areDiceEnabled,
   setDiceEnabled,
+  getDiceRenderPreference,
+  setDiceRenderPreference,
   setPingsEnabled,
   getInitiativeSortDirection,
   setInitiativeSortDirection,
@@ -548,6 +550,8 @@ export class SettingsDialog {
       set: setLocalPlayerStaticOnly,
     }));
 
+    sec.appendChild(this._buildDiceAppearanceRow());
+
     sec.appendChild(this._buildPerfToggle({
       title: 'Cap animated map texture at 1080p',
       help:
@@ -562,6 +566,41 @@ export class SettingsDialog {
   /** Build one row in the Performance section — title + multi-line
    *  help text + a right-aligned toggle that mirrors a localStorage
    *  flag via the supplied get/set pair. */
+  /** v2.19.3 — shaped dice or plain numbers, for THIS screen. Fidelity, not
+   *  attention: how MUCH you see of a roll is the Dice panel's business, and
+   *  travels with the pack; this never does. */
+  private _buildDiceAppearanceRow(): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'settings-danger-row';
+
+    const label = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = 'Dice appearance';
+    const help = document.createElement('span');
+    help.className = 'settings-stat-sub';
+    help.innerHTML =
+      'Rolled dice can be drawn as shaped, shaded dice or as plain numbered tiles. '
+      + '<em>Automatic</em> picks plain on a modest device or when you have asked the system '
+      + 'for less motion. This is for this screen only — it never travels with a pack, and every '
+      + 'player chooses their own.';
+    label.append(title, document.createElement('br'), help);
+
+    const select = document.createElement('select');
+    select.className = 'select-full';
+    select.style.flex = '0 0 auto';
+    select.style.width = '150px';
+    for (const [value, text] of [['auto', 'Automatic'], ['shaped', 'Shaped dice'], ['plain', 'Plain numbers']] as const) {
+      const o = document.createElement('option');
+      o.value = value; o.textContent = text;
+      select.append(o);
+    }
+    select.value = getDiceRenderPreference();
+    select.addEventListener('change', () => setDiceRenderPreference(select.value as 'auto' | 'shaped' | 'plain'));
+
+    row.append(label, select);
+    return row;
+  }
+
   private _buildPerfToggle(opts: {
     title: string;
     help:  string;

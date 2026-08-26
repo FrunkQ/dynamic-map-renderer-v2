@@ -122,6 +122,32 @@ const pointsAttr = (pts: Pt[]) => pts.map(([x, y]) => `${x},${y}`).join(' ');
 export const clipPathFor = (sides: number | 'F'): string =>
   `polygon(${shapeFor(sides).outline.map(([x, y]) => `${x}% ${y}%`).join(', ')})`;
 
+/** What a die is drawn as. `auto` decides from the device, never from taste. */
+export type DieStylePreference = 'auto' | 'shaped' | 'plain';
+export type DieStyle = 'shaped' | 'plain';
+
+export interface DeviceHints {
+  reducedMotion?: boolean;
+  /** navigator.deviceMemory, in GB. Absent on Firefox and Safari. */
+  deviceMemory?: number;
+  /** navigator.hardwareConcurrency. */
+  cores?: number;
+}
+
+/**
+ * Shaped dice or plain numbers. An explicit choice always wins — this is taste
+ * as much as capability, and a GM who wants plain numbers on a 32-core machine
+ * is not wrong. `auto` only guesses for people who have not chosen: someone who
+ * asked for less motion, or a device that looks like the stick PC under a table.
+ */
+export function chooseDieStyle(pref: DieStylePreference, env: DeviceHints = {}): DieStyle {
+  if (pref === 'shaped' || pref === 'plain') return pref;
+  if (env.reducedMotion) return 'plain';
+  if (typeof env.deviceMemory === 'number' && env.deviceMemory <= 2) return 'plain';
+  if (typeof env.cores === 'number' && env.cores <= 2) return 'plain';
+  return 'shaped';
+}
+
 export interface DieElement {
   el: HTMLElement;
   /** Set the numeral — used by the tumble and to land on the real face. */
@@ -132,19 +158,36 @@ export interface DieElement {
  * Build one die. `dropped` marks a die advantage threw away: struck through
  * rather than hidden, because seeing what you beat is half the pleasure.
  */
-export function buildDie(sides: number | 'F', faceText: string, dropped = false): DieElement {
+export function buildDie(
+  sides: number | 'F',
+  faceText: string,
+  dropped = false,
+  style: DieStyle = 'shaped',
+): DieElement {
   const shape = shapeFor(sides);
+  const plain = style === 'plain';
   const el = document.createElement('span');
-  el.className = 'die' + (dropped ? ' die--dropped' : '');
-  el.dataset.shape = shapeNameFor(sides);
-  el.style.clipPath = clipPathFor(sides);
+  el.className = 'die' + (dropped ? ' die--dropped' : '') + (plain ? ' die--plain' : '');
+  el.dataset.shape = plain ? 'plain' : shapeNameFor(sides);
+  // Plain numbers are a rounded tile: no silhouette to clip to, and the CSS
+  // drops the shine and the wobble with it. Same numeral machinery either way.
+  if (!plain) el.style.clipPath = clipPathFor(sides);
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('die-svg');
 
-  for (const facet of shape.facets) {
+  if (plain) {
+    const tile = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    tile.setAttribute('x', '4'); tile.setAttribute('y', '4');
+    tile.setAttribute('width', '92'); tile.setAttribute('height', '92');
+    tile.setAttribute('rx', '16');
+    tile.setAttribute('fill', 'var(--die-hi)');
+    svg.appendChild(tile);
+  }
+
+  for (const facet of plain ? [] : shape.facets) {
     const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     poly.setAttribute('points', pointsAttr(facet.pts));
     poly.setAttribute('fill', `var(--die-${facet.tone})`);
@@ -158,7 +201,8 @@ export function buildDie(sides: number | 'F', faceText: string, dropped = false)
 
   const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
   text.setAttribute('x', '50');
-  text.setAttribute('y', String(shape.textY));
+  // A tile has no reading face to sit inside: dead centre.
+  text.setAttribute('y', String(plain ? 54 : shape.textY));
   text.setAttribute('text-anchor', 'middle');
   text.setAttribute('dominant-baseline', 'middle');
   text.setAttribute('class', 'die-text');

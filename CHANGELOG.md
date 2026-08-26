@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.19.3 - 2026-08-26
+
+**Shaped dice or plain numbers, your choice, per screen.** A new *Dice appearance* selector in Settings > Performance: **Automatic**, **Shaped dice**, or **Plain numbers**. Plain is genuinely plain - a rounded tile and the number, no facets, no shine, no wobble, no shadow - for a modest screen or for anyone who would rather have the number than the theatre. Automatic picks plain when the device reports very little memory or few cores, or when you have asked your system for less motion.
+
+Players get the same choice for their own device in their right-click menu, beside the existing "Dice show me" control. The two are different questions and stay separate: *how much* you see of a roll (the dice, a line, or nothing) is the table's business and travels with the pack; *what they look like* is yours alone and never travels. Either way it takes effect on the next roll, with no reload.
+
 ## v2.19.2 - 2026-08-26
 
 **Dice that look like dice.** Each one is now cut to its own silhouette - the d20 hexagon with a triangle looking at you, the d4 triangle, the d8 diamond, the d10 kite, the d12 pentagon, the d6 bevelled cube - and shaded across facets with the light coming from the top left, tinted towards the roller's colour. They wobble and catch a moving highlight while they are in the air, then land with a bounce and a shadow. A die advantage threw away is struck through rather than hidden, because seeing what you beat is half the pleasure.

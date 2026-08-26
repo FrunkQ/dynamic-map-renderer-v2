@@ -20,7 +20,8 @@ import { parseIceParam } from '../p2p/iceConfig.ts';
 import { TextMapAltText } from '../rendering/TextMapAltText.ts';
 import { PlayerInitiativeRollModal } from './PlayerInitiativeRollModal.ts';
 import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix,
-  getDiceDetailPreference, setDiceDetailPreference } from '../storage/localSettings.ts';
+  getDiceDetailPreference, setDiceDetailPreference,
+  getDiceRenderPreference, setDiceRenderPreference } from '../storage/localSettings.ts';
 import { DiceLayer } from '../rendering/DiceLayer.ts';
 import { PlayerDiceTray } from './PlayerDiceTray.ts';
 import { rollFormula } from '../dice/roll.ts';
@@ -1357,6 +1358,17 @@ export class PlayerApp {
         label: `Dice show me: ${wording[current]}`,
         onSelect: () => setDiceDetailPreference(nextOf[current]),
       });
+      // The other axis: not how much, but what they look like. Only worth
+      // offering when this player is actually being shown dice.
+      if (current === 'full') {
+        const look = getDiceRenderPreference();
+        const nextLook = { auto: 'shaped', shaped: 'plain', plain: 'auto' } as const;
+        const lookWording = { auto: 'automatic', shaped: 'shaped dice', plain: 'plain numbers' } as const;
+        items.push({
+          label: `Dice look: ${lookWording[look]}`,
+          onSelect: () => setDiceRenderPreference(nextLook[look]),
+        });
+      }
     }
     // v2.17.21 — connection/activity log on demand only (no corner indicator).
     items.push({ label: 'Show activity', onSelect: () => this.messageLog?.show({ x: clientX, y: clientY }) });
