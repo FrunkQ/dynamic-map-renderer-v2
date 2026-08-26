@@ -18,7 +18,7 @@
  * GM's feed says 12.
  */
 
-import type { RollOutcome } from '../dice/roll.ts';
+import { critOf, type RollOutcome } from '../dice/roll.ts';
 import { buildDie, type DieElement } from './dieShapes.ts';
 import { skinFor } from './dieColors.ts';
 import { resolveDiceRender } from '../storage/localSettings.ts';
@@ -40,6 +40,17 @@ export interface DiceShow {
 
 /** How long a `line` sits before fading. Long enough to read across a table. */
 const LINE_MS = 7000;
+/**
+ * How long LANDED dice sit before they fade away. They are a moment, not a
+ * record: the evidence lives in the GM's feed as a sentence
+ * ("1+2+2=5 (on 3d6 [3-18])"), which is where anyone looks afterwards.
+ * The table screen holds them longer — it is the shared surface, and people
+ * look up at it a beat after the roll rather than during it.
+ */
+const LINGER_MS = 7000;
+const LINGER_TABLE_MS = 12000;
+/** The fade itself; mirrored by the CSS transition on .is-leaving. */
+const FADE_MS = 600;
 /** The tumble. Short: this is the fast, simple version, not a physics toy. */
 const TUMBLE_MS = 550;
 const TUMBLE_STEP_MS = 60;
@@ -52,13 +63,20 @@ export class DiceLayer {
    *  must STOP it: it holds the old dice, and its finish would mark the new
    *  roll settled early — dice sitting still while their numbers flicker. */
   private tumbles = new Map<string, ReturnType<typeof setInterval>>();
+  /** The fade waiting on each lane. Rolling again must CANCEL it outright — a
+   *  fade that fires afterwards would sweep away the hand that replaced it. */
+  private fades = new Map<string, ReturnType<typeof setTimeout>[]>();
   private lineHost: HTMLElement;
   private laneHost: HTMLElement;
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private reduced = false;
 
-  /** `mode` only sizes things: a table screen is read from across a room. */
+  private readonly lingerMs: number;
+
+  /** `mode` sizes things — a table screen is read from across a room — and sets
+   *  how long dice sit there before fading. */
   constructor(private root: HTMLElement, mode: 'viewer' | 'table') {
+    this.lingerMs = mode === 'table' ? LINGER_TABLE_MS : LINGER_MS;
     this.root.classList.add('dice-layer', `dice-layer--${mode}`);
     this.laneHost = document.createElement('div');
     this.laneHost.className = 'dice-lanes';
@@ -111,7 +129,7 @@ export class DiceLayer {
     if (d.whisper) lane.classList.add('is-whisper');
 
     if (this.reduced || dieEls.length === 0) {
-      lane.classList.add('is-settled');
+      this._land(lane, dieEls, d);
       return;
     }
 
@@ -139,10 +157,56 @@ export class DiceLayer {
         this.tumbles.delete(d.rollerKey);
         for (let i = 0; i < dieEls.length; i++) dieEls[i]!.setValue(finals[i]!);
         total.textContent = String(d.outcome.total);
-        lane.classList.add('is-settled');
+        this._land(lane, dieEls, d);
       }
     }, TUMBLE_STEP_MS);
     this.tumbles.set(d.rollerKey, spin);
+  }
+
+  /**
+   * The dice have landed. Mark the best and worst faces — only NOW, because a
+   * flare during the tumble would fire on every face flickering past — and
+   * start the clock on the fade.
+   */
+  private _land(lane: HTMLElement, dieEls: DieElement[], d: DiceShow): void {
+    lane.classList.add('is-settled');
+    const counted = d.outcome.dice.filter((die) => !die.dropped);
+    let maxes = 0, mins = 0;
+    for (let i = 0; i < dieEls.length; i++) {
+      const crit = critOf(d.outcome.dice[i]!);
+      dieEls[i]!.setCrit(crit);
+      if (crit === 'max') maxes++;
+      if (crit === 'min') mins++;
+    }
+    // Every die at its best (or worst) is a different event from one of them
+    // being lucky, and the lane says so rather than the dice repeating it.
+    if (counted.length > 0 && maxes === counted.length) lane.classList.add('is-allmax');
+    if (counted.length > 0 && mins === counted.length) lane.classList.add('is-allmin');
+    this._fadeAfter(lane, d.rollerKey);
+  }
+
+  /** Dice are a moment; the feed keeps the record. */
+  private _fadeAfter(lane: HTMLElement, rollerKey: string): void {
+    const pending: ReturnType<typeof setTimeout>[] = [];
+    const go = setTimeout(() => {
+      lane.classList.add('is-leaving');
+      const gone = setTimeout(() => {
+        lane.remove();
+        this.lanes.delete(rollerKey);
+        this.fades.delete(rollerKey);
+      }, FADE_MS);
+      pending.push(gone);
+    }, this.lingerMs);
+    pending.push(go);
+    this.fades.set(rollerKey, pending);
+  }
+
+  /** Stop a lane fading — it has just been rolled into again. */
+  private _cancelFade(rollerKey: string): void {
+    const pending = this.fades.get(rollerKey);
+    if (!pending) return;
+    for (const t of pending) clearTimeout(t);
+    this.fades.delete(rollerKey);
   }
 
   /** A line: someone else rolled, here is what it came to. Fades by itself. */
@@ -190,6 +254,8 @@ export class DiceLayer {
     this.timers.clear();
     for (const t of this.tumbles.values()) clearInterval(t);
     this.tumbles.clear();
+    for (const pending of this.fades.values()) for (const t of pending) clearTimeout(t);
+    this.fades.clear();
     this.lanes.clear();
     this.laneHost.replaceChildren();
     this.lineHost.replaceChildren();
@@ -204,9 +270,11 @@ export class DiceLayer {
   private _lane(d: DiceShow): HTMLElement {
     const running = this.tumbles.get(d.rollerKey);
     if (running !== undefined) { clearInterval(running); this.tumbles.delete(d.rollerKey); }
+    this._cancelFade(d.rollerKey);
     const existing = this.lanes.get(d.rollerKey);
     if (existing) {
-      existing.classList.remove('is-settled', 'is-whisper');
+      // Rolling again catches a fading hand and brings it back.
+      existing.classList.remove('is-settled', 'is-whisper', 'is-leaving', 'is-allmax', 'is-allmin');
       return existing;
     }
     const lane = document.createElement('div');
@@ -222,6 +290,7 @@ export class DiceLayer {
       this.lanes.delete(oldestKey);
       const stale = this.tumbles.get(oldestKey);
       if (stale !== undefined) { clearInterval(stale); this.tumbles.delete(oldestKey); }
+      this._cancelFade(oldestKey);
     }
     return lane;
   }

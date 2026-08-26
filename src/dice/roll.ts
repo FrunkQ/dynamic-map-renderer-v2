@@ -169,6 +169,60 @@ export function describeRoll(r: RollOutcome): string {
   return `${faces}${mod} = ${r.total}`;
 }
 
+/**
+ * What a formula COULD come to, low and high. A result means little without it:
+ * a 5 is a triumph on 3d6-with-a-penalty and a disaster on 3d6+10, and the feed
+ * line says so — "5 (on 3d6 [3-18])".
+ */
+export function rangeOf(input: string): { min: number; max: number } | null {
+  const p = parseFormula(input);
+  if (!p) return null;
+  let min = p.modifier, max = p.modifier;
+  for (const t of p.terms) {
+    // adv/dis rolls the die twice and keeps one, so the RANGE is unchanged.
+    min += t.sides === 'F' ? -t.count : t.count;
+    max += t.sides === 'F' ? t.count : t.count * t.sides;
+  }
+  return { min, max };
+}
+
+/**
+ * The sentence a roll leaves behind: "1+2+2=5 (on 3d6 [3-18])". This is the
+ * evidence — dice fade off the screen after a few seconds, and this is what
+ * remains in the GM's feed afterwards. Dropped dice are shown in brackets
+ * before the sum they did not join.
+ */
+export function describeRollSentence(r: RollOutcome): string {
+  const kept = r.dice.filter((d) => !d.dropped);
+  const beaten = r.dice.filter((d) => d.dropped)
+    .map((d) => `(${faceOf(d)})`).join(' ');
+  const sum = kept.map((d) => faceOf(d)).join('+')
+    + (r.modifier === 0 ? '' : r.modifier > 0 ? `+${r.modifier}` : `-${Math.abs(r.modifier)}`);
+  const range = rangeOf(r.formula);
+  const bounds = range ? ` [${range.min}-${range.max}]` : '';
+  return `${beaten ? beaten + ' ' : ''}${sum}=${r.total} (on ${r.formula}${bounds})`;
+}
+
+/** A die's face as it reads: Fate dice as +/-/0, everything else as its number. */
+function faceOf(d: DieResult): string {
+  if (d.sides !== 'F') return String(d.value);
+  return d.value > 0 ? '+' : d.value < 0 ? '-' : '0';
+}
+
+/**
+ * Did this die land on its best or worst face? Used for the flare on a natural
+ * 20 and the thud on a 1 — per DIE, since that is what a table cares about,
+ * not whether the total happened to hit its ceiling.
+ */
+export function critOf(d: DieResult): 'max' | 'min' | null {
+  if (d.dropped) return null;
+  if (d.sides === 'F') return d.value > 0 ? 'max' : d.value < 0 ? 'min' : null;
+  if (d.sides < 4) return null;            // a coin has no natural 20
+  if (d.value === d.sides) return 'max';
+  if (d.value === 1) return 'min';
+  return null;
+}
+
 /** How many dice a formula throws — the renderers size their tray with this. */
 export function diceCount(input: string): number {
   const p = parseFormula(input);

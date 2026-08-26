@@ -33,7 +33,7 @@ import { MessageThreads } from './MessageThreads.ts';
 import { buildMessageThreadPanel } from './MessageThreadPanel.ts';
 import { buildAllThreadsPanel, type AllThreadsFilter } from './AllThreadsPanel.ts';
 import { DicePanel } from './DicePanel.ts';
-import { rollFormula, describeRoll, type RollOutcome } from '../dice/roll.ts';
+import { rollFormula, describeRollSentence, type RollOutcome } from '../dice/roll.ts';
 import { detailFor } from '../dice/dicePolicy.ts';
 import { GM_DIE_BASE, GM_DIE_INK } from '../rendering/dieColors.ts';
 
@@ -7115,7 +7115,9 @@ export class GMApp {
         fromName: r.fromName,
         fromColor: r.fromColor,
         toPlayerId: null,
-        text: `${r.label}: ${describeRoll(r.outcome)}`,
+        // The sentence is the RECORD — the dice themselves fade off the screen
+        // after a few seconds, and this is what anyone reads afterwards.
+        text: `${r.fromName} rolled ${describeRollSentence(r.outcome)}`,
         at: Date.now(),
         origin: 'gm-bound' as const,
         kind: 'roll' as const,

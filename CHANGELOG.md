@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.4 - 2026-08-26
+
+**Dice are made of the roller's colour, and mottled like real ones.** A player's dice are their own colour - the one on their token - so the table knows whose they are before reading them, with facets lit and shaded from it and numerals in whatever stays readable (pick pale yellow and you get dark numbers). Each die carries five soft blobs of light and shade in the material, the same ones every time it tumbles. **The GM's dice are black with gold numerals**, and both ends are customisable in the Dice panel.
+
+**Dice now fade.** They sit for about seven seconds after landing - twelve on the table screen, which people look up at a beat later - and then go. What remains is the sentence in your feed: `Alex rolled 1+2+2=5 (on 3d6 [3-18])`. The range is the point of it: a 5 means nothing until you know it was 3d6. Rolling again catches a fading hand and brings it back.
+
+**A die at its best glows.** A natural maximum takes a gold rim and glow, a minimum a cold slate one, and when every die in a hand comes up best the whole lane lights and the total pulses. Not red for a bad roll - red means destructive here, and a bad roll is not a mistake you made.
+
 ## v2.19.3 - 2026-08-26
 
 **Shaped dice or plain numbers, your choice, per screen.** A new *Dice appearance* selector in Settings > Performance: **Automatic**, **Shaped dice**, or **Plain numbers**. Plain is genuinely plain - a rounded tile and the number, no facets, no shine, no wobble, no shadow - for a modest screen or for anyone who would rather have the number than the theatre. Automatic picks plain when the device reports very little memory or few cores, or when you have asked your system for less motion.

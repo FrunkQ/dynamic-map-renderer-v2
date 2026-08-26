@@ -171,9 +171,36 @@ there, not on five phones.
 - **Screen space, not map space.** PingLayer is map-anchored; dice must not be,
   or they swim when the GM pans and can land in the letterbox or outside the
   calibrated crop. Dice belong to the surface: a tray zone along the bottom.
-- Landed dice sit until that roller's next roll, because a table should behave
-  like a table. One lane per roller, tinted with their colour and captioned with
-  their name, so two people rolling at once do not collide.
+- One lane per roller, in that roller's colour and captioned with their name,
+  so two people rolling at once do not collide.
+- Landed dice FADE after a few seconds (7s on a player's screen, 12s on the
+  table, which people look up at a beat later). Dice are a moment; the record
+  is the sentence in the GM's feed. Rolling again catches a fading hand and
+  brings it back.
+
+### 5.4 What a roll leaves behind
+
+The dice go; the sentence stays:
+
+```
+Alex rolled 1+2+2=5 (on 3d6 [3-18])
+```
+
+The range is the point of it. A 5 means nothing on its own — it is a triumph on
+3d6 with a penalty and a disaster on 3d6+10 — so every roll records what it
+COULD have come to. Dice advantage threw away appear in brackets before the sum
+they did not join: `(3) 19=19`.
+
+### 5.5 Best and worst faces
+
+A die landing on its own maximum takes a gold rim and a gold glow; one landing
+on its minimum takes a cold slate rim. Red is deliberately not used: it means
+destructive in this codebase, and a bad roll is not a mistake anyone made.
+
+Marked per DIE, and only once it has LANDED — a flare during the tumble would
+fire on every face flickering past. When EVERY counted die is at its best the
+lane itself lights and the total pulses, because that is a different event from
+one die being lucky.
 
 ## 6. Rendering fidelity
 
@@ -210,7 +237,36 @@ the table's stick PC, with a player's phone second:
 
 Whatever draws it, the faces come down the wire. See section 4.
 
-## 7. Build order
+## 7. Physical dice (Pixels) — PROPOSAL, not built
+
+Pixels are Bluetooth dice with an accelerometer and LEDs
+(gamewithpixels.com/pages/dev-resources). They fit this design almost for free,
+because the wire already carries FACES rather than a request to roll: a physical
+die is just another source of them.
+
+- The player's own device pairs with their own dice over Web Bluetooth, from a
+  "Connect my dice" entry on the tray. The dependency
+  (`@systemic-games/pixels-web-connect`) is imported lazily, so nobody who does
+  not own a set ever downloads it.
+- Arm, then roll: tap the chip you want ("Attack"), then throw the physical die.
+  The reported face substitutes for the formula's die term and the modifier is
+  applied as usual, so the GM's vocabulary still governs. An unarmed throw
+  reports the bare face.
+- Several dice report separately, so faces are collected in a short window and
+  matched against the armed formula's terms.
+- Everything downstream is UNCHANGED: same `dice_roll`, same relay, same feed,
+  same table screen. Add one flag (`physical: true`) so the feed can say the
+  roll happened on real dice.
+- The LEDs are the one thing software dice cannot do: flash the die gold on its
+  own best face, and stay dark for a whispered roll.
+
+The blocker to check first: Web Bluetooth needs a SECURE CONTEXT and is
+Chrome/Edge/Android only - no iOS, no Firefox. Players who join over a LAN
+address (`http://192.168.x.x`) are not in a secure context, so pairing will not
+be offered to them at all; they would have to join over the https site. The GM
+preview iframe also needs `allow="bluetooth"`.
+
+## 8. Build order
 
 1. `src/dice/roll.ts` + `src/dice/dicePolicy.ts` with tests — pure, no UI.
 2. Types, storage, permission plumbing.
@@ -219,7 +275,7 @@ Whatever draws it, the faces come down the wire. See section 4.
 5. Player tray + whisper; GM relay; lines and 2D animation on every surface.
 6. Optional 3D as a lazy chunk.
 
-## 8. Build status
+## 9. Build status
 
 Sections 1-6 shipped on beta (1-5 at v2.19.0, the faceted dice at v2.19.2).
 

@@ -8,7 +8,7 @@
  */
 
 import type { ThreadMessage } from './MessageThreads.ts';
-import { describeRoll } from '../dice/roll.ts';
+import { rangeOf, describeRollSentence } from '../dice/roll.ts';
 
 export interface MessageThreadPanelOptions {
   /** Messages to render (chronological — caller passes them already
@@ -227,12 +227,14 @@ function _buildRollBody(roll: NonNullable<ThreadMessage['roll']>): HTMLElement {
 
   const formula = document.createElement('span');
   formula.className = 'mt-roll-formula';
-  formula.textContent = roll.outcome.formula;
+  const range = rangeOf(roll.outcome.formula);
+  // What it COULD have come to: a 5 means nothing until you know it was 3d6.
+  formula.textContent = roll.outcome.formula + (range ? ` [${range.min}-${range.max}]` : '');
 
   const breakdown = document.createElement('span');
   breakdown.className = 'mt-roll-breakdown';
-  // describeRoll ends in "= total"; the total is shown big on its own, so trim it.
-  breakdown.textContent = describeRoll(roll.outcome).replace(/\s*=\s*-?\d+$/, '');
+  // The same sum the feed sentence uses, minus the tail it repeats.
+  breakdown.textContent = describeRollSentence(roll.outcome).replace(/=.*$/, '').trim();
 
   const total = document.createElement('span');
   total.className = 'mt-roll-total';

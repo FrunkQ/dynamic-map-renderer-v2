@@ -181,6 +181,8 @@ export interface DieElement {
   el: HTMLElement;
   /** Set the numeral — used by the tumble and to land on the real face. */
   setValue: (text: string) => void;
+  /** Mark a best or worst face, once the die has actually landed on it. */
+  setCrit: (crit: 'max' | 'min' | null) => void;
 }
 
 /**
@@ -220,6 +222,7 @@ export function buildDie(
 
   for (const facet of plain ? [] : shape.facets) {
     const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    poly.setAttribute('class', 'die-facet');
     poly.setAttribute('points', pointsAttr(facet.pts));
     poly.setAttribute('fill', `var(--die-${facet.tone})`);
     // A hairline of the facet's own colour closes the seams antialiasing leaves
@@ -265,12 +268,32 @@ export function buildDie(
     svg.appendChild(slash);
   }
 
+  // The rim that lights up on a best or worst face. Built now, shown by CSS
+  // only once the die has landed — a flare mid-tumble would fire on every
+  // flickering face on the way past.
+  const rim = document.createElementNS('http://www.w3.org/2000/svg',
+    plain ? 'rect' : 'polygon');
+  if (plain) {
+    rim.setAttribute('x', '5'); rim.setAttribute('y', '5');
+    rim.setAttribute('width', '90'); rim.setAttribute('height', '90');
+    rim.setAttribute('rx', '15');
+  } else {
+    rim.setAttribute('points', pointsAttr(shape.outline));
+  }
+  rim.setAttribute('class', 'die-rim');
+  rim.setAttribute('fill', 'none');
+  svg.appendChild(rim);
+
   el.appendChild(svg);
   return {
     el,
     setValue: (next: string) => {
       text.textContent = next;
       text.setAttribute('font-size', String(fontSizeFor(next)));
+    },
+    setCrit: (crit: 'max' | 'min' | null) => {
+      el.classList.toggle('die--max', crit === 'max');
+      el.classList.toggle('die--min', crit === 'min');
     },
   };
 }

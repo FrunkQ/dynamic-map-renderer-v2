@@ -67,6 +67,45 @@ describe('DiceLayer tumble', () => {
     spy.mockRestore();
   });
 
+  it('fades the dice away, leaving the record to the feed', () => {
+    layer.showFull(show(roll(7, 3, 4)));
+    vi.advanceTimersByTime(1000);
+    expect(lane().classList.contains('is-settled')).toBe(true);
+    vi.advanceTimersByTime(7100);                                 // 7s after LANDING
+    expect(lane().classList.contains('is-leaving')).toBe(true);   // on its way out
+    vi.advanceTimersByTime(1000);
+    expect(root.querySelector('.dice-lane')).toBeNull();          // gone
+  });
+
+  it('rolling again catches a fading hand and keeps it', () => {
+    layer.showFull(show(roll(7, 3, 4)));
+    vi.advanceTimersByTime(8000);                 // landed, and fading
+    expect(lane().classList.contains('is-leaving')).toBe(true);
+    layer.showFull(show(roll(12, 6, 6)));         // ...rolled into again
+    expect(lane().classList.contains('is-leaving')).toBe(false);
+    vi.advanceTimersByTime(2000);
+    // The old fade must not sweep away the hand that replaced it.
+    expect(root.querySelector('.dice-lane')).not.toBeNull();
+    expect(faces()).toEqual(['6', '6']);
+  });
+
+  it('marks a best and a worst face only once the die has landed on it', () => {
+    layer.showFull(show({ formula: '2d20', dice: [{ sides: 20, value: 20 }, { sides: 20, value: 1 }], modifier: 0, total: 21 }));
+    // Mid-tumble the faces are still flickering: nothing may flare yet.
+    expect(root.querySelector('.die--max')).toBeNull();
+    vi.advanceTimersByTime(1000);
+    expect(root.querySelectorAll('.die--max')).toHaveLength(1);
+    expect(root.querySelectorAll('.die--min')).toHaveLength(1);
+    expect(lane().classList.contains('is-allmax')).toBe(false);   // not ALL of them
+  });
+
+  it('says so differently when every die came up best', () => {
+    layer.showFull(show({ formula: '2d6', dice: [{ sides: 6, value: 6 }, { sides: 6, value: 6 }], modifier: 0, total: 12 }));
+    vi.advanceTimersByTime(1000);
+    expect(lane().classList.contains('is-allmax')).toBe(true);
+    expect(lane().classList.contains('is-allmin')).toBe(false);
+  });
+
   it('gives each roller their own lane, oldest retired when crowded', () => {
     for (const who of ['a', 'b', 'c', 'd', 'e']) layer.showFull(show(roll(3, 3), who));
     expect(root.querySelectorAll('.dice-lane')).toHaveLength(4);

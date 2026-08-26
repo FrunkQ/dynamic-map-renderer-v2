@@ -44,7 +44,7 @@ describe('die shapes', () => {
     expect(die.el.style.clipPath).toBe(clipPathFor(20));
     const text = die.el.querySelector('text')!;
     expect(text.textContent).toBe('17');
-    expect(die.el.querySelectorAll('polygon')).toHaveLength(shapeFor(20).facets.length);
+    expect(die.el.querySelectorAll('.die-facet')).toHaveLength(shapeFor(20).facets.length);
     die.setValue('3');
     expect(text.textContent).toBe('3');
   });
@@ -60,7 +60,7 @@ describe('die shapes', () => {
     expect(die.el.classList.contains('die--plain')).toBe(true);
     expect(die.el.dataset.shape).toBe('plain');
     expect(die.el.style.clipPath).toBe('');                       // nothing to clip to
-    expect(die.el.querySelectorAll('polygon')).toHaveLength(0);   // no facets to shade
+    expect(die.el.querySelectorAll('.die-facet')).toHaveLength(0); // no facets to shade
     expect(die.el.querySelector('rect')).not.toBeNull();
     expect(die.el.querySelector('text')!.textContent).toBe('17'); // still the same numeral
     die.setValue('4');

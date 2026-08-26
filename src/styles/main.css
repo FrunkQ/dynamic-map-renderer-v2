@@ -7248,6 +7248,32 @@ option.select-option--add {
   border-top: 3px solid var(--roller-color, rgba(255, 255, 255, 0.4));
 }
 .dice-lane.is-whisper { border-color: rgba(165, 180, 252, 0.6); background: rgba(24, 24, 48, 0.8); }
+/* Dice are a moment, not a record: they fade a few seconds after landing and
+   the roll survives as a sentence in the GM's feed. Rolling again catches a
+   fading hand and brings it back. */
+.dice-lane { transition: opacity 600ms ease, transform 600ms ease; }
+.dice-lane.is-leaving { opacity: 0; transform: translateY(8px) scale(0.96); }
+
+/* A best or worst face, marked only once the die has LANDED on it. Gold for a
+   die at its best; a cold slate for one at its worst — red is reserved for
+   destructive things, and a bad roll is not a mistake you made. */
+.die-rim { stroke: none; stroke-width: 0; }
+.dice-lane.is-settled .die--max .die-rim { stroke: #f2c14e; stroke-width: 5; }
+.dice-lane.is-settled .die--min .die-rim { stroke: #7c8698; stroke-width: 4; }
+/* Every die at its best is a different event from one of them being lucky. */
+.dice-lane.is-allmax {
+  border-top-color: #f2c14e;
+  box-shadow: 0 0 18px rgba(242, 193, 78, 0.35);
+}
+.dice-lane.is-allmax .dice-lane-total { color: #f7d98a; animation: dice-crit 700ms ease-out; }
+.dice-lane.is-allmin .dice-lane-total { color: #97a2b4; }
+@keyframes dice-crit {
+  0%   { transform: scale(1.35); text-shadow: 0 0 18px rgba(242, 193, 78, 0.9); }
+  100% { transform: none; text-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dice-lane.is-allmax .dice-lane-total { animation: none; }
+}
 .dice-lane-name  { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
 .dice-lane-label { font-size: 10px; color: var(--text-dim); }
 .dice-faces { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin: 3px 0; }
@@ -7305,6 +7331,9 @@ option.select-option--add {
 .dice-lane:not(.is-settled) .die:nth-child(3n) { animation-delay: -190ms; }
 /* The shadow arrives only once they land: no filter runs during the animation. */
 .dice-lane.is-settled .die { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+/* A die at its best glows instead. Must come AFTER the rule above: same
+   specificity, so order is what decides which shadow a natural 20 gets. */
+.dice-lane.is-settled .die--max { filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.8)); }
 .dice-lane.is-settled .die { animation: die-land 220ms ease-out; }
 @keyframes die-shine  { from { transform: translate3d(-130%, 0, 0); } to { transform: translate3d(130%, 0, 0); } }
 @keyframes die-wobble { from { transform: rotate(-9deg) scale(0.94); } to { transform: rotate(9deg) scale(1.05); } }
