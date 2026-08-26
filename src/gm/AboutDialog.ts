@@ -805,6 +805,19 @@ export class AboutDialog {
     licence.textContent = 'MIT © FrunkQ';
     info.appendChild(licence);
 
+    // v2.19.8 — third-party acknowledgements. In the FIXED footer rather than
+    // the body above, because the body is the creator's to overwrite and an
+    // attribution that a pack can delete is not an attribution. Mappadux asks
+    // its users to credit the creators they build on; it can do the same.
+    const credits = document.createElement('div');
+    credits.className = 'about-mpx-credits';
+    credits.innerHTML =
+      'Pixels dice support uses <a href="https://gamewithpixels.com/" target="_blank" rel="noopener noreferrer">'
+      + 'Pixels</a> by Systemic Games — '
+      + '<a href="https://www.npmjs.com/package/@systemic-games/pixels-web-connect" target="_blank" rel="noopener noreferrer">'
+      + 'pixels-web-connect</a>, MIT.';
+    info.appendChild(credits);
+
     root.appendChild(info);
 
     // Right column: dialog-action buttons. Edit mode → Cancel + Save;

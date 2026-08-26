@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.19.9 - 2026-08-26
+
+Credit where it is due: Pixels dice support is acknowledged in About, in the part of it a map pack cannot overwrite, and a new THIRD-PARTY-NOTICES.md carries the licence notices for what Mappadux ships. Mappadux asks its users to credit the creators they build on, so it should do the same.
+
 ## v2.19.8 - 2026-08-26
 
 **Pair your Pixels dice from Settings > Dice**, not just from the tray - with a plain answer to "where do I pair these?", the dice you have paired, and what each one is doing. And a new **How to write a roll** reference next to the formula box: every mechanic, what it does, and an example you can click to drop straight into the box.
