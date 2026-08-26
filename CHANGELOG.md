@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.19.12 - 2026-08-26
+
+A plain word about privacy, in About, in Settings and in the README: mappadux.com counts page views so I know how many people use it - no cookies, no accounts, nothing that identifies you or follows you elsewhere, and nothing at all about your maps, packs or table. Self-hosted builds contain none of it.
+
 ## v2.19.11 - 2026-08-26
 
 Pairing dice is a once-a-game thing, so it now lives with the rest of the setup rather than on the dice rail: yours in Settings > Dice, a player's in their right-click menu. The rail is for playing.

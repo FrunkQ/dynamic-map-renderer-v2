@@ -1234,7 +1234,7 @@ export class SettingsDialog {
       '</ol>' +
       '<strong>Permissions you\'ll grant:</strong> <code>streaming</code> (audio playback), <code>user-modify-playback-state</code> (play / pause commands), <code>user-read-email</code> + <code>user-read-private</code> (required by Spotify alongside <code>streaming</code>).<br>' +
       '<br>' +
-      '<strong>Privacy:</strong> the Client ID + access token stay in your browser (localStorage). They never travel in <code>.mappadux</code> pack bundles or to any Mappadux server — there isn\'t one.';
+      '<strong>Privacy:</strong> the Client ID + access token stay in your browser (localStorage). They never travel in <code>.mappadux</code> pack bundles, and there is no Mappadux server holding your data. (mappadux.com does count page views — no cookies, nothing identifying, nothing about your table; see About.)';
     wrap.appendChild(sub);
 
     const form = document.createElement('div');
