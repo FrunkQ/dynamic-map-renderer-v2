@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.19.10 - 2026-08-26
+
+Third-party notices completed: every runtime dependency and all twelve bundled font families now carry their copyright line. Two of the fonts turn out to be Apache-2.0 rather than OFL, and are listed as such.
+
 ## v2.19.9 - 2026-08-26
 
 Credit where it is due: Pixels dice support is acknowledged in About, in the part of it a map pack cannot overwrite, and a new THIRD-PARTY-NOTICES.md carries the licence notices for what Mappadux ships. Mappadux asks its users to credit the creators they build on, so it should do the same.

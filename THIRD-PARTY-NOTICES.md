@@ -1,74 +1,110 @@
 # Third-party notices
 
-Mappadux ships code and fonts from the projects below. Their licences require
-the copyright notice to travel with any distribution, which is what this file is
+Mappadux distributes the code and fonts below. Their licences ask for the
+copyright notice to travel with any distribution, which is what this file is
 for. Mappadux itself is MIT © FrunkQ — see [LICENSE](LICENSE).
 
-Everything here is a RUNTIME dependency (`npm ls --omit=dev --depth=0`); build
-tooling is not distributed and is not listed.
-
-| Package | Licence | Used for |
-|---|---|---|
-| `@systemic-games/pixels-web-connect` (+ `pixels-core-connect`, `pixels-core-animation`, `pixels-core-utils`) | MIT | Physical Pixels dice |
-| `three` | MIT | The map renderer |
-| `peerjs` | MIT | Player and projector connections |
-| `polygon-clipping` | MIT | Fog of war and MapFX shapes |
-| `qrcode` | MIT | The join QR code |
-| `idb` | ISC | The workspace database |
-| `@vercel/analytics` | MPL-2.0 | Page analytics |
-| `@fontsource/*` (Caveat, Cinzel, IM Fell DW Pica, MedievalSharp, Permanent Marker, Playwrite GB J, Press Start 2P, Seaweed Script, Special Elite, Uncial Antiqua, VT323, Whisper) | SIL OFL 1.1 | The themed fonts |
+Only RUNTIME dependencies are listed (`npm ls --omit=dev --depth=0`); build
+tooling is not distributed. The fonts are here because Mappadux **bundles the
+font files themselves** (28 `.woff2` in a build) rather than fetching them from
+a CDN — deliberate, so a table can play offline, and it is what makes the notice
+required.
 
 ---
 
-## Pixels dice — Systemic Games
+## Code
 
-Physical dice support (`src/dice/pixelsLink.ts`) is built on Systemic Games'
-web packages, loaded only when someone actually pairs a die.
-<https://gamewithpixels.com/>
+### Pixels dice — Systemic Games (MIT)
 
-```
-MIT License
+Physical dice support (`src/dice/pixelsLink.ts`), loaded only when someone
+actually pairs a die. <https://gamewithpixels.com/> — packages
+`@systemic-games/pixels-web-connect`, `pixels-core-connect`,
+`pixels-core-animation`, `pixels-core-utils`.
 
-Copyright (c) 2023 Systemic Games
+> Copyright (c) 2023 Systemic Games
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+### three.js (MIT)
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The map renderer. <https://threejs.org/>
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+> Copyright © 2010-2026 three.js authors
+
+### PeerJS (MIT)
+
+Player and projector connections. <https://peerjs.com/>
+
+> Copyright (c) 2015 Michelle Bu and Eric Zhang
+
+### polygon-clipping (MIT)
+
+Fog of war and MapFX shapes.
+
+> Copyright (c) 2018 Mike Fogel
+
+### node-qrcode (MIT)
+
+The join QR code. <https://github.com/soldair/node-qrcode>
+
+> Copyright (c) Ryan Day
+
+### idb (ISC)
+
+The workspace database. <https://github.com/jakearchibald/idb>
+
+> Copyright (c) 2016, Jake Archibald
+
+### @vercel/analytics (MPL-2.0)
+
+**Only in builds produced by Vercel's CI** — that is mappadux.com and
+beta.mappadux.com. The import is gated behind `__VERCEL_DEPLOY__`, so a
+self-hosted or local build tree-shakes it out entirely and ships no analytics
+code at all. Used unmodified; source at
+<https://github.com/vercel/analytics>, and the MPL-2.0 text travels with the
+package.
 
 ---
 
-## Still to do
+## Fonts
 
-This file is honest about what it covers and what it does not. The Pixels
-notice above is complete; the rest of the table names the licence but does not
-yet reproduce each project's copyright line, and MIT, ISC and OFL all ask for
-that in a distribution.
+The twelve catalogue families, bundled as woff2 subsets. Ten are SIL Open Font
+License 1.1; **two are Apache-2.0** — they are not interchangeable, so they are
+listed separately.
 
-Outstanding:
+### SIL Open Font License 1.1
 
-- The full MIT/ISC notices for three, peerjs, polygon-clipping, qrcode and idb.
-- The OFL notices for each `@fontsource/*` family. OFL is the strictest of the
-  set: it wants the copyright statement, the licence, and the reserved font
-  names shipped with the font — one entry per family, not one for all of them.
-- `@vercel/analytics` is MPL-2.0, which has source-availability terms rather
-  than a notice-only obligation. Worth a look before the next production
-  release: it is used unmodified, which is the easy case, but it is the only
-  non-permissive licence in the list.
+Full licence: <https://openfontlicense.org/> (also shipped in each package).
+
+| Family | Copyright |
+|---|---|
+| Caveat | Copyright 2014 The Caveat Project Authors |
+| Cinzel | Copyright 2020 The Cinzel Project Authors |
+| IM Fell DW Pica | Copyright Google Inc. |
+| MedievalSharp | Copyright (c) 2011, Wojciech 'wmk69' Kalinowski |
+| Playwrite GB J | Copyright Google Inc. |
+| Press Start 2P | Copyright 2012 The Press Start 2P Project Authors — Reserved Font Name "Press Start 2P" |
+| Seaweed Script | Copyright (c) 2012 Font Diner, Inc DBA Neapolitan — Reserved Font Name "Seaweed Script" |
+| Uncial Antiqua | Copyright (c) 2011 Brian J. Bonislawsky DBA Astigmatic (AOETI) — Reserved Font Name "Uncial Antiqua" |
+| VT323 | Copyright 2011, The VT323 Project Authors |
+| Whisper | Copyright 1993-2022 The Whisper Project Authors |
+
+Reserved Font Names may not be used by a modified version of the font. Mappadux
+ships them unmodified.
+
+### Apache License 2.0
+
+Full licence: <https://www.apache.org/licenses/LICENSE-2.0>
+
+| Family | Copyright |
+|---|---|
+| Permanent Marker | Copyright (c) 2010 Font Diner, Inc. |
+| Special Elite | Copyright (c) 2010 Brian J. Bonislawsky DBA Astigmatic (AOETI) |
+
+---
+
+## Keeping this current
 
 Anything added from here on goes in this file WHEN it is added, rather than
-being audited back in later.
+being audited back in later. `npm ls --omit=dev --depth=0` shows what actually
+ships; a dependency that is only imported behind a build flag (as
+`@vercel/analytics` is) should say so rather than implying every build carries
+it.
