@@ -7212,6 +7212,23 @@ option.select-option--add {
 .dice-chip:active { transform: translateY(1px); }
 .dice-chip-label   { font-weight: 650; font-size: 13px; line-height: 1.1; }
 .dice-chip-formula { font-size: 10px; color: var(--text-dim); font-family: ui-monospace, monospace; }
+/* Real dice on the table: the chips step aside and the tray becomes a status
+   strip. The rules stay, which is why the whisper toggle is still beside it. */
+.dice-physical-status {
+  flex: 0 0 auto; display: flex; align-items: center;
+  padding: 5px 10px; border-radius: 8px; font-size: 12px;
+  color: var(--text-secondary); background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-tray.is-collecting .dice-physical-status {
+  color: var(--text-primary); border-color: rgba(255, 255, 255, 0.4);
+}
+.dice-pair-btn {
+  flex: 0 0 auto; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  font-size: 11px; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04); border: 1px dashed rgba(255, 255, 255, 0.22);
+}
+.dice-pair-btn:hover { color: var(--text-primary); }
 .dice-whisper-toggle {
   flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
   padding: 5px 10px; border-radius: 8px; cursor: pointer; font-size: 11px;
@@ -7449,6 +7466,12 @@ body.starmap-active .dice-layer { z-index: 8; }
 .mt-msg--whisper .mt-roll {
   background: rgba(129, 140, 248, 0.12);
   border-left-color: #818cf8;
+}
+/* A roll that happened on the table rather than on a screen. */
+.mt-roll-real {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim); border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px; padding: 0 6px;
 }
 .mt-msg-whisper-tag {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;

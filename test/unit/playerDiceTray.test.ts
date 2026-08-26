@@ -31,6 +31,7 @@ describe('PlayerDiceTray', () => {
     tray = new PlayerDiceTray(root, {
       onRoll: (entry, whisper) => rolls.push({ label: entry.label, whisper }),
       onWhisperChange: (armed, reason) => whisperEvents.push({ armed, reason }),
+      onConnectDice: () => { /* pairing is exercised in the app, not here */ },
     });
   });
   afterEach(() => { tray.destroy(); vi.useRealTimers(); });
@@ -96,6 +97,50 @@ describe('PlayerDiceTray', () => {
     // Coming back to a tray that is still secretly armed is the surprise this
     // whole mechanism exists to avoid.
     expect(tray.isWhispering).toBe(false);
+    expect(root.hidden).toBe(true);
+  });
+
+  it('real dice replace the chips, but never the rules', () => {
+    tray.update(SET, true);
+    expect(root.querySelectorAll('.dice-chip')).toHaveLength(2);
+
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle' }, { id: 'd2', name: 'Doom' }]);
+    // Nothing left to tap: the dice are on the table.
+    expect(root.querySelectorAll('.dice-chip')).toHaveLength(0);
+    expect(root.querySelector('.dice-physical-status')?.textContent).toContain('2 dice connected');
+    // ...but whisper still governs what you throw next, so it stays.
+    expect(toggle()).not.toBeNull();
+    toggle()!.click();
+    expect(tray.isWhispering).toBe(true);
+
+    // Unpair and the chips come back.
+    tray.setPhysicalDice([]);
+    expect(root.querySelectorAll('.dice-chip')).toHaveLength(2);
+  });
+
+  it('says so while a thrown handful is still landing', () => {
+    tray.update(SET, true);
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle' }]);
+    tray.setCollecting(1);
+    expect(root.classList.contains('is-collecting')).toBe(true);
+    expect(root.querySelector('.dice-physical-status')?.textContent).toBe('A die has landed…');
+    tray.setCollecting(3);
+    expect(root.querySelector('.dice-physical-status')?.textContent).toBe('3 dice landed…');
+    tray.setCollecting(0);
+    expect(root.classList.contains('is-collecting')).toBe(false);
+    expect(root.querySelector('.dice-physical-status')?.textContent).toContain('connected');
+  });
+
+  it('offers pairing only where it could work, and shows the tray for it alone', () => {
+    tray.update([], true);                       // no set at all
+    expect(root.hidden).toBe(true);
+    tray.setPairingAvailable(true);
+    // Worth showing the tray for the pairing button by itself: a player with
+    // their own dice does not need the GM to have written a set first.
+    expect(root.hidden).toBe(false);
+    expect(root.querySelector('.dice-pair-btn')).not.toBeNull();
+    tray.setPairingAvailable(false);
+    expect(root.querySelector('.dice-pair-btn')).toBeNull();
     expect(root.hidden).toBe(true);
   });
 

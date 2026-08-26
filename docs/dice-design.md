@@ -237,34 +237,41 @@ the table's stick PC, with a player's phone second:
 
 Whatever draws it, the faces come down the wire. See section 4.
 
-## 7. Physical dice (Pixels) — PROPOSAL, not built
+## 7. Physical dice (Pixels) — BUILT at v2.19.5, UNVERIFIED against hardware
 
-Pixels are Bluetooth dice with an accelerometer and LEDs
-(gamewithpixels.com/pages/dev-resources). They fit this design almost for free,
-because the wire already carries FACES rather than a request to roll: a physical
-die is just another source of them.
+Pixels are Bluetooth dice with an accelerometer and LEDs. They fit this design
+almost for free, because the wire already carries FACES rather than a request to
+roll: a physical die is just another source of them.
 
-- The player's own device pairs with their own dice over Web Bluetooth, from a
-  "Connect my dice" entry on the tray. The dependency
-  (`@systemic-games/pixels-web-connect`) is imported lazily, so nobody who does
-  not own a set ever downloads it.
-- Arm, then roll: tap the chip you want ("Attack"), then throw the physical die.
-  The reported face substitutes for the formula's die term and the modifier is
-  applied as usual, so the GM's vocabulary still governs. An unarmed throw
-  reports the bare face.
-- Several dice report separately, so faces are collected in a short window and
-  matched against the armed formula's terms.
-- Everything downstream is UNCHANGED: same `dice_roll`, same relay, same feed,
-  same table screen. Add one flag (`physical: true`) so the feed can say the
-  roll happened on real dice.
-- The LEDs are the one thing software dice cannot do: flash the die gold on its
-  own best face, and stay dark for a whispered roll.
+**A MIRROR, not a controller.** Nothing is armed and nothing is asked for. The
+dice REPLACE the tray for whoever owns them: the chips step aside, the dice get
+thrown, and the roll appears on screen exactly as a tapped one would. Every rule
+and every part of the look is unchanged — same lanes, same colours, same crit
+flares, same fade, same sentence in the GM's feed.
 
-The blocker to check first: Web Bluetooth needs a SECURE CONTEXT and is
-Chrome/Edge/Android only - no iOS, no Firefox. Players who join over a LAN
-address (`http://192.168.x.x`) are not in a secure context, so pairing will not
-be offered to them at all; they would have to join over the https site. The GM
-preview iframe also needs `allow="bluetooth"`.
+- `physicalRoll.ts` is pure and holds the rules: the collection window and how a
+  handful becomes a roll. `pixelsLink.ts` holds the Bluetooth and is imported
+  LAZILY, so nobody without dice downloads the library (its own ~120 kB chunk).
+- A thrown SET arrives one die at a time, so the first die opens a window, each
+  further die extends it, and when the table goes quiet (1.8s, capped at 6s) the
+  handful is reported as ONE roll: `1d20+2d6`, biggest first, total summed. A
+  die nudged twice in one window keeps its LAST face - picking one up and
+  dropping it corrects the roll rather than adding to it.
+- Whisper still governs what you throw next, which is why the toggle stays on
+  the tray when the chips go.
+- `physical: true` rides along so the feed can mark it as real dice.
+- We do NOT drive the LEDs. A Pixels die runs its own on-die profile when it
+  lands (`profileHash` is a property of the DIE), configured in the Pixels app.
+
+Constraints, all failing closed and silently: Web Bluetooth is Chromium-only (no
+iOS, no Firefox) and needs a SECURE CONTEXT. Players joining the https site are
+fine; someone on a LAN address (`http://192.168.x.x`, which is what the GM hands
+out when running from localhost in dev) is not, and is never shown the button.
+The GM preview iframe would additionally need `allow="bluetooth"`.
+
+NOT VERIFIED against real dice - there is no hardware on the machine that built
+it. The rules, the collection window and the tray behaviour are covered by
+tests; the Bluetooth handshake itself has never run.
 
 ## 8. Build order
 

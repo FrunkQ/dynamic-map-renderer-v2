@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.5 - 2026-08-26
+
+**Roll your own Pixels dice.** If you own a set of Pixels electronic dice, tap **My dice** on the tray and pair them - and from then on the buttons step aside. Throw your dice on the actual table and the roll appears on everyone's screen a moment later, with everything else exactly as it always is: your colour, the shaped dice, the gold flare on a natural maximum, the fade, and the sentence in the GM's feed (marked *real dice*). Throw a handful and it waits for the table to go quiet before reporting them as one roll; pick a die up and drop it again and it corrects the roll rather than adding to it. Whisper still applies to whatever you throw next.
+
+The dice keep doing their own light show - that lives on the die itself and is configured in the Pixels app, so it is none of Mappadux's business.
+
+Pairing is only offered where it can actually work: Chrome, Edge or Android, on the https site. It needs a secure connection, so a player who joined over a local network address will not see the button. Nobody without dice downloads anything extra.
+
 ## v2.19.4 - 2026-08-26
 
 **Dice are made of the roller's colour, and mottled like real ones.** A player's dice are their own colour - the one on their token - so the table knows whose they are before reading them, with facets lit and shaded from it and numerals in whatever stays readable (pick pale yellow and you get dark numbers). Each die carries five soft blobs of light and shade in the material, the same ones every time it tumbles. **The GM's dice are black with gold numerals**, and both ends are customisable in the Dice panel.

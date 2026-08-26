@@ -1,7 +1,7 @@
 {
   "name": "dynamic-map-renderer-v2",
   "private": true,
-  "version": "2.19.4",
+  "version": "2.19.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -42,6 +42,7 @@
     "@fontsource/uncial-antiqua": "^5.2.7",
     "@fontsource/vt323": "^5.2.7",
     "@fontsource/whisper": "^5.2.8",
+    "@systemic-games/pixels-web-connect": "^1.3.1",
     "@vercel/analytics": "^1.6.1",
     "idb": "^8.0.3",
     "peerjs": "^1.5.5",

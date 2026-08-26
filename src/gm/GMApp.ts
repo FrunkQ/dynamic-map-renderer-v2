@@ -4111,6 +4111,7 @@ export class GMApp {
         whisper: msg.whisper === true,
         fromGm: false,
         rollerClientId: msg.clientId,
+        physical: msg.physical === true,
       });
       return;
     }
@@ -7093,6 +7094,8 @@ export class GMApp {
     whisper: boolean; fromGm: boolean; forcePublic?: boolean;
     /** The window that rolled it, so its own echo can be ignored there. */
     rollerClientId?: string | null;
+    /** Thrown on real dice rather than tapped. */
+    physical?: boolean;
   }): void {
     const ctx = {
       policy: getDicePolicy(),
@@ -7121,7 +7124,7 @@ export class GMApp {
         at: Date.now(),
         origin: 'gm-bound' as const,
         kind: 'roll' as const,
-        roll: { label: r.label, outcome: r.outcome, whisper: r.whisper },
+        roll: { label: r.label, outcome: r.outcome, whisper: r.whisper, physical: r.physical === true },
       };
       if (r.fromGm) this._messageThreads.addOutgoing(threadKey, entry);
       else this._messageThreads.addIncoming(threadKey, entry, this._visibleThreadKey());
@@ -7142,6 +7145,7 @@ export class GMApp {
       fromName: r.fromName,
       fromColor: r.fromColor,
       whisper: r.whisper,
+      ...(r.physical ? { physical: true } : {}),
       detailOthers,
       detailTable,
       rollerClientId: r.rollerClientId ?? null,

@@ -41,7 +41,13 @@ export interface ThreadMessage {
    *  a GM watching a busy table would otherwise have it lit all evening. The
    *  `text` field still carries a readable fallback. */
   kind?:     'roll';
-  roll?:     { label: string; outcome: import('../dice/roll.ts').RollOutcome; whisper: boolean };
+  roll?:     {
+    label: string;
+    outcome: import('../dice/roll.ts').RollOutcome;
+    whisper: boolean;
+    /** Thrown on real dice rather than tapped — worth saying in the feed. */
+    physical?: boolean;
+  };
   /** Pre-fetched LLM reply suggestions for GM-bound messages, if the
    *  assistant was configured at arrival time. */
   suggestionsPromise?: Promise<string[]>;

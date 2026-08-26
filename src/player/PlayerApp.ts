@@ -24,7 +24,8 @@ import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix,
   getDiceRenderPreference, setDiceRenderPreference } from '../storage/localSettings.ts';
 import { DiceLayer } from '../rendering/DiceLayer.ts';
 import { PlayerDiceTray } from './PlayerDiceTray.ts';
-import { rollFormula } from '../dice/roll.ts';
+import { rollFormula, type RollOutcome } from '../dice/roll.ts';
+import { isPhysicalDiceSupported } from '../dice/physicalRoll.ts';
 import { reduceDetail, type DiceDetail } from '../dice/dicePolicy.ts';
 import { Viewer } from '../viewers/Viewer.ts';
 import { PROFILE_PLAYER } from '../viewers/profiles.ts';
@@ -430,6 +431,7 @@ export class PlayerApp {
     if (diceTrayEl && !this._isPreviewMode()) {
       this._diceTray = new PlayerDiceTray(diceTrayEl, {
         onRoll: (entry, whisper) => void this._rollDice(entry, whisper),
+        onConnectDice: () => void this._connectPhysicalDice(),
         onWhisperChange: (armed, reason) => {
           // Never let the mode change silently: the first they would know is a
           // secret roll on the table screen.
@@ -441,6 +443,8 @@ export class PlayerApp {
           });
         },
       });
+      // Real dice are only offered where Web Bluetooth can actually work.
+      this._diceTray.setPairingAvailable(isPhysicalDiceSupported());
     }
     // v2.16.77 — read-only whiteboard mirrored from the GM.
     const boardEl = document.getElementById('annotate-whiteboard') as HTMLCanvasElement | null;
@@ -1411,28 +1415,65 @@ export class PlayerApp {
    *  the faces are decided once, by whoever rolled. Identity first, so the GM
    *  can attribute it, exactly as pings do. */
   private async _rollDice(entry: import('../types.ts').DiceButton, whisper: boolean): Promise<void> {
+    const outcome = rollFormula(entry.formula);
+    if (!outcome) return;
+    await this._emitRoll(entry.label, outcome, whisper, false);
+  }
+
+  /**
+   * v2.19.5 — pair the player's own Pixels dice. From here on the tray's chips
+   * step aside: they throw their dice and the roll appears, with every rule
+   * and every bit of the look unchanged.
+   */
+  private async _connectPhysicalDice(): Promise<void> {
+    if (!this.features.dice || !isPhysicalDiceSupported()) return;
+    if (!this.identity) {
+      await this.openIdentityModal();
+      if (!this.identity) return;
+    }
+    try {
+      if (!this._pixels) {
+        const { PixelsLink } = await import('../dice/pixelsLink.ts');
+        this._pixels = new PixelsLink({
+          onRoll: (outcome) => {
+            // The dice decided; whisper still applies to what you throw next.
+            void this._emitRoll(outcome.formula, outcome, this._diceTray?.isWhispering ?? false, true);
+          },
+          onCollecting: (count) => this._diceTray?.setCollecting(count),
+          onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(dice.map((d) => ({ id: d.id, name: d.name }))),
+        });
+      }
+      await this._pixels.addDie();
+    } catch {
+      // A cancelled chooser, a die that would not connect, a browser that said
+      // no: nothing to report but the tray staying as it was.
+    }
+  }
+  private _pixels: import('../dice/pixelsLink.ts').PixelsLink | null = null;
+
+  /** The one path a roll takes, whether it was tapped or thrown. */
+  private async _emitRoll(label: string, outcome: RollOutcome, whisper: boolean, physical: boolean): Promise<void> {
     if (!this.features.dice) return;
     if (!this.identity) {
       await this.openIdentityModal();
       if (!this.identity) return;
     }
-    const outcome = rollFormula(entry.formula);
-    if (!outcome) return;
     const rollId = generateId();
     this.guest.send({
       type: 'dice_roll',
       playerId: this.playerId,
       clientId: this.clientId,
       rollId,
-      label: entry.label,
+      label,
       roll: outcome,
       whisper,
+      ...(physical ? { physical: true } : {}),
     });
     // A whisper is never relayed, so this local draw is the only one there is —
     // and a whisper always shows in full, because the table cannot show it.
     this._showDice(whisper ? 'full' : this._diceRollerDetail, {
       rollId,
-      label: entry.label,
+      label,
       outcome,
       rollerKey: this.playerId,
       rollerName: this.identity.characterName || this.identity.playerName || 'You',

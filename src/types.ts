@@ -1563,6 +1563,8 @@ export interface MsgDiceRoll {
   roll:     import('./dice/roll.ts').RollOutcome;
   /** GM + roller only, whatever the pack policy says. */
   whisper:  boolean;
+  /** v2.19.5 — thrown on real dice rather than tapped. */
+  physical?: boolean;
 }
 
 /**
@@ -1580,6 +1582,8 @@ export interface MsgDiceShow {
   fromName:  string;
   fromColor: string;
   whisper:   boolean;
+  /** v2.19.5 — thrown on real dice rather than tapped. */
+  physical?: boolean;
   /** How players who did NOT roll should show it. */
   detailOthers: import('./dice/dicePolicy.ts').DiceDetail;
   /** How the table screen (projector / scaled view) should show it. */

@@ -241,6 +241,14 @@ function _buildRollBody(roll: NonNullable<ThreadMessage['roll']>): HTMLElement {
   total.textContent = String(roll.outcome.total);
 
   el.append(label, formula, breakdown, total);
+  if (roll.physical) {
+    // Worth knowing: this one happened on the table, not on a screen.
+    const real = document.createElement('span');
+    real.className = 'mt-roll-real';
+    real.textContent = 'real dice';
+    real.title = 'Rolled on the player’s own Pixels dice';
+    el.insertBefore(real, total);
+  }
   return el;
 }
 
