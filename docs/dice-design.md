@@ -273,7 +273,7 @@ the table's stick PC, with a player's phone second:
 
 Whatever draws it, the faces come down the wire. See section 4.
 
-## 7. Physical dice (Pixels) — BUILT at v2.19.5, UNVERIFIED against hardware
+## 7. Physical dice (Pixels) — BUILT, UNVERIFIED against hardware
 
 Pixels are Bluetooth dice with an accelerometer and LEDs. They fit this design
 almost for free, because the wire already carries FACES rather than a request to
@@ -304,6 +304,41 @@ iOS, no Firefox) and needs a SECURE CONTEXT. Players joining the https site are
 fine; someone on a LAN address (`http://192.168.x.x`, which is what the GM hands
 out when running from localhost in dev) is not, and is never shown the button.
 The GM preview iframe would additionally need `allow="bluetooth"`.
+
+### 7.1 What the vendor's guide changed (v2.19.8)
+
+Systemic publish a Developer's Guide, and it is mostly a list of ways wireless
+goes wrong. Reading it properly corrected several things this had wrong:
+
+- **`repeatConnect`, never `connect`.** Windows reports a peripheral as
+  disconnected about FOUR SECONDS before the die itself notices, so a prompt
+  reconnect fails. repeatConnect backs off and retries. This was the single
+  biggest fix; the first version called `connect()` directly.
+- **Listen for `status`.** A disconnection is otherwise completely silent —
+  roll events simply stop arriving and the player wonders why their dice broke.
+  An unasked-for disconnection now triggers an automatic reconnect attempt.
+- **Never pre-check `pixel.status`.** It is the LAST KNOWN status and the die
+  may drop the instant after; wrap the call instead.
+- **No dialogs on failure.** The tray says what happened, in place.
+- **Always leave a way to roll.** When no die is actually connected the
+  on-screen chips come back by themselves, so a wandering die never leaves a
+  player with nothing.
+- **A die talks to ONE device at a time**, so while Mappadux holds it the Pixels
+  app cannot. We let go on `pagehide`, and the UI says so.
+- **Surface re-rolls.** A bumped die that changes the result must be SEEN to do
+  it, or the screen and the table disagree and the player trusts neither.
+- **`getPixel(systemId)`** reconnects a die authorised earlier with no chooser —
+  which is why the systemId is remembered per browser. Chrome only allows it
+  across sessions with its new permissions backend
+  (`getBluetoothCapabilities().persistentPermissions`).
+
+Deliberately NOT applied: the guide suggests disconnecting when the app goes to
+the background so other software can use the dice. For a VTT that is backwards —
+a player puts their phone down and watches the table screen, and their dice must
+keep working.
+
+Physical rolls apply NO set mechanics: they report the faces and the sum, and
+nothing else. "Just say what they roll."
 
 NOT VERIFIED against real dice - there is no hardware on the machine that built
 it. The rules, the collection window and the tray behaviour are covered by

@@ -23,6 +23,16 @@ import {
 export interface DiceSettingsOptions {
   /** The set, the permission or the policy changed — viewers need telling. */
   onChanged: () => void;
+  /** v2.19.8 — physical dice, if this browser can have them. Setup belongs
+   *  here; the live state belongs on the tray, where it is being used. */
+  pixels?: {
+    supported: boolean;
+    /** Why not, when not — so nobody is left guessing. */
+    reason?: string;
+    list: () => { id: string; name: string; status: 'connecting' | 'ready' | 'lost' }[];
+    pair: () => Promise<unknown>;
+    forget: (id: string) => Promise<unknown>;
+  };
 }
 
 interface Preset {
@@ -122,6 +132,17 @@ const PRESETS: Record<string, Preset> = {
 /** The words a formula may use, shown where someone is writing one. */
 const VOCABULARY = 'adv · dis · burst · keep 3 · keep low 3 · target 5';
 
+/** What each word does, with something to copy. A GM writing a set should not
+ *  have to find documentation to learn their own tool. */
+const MECHANICS: { word: string; means: string; example: string }[] = [
+  { word: 'adv',        means: 'Roll it twice and keep the higher. The one it beat is shown struck through.', example: '1d20+5 adv' },
+  { word: 'dis',        means: 'Roll it twice and keep the lower.', example: '1d20 dis' },
+  { word: 'burst',      means: 'A die at its maximum rolls again and ADDS, and keeps going — exploding dice.', example: '1d6 burst' },
+  { word: 'keep N',     means: 'Keep the best N dice. The rest stay on screen, struck through.', example: '4d6 keep 3' },
+  { word: 'keep low N', means: 'Keep the WORST N instead.', example: '4d6 keep low 1' },
+  { word: 'target N',   means: 'A success pool: the result is how many dice reached N, not their sum. Says "glitch" when more than half come up 1.', example: '12d6 target 5' },
+];
+
 export function buildDiceSettings(host: HTMLElement, opts: DiceSettingsOptions): void {
   const changed = () => opts.onChanged();
   host.append(
@@ -129,6 +150,8 @@ export function buildDiceSettings(host: HTMLElement, opts: DiceSettingsOptions):
     _gmTrayRow(changed),
     _setEditor(changed),
     _presetRow(changed),
+    _mechanicsHelp(),
+    _pixelsBlock(host, opts),
     _policyBlock(changed),
   );
 }
@@ -337,6 +360,148 @@ function _setRow(entry: DiceButton, refresh: () => void): HTMLElement {
 
   row.append(shown, loud, del);
   return row;
+}
+
+/** The reference, folded away until someone wants it. */
+function _mechanicsHelp(): HTMLElement {
+  const details = document.createElement('details');
+  details.className = 'dice-policy dice-help';
+  const summary = document.createElement('summary');
+  summary.textContent = 'How to write a roll';
+  details.append(summary);
+
+  const intro = document.createElement('p');
+  intro.className = 'settings-section-intro';
+  intro.textContent =
+    'A roll is dice and a modifier — 2d6, 1d20+5, 1d8+1d6-2, 4dF — followed by '
+    + 'any of these words, in any order. They combine: "5d10 burst keep 3" is '
+    + 'Legend of the Five Rings, "8d10 burst target 8" is World of Darkness.';
+  details.append(intro);
+
+  const list = document.createElement('dl');
+  list.className = 'dice-help-list';
+  for (const m of MECHANICS) {
+    const term = document.createElement('dt');
+    term.textContent = m.word;
+    const meaning = document.createElement('dd');
+    meaning.textContent = m.means;
+    const example = document.createElement('code');
+    example.className = 'dice-help-example';
+    example.textContent = m.example;
+    example.title = 'Click to copy into the formula box';
+    example.addEventListener('click', () => {
+      const input = document.querySelector<HTMLInputElement>('.dice-formula-input');
+      if (!input) return;
+      input.value = m.example;
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+    });
+    meaning.append(document.createElement('br'), example);
+    list.append(term, meaning);
+  }
+  details.append(list);
+  return details;
+}
+
+/**
+ * Physical dice. The PAIRING lives here because it is setup — the question
+ * "where do I pair these?" should be answerable from the same place as the rest
+ * of the dice settings, not only from a button on the canvas.
+ */
+function _pixelsBlock(host: HTMLElement, opts: DiceSettingsOptions): HTMLElement {
+  const details = document.createElement('details');
+  details.className = 'dice-policy dice-pixels';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Your own dice (Pixels)';
+  details.append(summary);
+
+  const intro = document.createElement('p');
+  intro.className = 'settings-section-intro';
+  intro.innerHTML =
+    'Pair a set of <a href="https://gamewithpixels.com/" target="_blank" rel="noopener noreferrer">Pixels</a> '
+    + 'electronic dice and throwing them on the actual table puts the roll on screen — the buttons step aside '
+    + 'while they are connected. Each player pairs their own, on their own device, from the <strong>My dice</strong> '
+    + 'button on their dice tray. A die talks to one device at a time, so while it is paired here the Pixels app '
+    + 'cannot have it.';
+  details.append(intro);
+
+  const pixels = opts.pixels;
+  if (!pixels?.supported) {
+    const why = document.createElement('p');
+    why.className = 'dice-empty';
+    why.textContent = pixels?.reason
+      ?? 'Not available on this screen: it needs Chrome, Edge or Android, over the https site '
+       + '(a local network address will not do — the browser only allows Bluetooth on a secure connection).';
+    details.append(why);
+    return details;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'dice-rows';
+  const render = () => {
+    list.replaceChildren();
+    const dice = pixels.list();
+    if (dice.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'dice-empty';
+      empty.textContent = 'No dice paired yet.';
+      list.append(empty);
+      return;
+    }
+    for (const die of dice) {
+      const row = document.createElement('div');
+      row.className = 'dice-row';
+      const shown = document.createElement('div');
+      shown.className = 'dice-row-roll dice-row-roll--static';
+      const name = document.createElement('span');
+      name.className = 'dice-row-label';
+      name.textContent = die.name;
+      const status = document.createElement('span');
+      status.className = 'dice-row-formula';
+      status.textContent = die.status === 'ready' ? 'connected'
+        : die.status === 'connecting' ? 'connecting…' : 'not connected';
+      shown.append(name, status);
+
+      const forget = document.createElement('button');
+      forget.type = 'button';
+      forget.className = 'dice-row-delete';
+      forget.title = `Disconnect ${die.name}`;
+      forget.setAttribute('aria-label', `Disconnect ${die.name}`);
+      forget.textContent = '×';
+      forget.addEventListener('click', () => { void pixels.forget(die.id).then(render); });
+
+      row.append(shown, forget);
+      list.append(row);
+    }
+  };
+  render();
+  details.append(list);
+
+  const pair = document.createElement('button');
+  pair.type = 'button';
+  pair.className = 'btn btn--sm';
+  pair.textContent = 'Pair a die…';
+  pair.title = 'Your browser will ask which die to connect to';
+  pair.addEventListener('click', () => {
+    pair.disabled = true;
+    pair.textContent = 'Connecting…';
+    void pixels.pair().finally(() => {
+      pair.disabled = false;
+      pair.textContent = 'Pair a die…';
+      render();
+    });
+  });
+  details.append(pair);
+
+  const note = document.createElement('p');
+  note.className = 'dice-empty';
+  note.textContent =
+    'Connecting takes a few seconds and can fail if a die is asleep — give it a shake first. '
+    + 'Whether a die is connected right now is shown on the tray, where you are using it.';
+  details.append(note);
+
+  void host; // the block re-renders itself; the host is only its home
+  return details;
 }
 
 // ─── Systems ────────────────────────────────────────────────────────────────

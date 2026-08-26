@@ -34,8 +34,9 @@ export class PlayerDiceTray {
   /** v2.19.5 — real dice REPLACE the chips for whoever owns them: there is
    *  nothing to tap when the dice are on the table. Every rule stays — whisper
    *  still applies to what you throw next, which is why the toggle stays too. */
-  private physicalDice: { id: string; name: string }[] = [];
+  private physicalDice: { id: string; name: string; status?: 'connecting' | 'ready' | 'lost' }[] = [];
   private collecting = 0;
+  private rerolled: string | null = null;
   private canPair = false;
   private whisper = false;
   private whisperTimer: ReturnType<typeof setTimeout> | null = null;
@@ -68,19 +69,26 @@ export class PlayerDiceTray {
     this._render();
   }
 
-  /** The dice this player has on the table now. */
-  setPhysicalDice(dice: { id: string; name: string }[]): void {
+  /** The dice this player has on the table now, and how each is doing. */
+  setPhysicalDice(dice: { id: string; name: string; status?: 'connecting' | 'ready' | 'lost' }[]): void {
     this.physicalDice = dice;
     this._render();
   }
 
   /** How many have landed while we wait for the rest of the handful. */
-  setCollecting(count: number): void {
-    if (this.collecting === count) return;
+  setCollecting(count: number, rerolled: string | null = null): void {
+    if (this.collecting === count && this.rerolled === rerolled) return;
     this.collecting = count;
+    this.rerolled = rerolled;
     const status = this.root.querySelector('.dice-physical-status');
     if (status) status.textContent = this._statusText();
     this.root.classList.toggle('is-collecting', count > 0);
+  }
+
+  /** Any die actually listening? When none is, the chips come back: there is
+   *  always a way to roll, which is what the Pixels guide asks for. */
+  private get _hasLiveDie(): boolean {
+    return this.physicalDice.some((d) => (d.status ?? 'ready') === 'ready');
   }
 
   /** Hide the tray without forgetting the set (a StarMap, a hold screen). */
@@ -104,14 +112,16 @@ export class PlayerDiceTray {
     if (this.root.hidden) return;
 
     // Real dice on the table: the chips go, the status and the rules stay.
-    if (this.physicalDice.length > 0) {
+    if (this.physicalDice.length > 0 || this.collecting > 0) {
       const status = document.createElement('span');
       status.className = 'dice-physical-status';
       status.textContent = this._statusText();
       this.rail.appendChild(status);
     }
 
-    for (const entry of this.physicalDice.length > 0 ? [] : this.set) {
+    // Dice that are connecting or lost do not replace the chips: a player must
+    // never be left with nothing to roll because their die wandered off.
+    for (const entry of this._hasLiveDie ? [] : this.set) {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'dice-chip';
@@ -158,11 +168,20 @@ export class PlayerDiceTray {
   }
 
   private _statusText(): string {
+    // A bumped die changing the result has to be seen to do it.
+    if (this.rerolled) return `${this.rerolled} rolled again — counting the new one`;
     if (this.collecting > 0) {
       return this.collecting === 1 ? 'A die has landed…' : `${this.collecting} dice landed…`;
     }
-    const n = this.physicalDice.length;
-    return n === 1 ? 'Your die is connected — just roll it' : `${n} dice connected — just roll them`;
+    const lost = this.physicalDice.filter((d) => d.status === 'lost');
+    const connecting = this.physicalDice.filter((d) => d.status === 'connecting');
+    if (connecting.length > 0) return `Connecting to ${connecting[0]!.name}…`;
+    // Said in place, never in a dialog — and the chips are back underneath it.
+    if (lost.length > 0 && !this._hasLiveDie) return `Lost ${lost[0]!.name} — tap to try again`;
+    if (lost.length > 0) return `${lost[0]!.name} dropped out`;
+    const live = this.physicalDice.filter((d) => (d.status ?? 'ready') === 'ready').length;
+    if (live === 0) return 'No dice connected';
+    return live === 1 ? 'Your die is connected — just roll it' : `${live} dice connected — just roll them`;
   }
 
   private _roll(entry: DiceButton): void {

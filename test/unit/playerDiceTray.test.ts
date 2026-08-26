@@ -104,7 +104,8 @@ describe('PlayerDiceTray', () => {
     tray.update(SET, true);
     expect(root.querySelectorAll('.dice-chip')).toHaveLength(2);
 
-    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle' }, { id: 'd2', name: 'Doom' }]);
+    tray.setPhysicalDice([
+      { id: 'd1', name: 'Sparkle', status: 'ready' }, { id: 'd2', name: 'Doom', status: 'ready' }]);
     // Nothing left to tap: the dice are on the table.
     expect(root.querySelectorAll('.dice-chip')).toHaveLength(0);
     expect(root.querySelector('.dice-physical-status')?.textContent).toContain('2 dice connected');
@@ -118,9 +119,36 @@ describe('PlayerDiceTray', () => {
     expect(root.querySelectorAll('.dice-chip')).toHaveLength(2);
   });
 
+  it('gives the chips back when no die is actually listening', () => {
+    tray.update(SET, true);
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle', status: 'ready' }]);
+    expect(root.querySelectorAll('.dice-chip')).toHaveLength(0);
+
+    // The die wanders off. There must always be a way to roll.
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle', status: 'lost' }]);
+    expect(root.querySelectorAll('.dice-chip')).toHaveLength(2);
+    expect(root.querySelector('.dice-physical-status')?.textContent).toContain('Lost Sparkle');
+
+    // ...and while it is coming back, still.
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle', status: 'connecting' }]);
+    expect(root.querySelectorAll('.dice-chip')).toHaveLength(2);
+    expect(root.querySelector('.dice-physical-status')?.textContent).toContain('Connecting to Sparkle');
+
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle', status: 'ready' }]);
+    expect(root.querySelectorAll('.dice-chip')).toHaveLength(0);
+  });
+
+  it('says when a die was thrown again mid-handful', () => {
+    tray.update(SET, true);
+    tray.setPhysicalDice([{ id: 'd1', name: 'Doom', status: 'ready' }]);
+    tray.setCollecting(2, 'Doom');
+    expect(root.querySelector('.dice-physical-status')?.textContent)
+      .toBe('Doom rolled again — counting the new one');
+  });
+
   it('says so while a thrown handful is still landing', () => {
     tray.update(SET, true);
-    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle' }]);
+    tray.setPhysicalDice([{ id: 'd1', name: 'Sparkle', status: 'ready' }]);
     tray.setCollecting(1);
     expect(root.classList.contains('is-collecting')).toBe(true);
     expect(root.querySelector('.dice-physical-status')?.textContent).toBe('A die has landed…');

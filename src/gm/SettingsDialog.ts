@@ -57,7 +57,7 @@ import {
 } from '../stagecraft/stagecraftStorage.ts';
 import { loadStoredIce, saveStoredIce, parseIceText, iceToText } from '../p2p/iceConfig.ts';
 import { getSseOrigin, setSseOrigin, SSE_ORIGIN_DEFAULT } from '../storage/localSettings.ts';
-import { buildDiceSettings } from './DiceSettings.ts';
+import { buildDiceSettings, type DiceSettingsOptions } from './DiceSettings.ts';
 import { fetchInfo as fetchWledInfo, normaliseEndpoint } from '../stagecraft/wledClient.ts';
 import { fetchInfo as fetchQlcInfo, normaliseQlcEndpoint } from '../stagecraft/qlcClient.ts';
 import { wledConfigUrl, haConfigUrl, qlcConfigUrl } from '../stagecraft/configUrls.ts';
@@ -95,6 +95,8 @@ export interface SettingsDialogCallbacks {
    *  need telling straight away: a GM editing the set mid-session expects it
    *  on the players' trays before they close the dialog. */
   onDiceChanged?:    () => void;
+  /** v2.19.8 — pairing physical dice is setup, so it belongs in here too. */
+  pixels?:           DiceSettingsOptions['pixels'];
 }
 
 export class SettingsDialog {
@@ -106,6 +108,7 @@ export class SettingsDialog {
 
   open(cb: SettingsDialogCallbacks): Promise<void> {
     this._onDiceChanged = cb.onDiceChanged;
+    this._pixels = cb.pixels;
     this.overlay = this._build(cb);
     document.body.appendChild(this.overlay);
     document.addEventListener('keydown', this.onKey);
@@ -642,10 +645,14 @@ export class SettingsDialog {
       'Dice',
       'The rolls your game asks for, and the house rules about who sees them. Both travel with the pack.',
     );
-    buildDiceSettings(sec, { onChanged: () => this._onDiceChanged?.() });
+    buildDiceSettings(sec, {
+      onChanged: () => this._onDiceChanged?.(),
+      ...(this._pixels ? { pixels: this._pixels } : {}),
+    });
     return sec;
   }
   private _onDiceChanged: (() => void) | undefined;
+  private _pixels: DiceSettingsOptions['pixels'];
 
   private _buildPlayerPermissionsSection(): HTMLElement {
     const sec = mkSection(

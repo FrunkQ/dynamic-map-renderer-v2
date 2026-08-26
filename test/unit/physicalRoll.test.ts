@@ -69,6 +69,19 @@ describe('collecting a thrown set', () => {
     expect(done.mock.calls[0]![0]).toEqual([face('a', 20, 17)]);
   });
 
+  it('SAYS a die was thrown again, rather than quietly changing the answer', () => {
+    // The guide is firm about this: a bumped die that changes the result has to
+    // be seen doing it, or the screen and the table disagree.
+    const progress = vi.fn<(faces: PhysicalFace[], e?: { dieId: string; rerolled: boolean }) => void>();
+    const c = new RollCollector({ onComplete: done, onProgress: progress });
+    c.add(face('a', 20, 4));
+    expect(progress.mock.calls[0]![1]).toEqual({ dieId: 'a', rerolled: false });
+    c.add(face('b', 20, 9));
+    expect(progress.mock.calls[1]![1]).toEqual({ dieId: 'b', rerolled: false });
+    c.add(face('a', 20, 17));
+    expect(progress.mock.calls[2]![1]).toEqual({ dieId: 'a', rerolled: true });
+  });
+
   it('reports eventually even if the table never settles', () => {
     collector.add(face('a', 6, 1));
     // Something keeps knocking a die every second: the quiet window would never

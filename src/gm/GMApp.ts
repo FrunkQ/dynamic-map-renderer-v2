@@ -86,7 +86,7 @@ import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode, generateInstanceId } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, getMap, saveMap, deleteMap, clearAssetLibraries, clearEverything, getActiveInstanceId } from '../storage/db.ts';
-import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet, isGmDiceTrayShown } from '../storage/localSettings.ts';
+import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet, isGmDiceTrayShown, getKnownPixels } from '../storage/localSettings.ts';
 import { seedDefaultMaps, reseedWelcomePack, WELCOME_PACK_VERSION } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
@@ -7507,6 +7507,7 @@ export class GMApp {
       // A GM may want both: their own dice for the moments that deserve them,
       // and the rail for everything else.
       this._diceTray.setPairingAvailable(isPhysicalDiceSupported());
+      void this._reconnectGmDice();
     }
     this._refreshDiceOverlay();
   }
@@ -7521,17 +7522,26 @@ export class GMApp {
   /** The GM's own physical dice — same mirror the players get. */
   private async _connectGmDice(): Promise<void> {
     if (!isPhysicalDiceSupported()) return;
-    try {
-      if (!this._gmPixels) {
-        const { PixelsLink } = await import('../dice/pixelsLink.ts');
-        this._gmPixels = new PixelsLink({
-          onRoll: (outcome) => this._publishGmRoll(outcome.formula, outcome, false),
-          onCollecting: (count) => this._diceTray?.setCollecting(count),
-          onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(dice.map((d) => ({ id: d.id, name: d.name }))),
-        });
-      }
-      await this._gmPixels.addDie();
-    } catch { /* chooser cancelled, or the die would not connect */ }
+    try { await (await this._gmPixelsLink())?.addDie(); }
+    catch { /* chooser cancelled, or the die would not connect */ }
+  }
+
+  /** Dice this browser already knows come back with no chooser and no tap. */
+  private async _reconnectGmDice(): Promise<void> {
+    if (!isPhysicalDiceSupported() || getKnownPixels().length === 0) return;
+    try { await (await this._gmPixelsLink())?.reconnectKnown(); } catch { /* not around */ }
+  }
+
+  private async _gmPixelsLink(): Promise<import('../dice/pixelsLink.ts').PixelsLink | null> {
+    if (this._gmPixels) return this._gmPixels;
+    const { PixelsLink } = await import('../dice/pixelsLink.ts');
+    this._gmPixels = new PixelsLink({
+      onRoll: (outcome) => this._publishGmRoll(outcome.formula, outcome, false),
+      onCollecting: (c) => this._diceTray?.setCollecting(c.count, c.rerolled),
+      onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(
+        dice.map((d) => ({ id: d.id, name: d.name, status: d.status }))),
+    });
+    return this._gmPixels;
   }
 
   /** Which thread (if any) is already on screen — '*' when the All Players feed
@@ -8179,6 +8189,14 @@ export class GMApp {
       onDiceChanged: () => {
         this._broadcastPlayerFeatures();
         this._refreshDiceOverlay();
+      },
+      // Pairing is setup, so it is answerable from Settings as well as from the
+      // tray — "where do I pair these?" should not need a hunt.
+      pixels: {
+        supported: isPhysicalDiceSupported(),
+        list: () => (this._gmPixels?.connected ?? []).map((d) => ({ id: d.id, name: d.name, status: d.status })),
+        pair: () => this._connectGmDice(),
+        forget: (id: string) => this._gmPixels?.removeDie(id) ?? Promise.resolve(),
       },
       onDeleteAllData: async () => {
         // Nuke everything: IDB + ALL local settings (including API keys,

@@ -415,6 +415,36 @@ export function setDiceDetailPreference(d: DiceDetail): void {
 }
 
 /**
+ * v2.19.8 Dice — physical dice this browser has been given access to, so a
+ * returning player does not have to pick them out of the chooser again. The
+ * systemId is the id the OS assigned, which is what the Pixels library needs to
+ * reconnect one silently. Per device and never bundled: it is about this
+ * browser's Bluetooth permissions, not about the game.
+ */
+export const KNOWN_PIXELS_KEY = 'mappadux:pixels_dice';
+
+export function getKnownPixels(): { systemId: string; name: string }[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KNOWN_PIXELS_KEY) ?? '[]') as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((d): d is { systemId: string; name: string } =>
+        !!d && typeof d === 'object'
+        && typeof (d as { systemId?: unknown }).systemId === 'string'
+        && (d as { systemId: string }).systemId.length > 0)
+      .slice(0, 12)
+      .map((d) => ({ systemId: d.systemId, name: typeof d.name === 'string' ? d.name : 'die' }));
+  } catch { return []; }
+}
+
+export function rememberPixels(dice: { systemId: string; name: string }[]): void {
+  try {
+    if (dice.length === 0) localStorage.removeItem(KNOWN_PIXELS_KEY);
+    else localStorage.setItem(KNOWN_PIXELS_KEY, JSON.stringify(dice.slice(0, 12)));
+  } catch { /* private mode etc. */ }
+}
+
+/**
  * v2.19.7 Dice — show the GM's own dice rail over their canvas. Their screen,
  * their choice, so it does not travel with the pack. On by default: a GM who
  * has set dice up presumably wants to roll them.

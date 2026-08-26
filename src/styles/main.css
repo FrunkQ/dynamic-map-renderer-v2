@@ -7449,6 +7449,24 @@ body.starmap-active .dice-layer { z-index: 8; }
 .dice-policy { margin-top: var(--space-sm); }
 .dice-policy > summary { cursor: pointer; font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: var(--space-xs); }
 .dice-policy > summary:hover { color: var(--text-primary); }
+/* The mechanics reference: folded away, with copyable examples. */
+.dice-help-list { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px var(--space-sm); align-items: baseline; }
+.dice-help-list dt {
+  font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700;
+  color: var(--text-primary); white-space: nowrap;
+}
+.dice-help-list dd { margin: 0; font-size: 11px; line-height: 1.45; color: var(--text-secondary); }
+.dice-help-example {
+  display: inline-block; margin-top: 2px; padding: 1px 6px; border-radius: 4px; cursor: pointer;
+  font-family: ui-monospace, monospace; font-size: 11px;
+  background: rgba(255, 255, 255, 0.07); color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-help-example:hover { background: rgba(255, 255, 255, 0.15); }
+.dice-pixels .btn { margin-top: var(--space-xs); }
+.dice-row-roll--static { cursor: default; }
+.dice-row-roll--static:hover { background: rgba(255, 255, 255, 0.05); }
+
 .dice-color-pair { display: flex; align-items: center; gap: 6px; }
 .dice-color {
   width: 34px; height: 26px; padding: 0; cursor: pointer;

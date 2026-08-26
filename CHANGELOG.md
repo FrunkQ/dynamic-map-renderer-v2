@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.8 - 2026-08-26
+
+**Pair your Pixels dice from Settings > Dice**, not just from the tray - with a plain answer to "where do I pair these?", the dice you have paired, and what each one is doing. And a new **How to write a roll** reference next to the formula box: every mechanic, what it does, and an example you can click to drop straight into the box.
+
+**Physical dice made much more robust**, after a proper read of the manufacturer's developer guide. Connecting now retries with a back-off (Windows reports a die as disconnected about four seconds before the die agrees, so the obvious approach fails); a die that drops out says so on the tray instead of going quiet, and tries to come back by itself; **the on-screen dice reappear whenever no physical die is connected**, so you are never left with nothing to roll; a die you have paired before reconnects on its own next time, with no browser prompt; and Mappadux hands your dice back when the page closes, so the Pixels app can have them again.
+
+If you bump a die that had already landed, the tray now says so and counts the new roll - rather than quietly changing the answer while the table sees something else.
+
 ## v2.19.7 - 2026-08-26
 
 **Dice roll across the map.** They come in from an edge, bounce off the sides a couple of times and settle where they fall, with the total catching up underneath them - instead of lining up in a corner. It is all theatre: the result is decided before anything moves, so the dice only have to look like they are rolling. Nothing ever lands under the tray or off the edge, on any screen size.

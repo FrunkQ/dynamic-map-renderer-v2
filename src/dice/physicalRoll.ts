@@ -78,8 +78,13 @@ export function outcomeFor(faces: PhysicalFace[]): RollOutcome | null {
 export interface RollCollectorOptions {
   /** The handful is complete. */
   onComplete: (faces: PhysicalFace[]) => void;
-  /** A die landed and the window is open — for the "collecting…" state. */
-  onProgress?: (faces: PhysicalFace[]) => void;
+  /**
+   * A die landed and the window is open — for the "collecting…" state.
+   * `rerolled` means this die had already landed and has been thrown again:
+   * the guide is firm that a bumped die must be SEEN to change the result,
+   * or the screen and the table disagree and the player trusts neither.
+   */
+  onProgress?: (faces: PhysicalFace[], event?: { dieId: string; rerolled: boolean }) => void;
   quietMs?: number;
   maxMs?: number;
 }
@@ -106,8 +111,9 @@ export class RollCollector {
 
   add(face: PhysicalFace): void {
     const first = this.faces.size === 0;
+    const rerolled = this.faces.has(face.dieId);
     this.faces.set(face.dieId, face);
-    this.opts.onProgress?.(this.pending);
+    this.opts.onProgress?.(this.pending, { dieId: face.dieId, rerolled });
 
     if (this.quietTimer) clearTimeout(this.quietTimer);
     this.quietTimer = setTimeout(() => this._complete(), this.quietMs);

@@ -26,6 +26,7 @@ import { DiceLayer } from '../rendering/DiceLayer.ts';
 import { PlayerDiceTray } from './PlayerDiceTray.ts';
 import { rollFormula, type RollOutcome } from '../dice/roll.ts';
 import { isPhysicalDiceSupported } from '../dice/physicalRoll.ts';
+import { getKnownPixels } from '../storage/localSettings.ts';
 import { reduceDetail, type DiceDetail } from '../dice/dicePolicy.ts';
 import { Viewer } from '../viewers/Viewer.ts';
 import { PROFILE_PLAYER } from '../viewers/profiles.ts';
@@ -446,6 +447,8 @@ export class PlayerApp {
       });
       // Real dice are only offered where Web Bluetooth can actually work.
       this._diceTray.setPairingAvailable(isPhysicalDiceSupported());
+      // ...and dice already known to this browser come back by themselves.
+      void this._reconnectKnownDice();
     }
     // v2.16.77 — read-only whiteboard mirrored from the GM.
     const boardEl = document.getElementById('annotate-whiteboard') as HTMLCanvasElement | null;
@@ -1433,22 +1436,36 @@ export class PlayerApp {
       if (!this.identity) return;
     }
     try {
-      if (!this._pixels) {
-        const { PixelsLink } = await import('../dice/pixelsLink.ts');
-        this._pixels = new PixelsLink({
-          onRoll: (outcome) => {
-            // The dice decided; whisper still applies to what you throw next.
-            void this._emitRoll(outcome.formula, outcome, this._diceTray?.isWhispering ?? false, true);
-          },
-          onCollecting: (count) => this._diceTray?.setCollecting(count),
-          onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(dice.map((d) => ({ id: d.id, name: d.name }))),
-        });
-      }
-      await this._pixels.addDie();
+      await (await this._pixelsLink())?.addDie();
     } catch {
       // A cancelled chooser, a die that would not connect, a browser that said
-      // no: nothing to report but the tray staying as it was.
+      // no: nothing to report but the tray saying so in place.
     }
+  }
+
+  /**
+   * v2.19.8 — dice this browser has been given access to before come back on
+   * their own, with no chooser and no tap. Gated on having paired here already,
+   * so nobody without dice ever downloads the library.
+   */
+  private async _reconnectKnownDice(): Promise<void> {
+    if (!isPhysicalDiceSupported() || getKnownPixels().length === 0) return;
+    try { await (await this._pixelsLink())?.reconnectKnown(); } catch { /* not around */ }
+  }
+
+  private async _pixelsLink(): Promise<import('../dice/pixelsLink.ts').PixelsLink | null> {
+    if (this._pixels) return this._pixels;
+    const { PixelsLink } = await import('../dice/pixelsLink.ts');
+    this._pixels = new PixelsLink({
+      onRoll: (outcome) => {
+        // The dice decided; whisper still applies to what you throw next.
+        void this._emitRoll(outcome.formula, outcome, this._diceTray?.isWhispering ?? false, true);
+      },
+      onCollecting: (c) => this._diceTray?.setCollecting(c.count, c.rerolled),
+      onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(
+        dice.map((d) => ({ id: d.id, name: d.name, status: d.status }))),
+    });
+    return this._pixels;
   }
   private _pixels: import('../dice/pixelsLink.ts').PixelsLink | null = null;
 
