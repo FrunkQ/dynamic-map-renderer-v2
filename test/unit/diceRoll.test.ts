@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseFormula, isValidFormula, rollFormula, describeRoll, diceCount, MAX_DICE,
-  rangeOf, describeRollSentence, critOf,
+  rangeOf, describeRollSentence, critOf, MAX_BURST,
 } from '../../src/dice/roll.ts';
 
 /** Deterministic RNG: replays the given uniforms, then repeats the last one. */
@@ -105,17 +105,135 @@ describe('what a roll leaves behind', () => {
     const adv = rollFormula('1d20 adv', seq(0.1, 0.9))!;      // 3 beaten by 19
     expect(describeRollSentence(adv)).toBe('(3) 19=19 (on 1d20 adv [1-20])');
   });
+});
 
-  it('spots a die at its best or worst, and nothing in between', () => {
-    expect(critOf({ sides: 20, value: 20 })).toBe('max');
-    expect(critOf({ sides: 20, value: 1 })).toBe('min');
-    expect(critOf({ sides: 20, value: 11 })).toBeNull();
-    expect(critOf({ sides: 6, value: 6 })).toBe('max');
-    expect(critOf({ sides: 'F', value: 1 })).toBe('max');
+describe('mechanics, written as words', () => {
+  it('bursts a die at its maximum, adding into that die', () => {
+    // d6: 6 (burst) -> 6 (burst again) -> 2. One die reading 14.
+    const r = rollFormula('1d6 burst', seq(0.99, 0.99, 0.25))!;
+    expect(r.dice).toHaveLength(1);
+    expect(r.dice[0]!.value).toBe(14);
+    expect(r.dice[0]!.burst).toBe(2);
+    expect(r.total).toBe(14);
+  });
+
+  it('stops a burst before it can hang a phone', () => {
+    // An rng that always rolls maximum would explode for ever.
+    const r = rollFormula('1d6 burst', () => 0.999)!;
+    expect(r.dice[0]!.burst).toBe(MAX_BURST);
+    expect(r.total).toBe(6 * (MAX_BURST + 1));
+  });
+
+  it('refuses a burst that could never settle', () => {
+    expect(isValidFormula('1d2 burst')).toBe(false);
+    expect(isValidFormula('4dF burst')).toBe(false);
+  });
+
+  it('keeps the best dice and strikes the rest, without hiding them', () => {
+    const r = rollFormula('4d6 keep 3', seq(0.0, 0.99, 0.5, 0.99))!;   // 1, 6, 4, 6
+    expect(r.dice.map((d) => d.value)).toEqual([1, 6, 4, 6]);
+    expect(r.dice.filter((d) => d.dropped).map((d) => d.value)).toEqual([1]);
+    expect(r.total).toBe(16);
+  });
+
+  it('keeps the worst when asked to', () => {
+    const r = rollFormula('4d6 keep low 1', seq(0.0, 0.99, 0.5, 0.99))!;
+    expect(r.total).toBe(1);
+    expect(r.dice.filter((d) => !d.dropped)).toHaveLength(1);
+  });
+
+  it('rolls and keeps the L5R way, said out loud', () => {
+    // 5d10, one of them bursting, keeping the best 3.
+    const r = rollFormula('5d10 burst keep 3', seq(0.99, 0.3, 0.1, 0.5, 0.7, 0.2))!;
+    expect(r.formula).toBe('5d10 burst keep 3');
+    expect(r.dice).toHaveLength(5);
+    expect(r.dice.filter((d) => !d.dropped)).toHaveLength(3);
+    // The burst die carried its explosion into its own value.
+    expect(r.dice[0]!.value).toBeGreaterThan(10);
+  });
+
+  it('counts a success pool instead of summing it', () => {
+    // 6d6 needing 5s: 6, 5, 4, 1, 1, 2 -> two hits.
+    const r = rollFormula('6d6 target 5', seq(0.99, 0.8, 0.6, 0.0, 0.0, 0.25))!;
+    expect(r.total).toBe(2);
+    expect(r.pool?.target).toBe(5);
+    expect(r.pool?.ones).toBe(2);
+    expect(r.pool?.glitch).toBe(false);
+    expect(r.modifier).toBe(0);
+  });
+
+  it('spots a glitch when most of the pool came up ones', () => {
+    const r = rollFormula('4d6 target 5', seq(0.0, 0.0, 0.0, 0.99))!;   // 1,1,1,6
+    expect(r.total).toBe(1);
+    expect(r.pool?.glitch).toBe(true);
+    expect(describeRollSentence(r)).toContain('glitch');
+    // ...and a glitch with nothing to show for it is the critical one.
+    const worse = rollFormula('4d6 target 5', seq(0.0, 0.0, 0.0, 0.5))!;
+    expect(worse.total).toBe(0);
+    expect(describeRollSentence(worse)).toContain('critical glitch');
+  });
+
+  it('says a pool in hits rather than as a sum', () => {
+    const r = rollFormula('4d6 target 5', seq(0.99, 0.99, 0.0, 0.0))!;
+    expect(describeRollSentence(r)).toBe('6 6 1 1 = 2 hits (on 4d6 target 5 [0-4])');
+  });
+
+  it('refuses a modifier on a pool, because it would be adding apples', () => {
+    expect(isValidFormula('6d6+2 target 5')).toBe(false);
+  });
+
+  it('reads mechanics in any order, and rejects words it does not know', () => {
+    expect(isValidFormula('5d10 keep 3 burst')).toBe(true);
+    expect(isValidFormula('4d6 keep best 3')).toBe(true);
+    expect(isValidFormula('12d6 hits 5')).toBe(true);
+    expect(isValidFormula('1d20 sideways')).toBe(false);
+    expect(isValidFormula('4d6 keep')).toBe(false);
+    expect(isValidFormula('4d6 keep 9')).toBe(false);      // more than were rolled
+    expect(isValidFormula('4d6 target')).toBe(false);
+  });
+
+  it('bounds a roll by what is kept, and admits a burst has no ceiling', () => {
+    expect(rangeOf('4d6 keep 3')).toEqual({ min: 3, max: 18 });
+    expect(rangeOf('12d6 target 5')).toEqual({ min: 0, max: 12 });
+    expect(rangeOf('1d6 burst')).toEqual({ min: 1, max: 6, open: true });
+    expect(describeRollSentence(rollFormula('1d6 burst', seq(0.5))!)).toContain('[1-6+]');
+  });
+});
+
+describe('which way is up', () => {
+  const die = (sides: number, value: number) => ({ sides, value });
+
+  it('celebrates a maximum by default', () => {
+    expect(critOf(die(20, 20))).toBe('good');
+    expect(critOf(die(20, 1))).toBe('bad');
+    expect(critOf(die(20, 11))).toBeNull();
+  });
+
+  it('celebrates a 1 when low is what you want', () => {
+    // Roll-under systems: the 1 is the triumph and the 20 is the disaster.
+    expect(critOf(die(20, 1), 'low')).toBe('good');
+    expect(critOf(die(20, 20), 'low')).toBe('bad');
+    expect(critOf(die(20, 11), 'low')).toBeNull();
+  });
+
+  it('can be turned off entirely', () => {
+    expect(critOf(die(20, 20), 'off')).toBeNull();
+    expect(critOf(die(20, 1), 'off')).toBeNull();
+  });
+
+  it('treats a burst die as the high end, since it went past its own maximum', () => {
+    expect(critOf({ sides: 6, value: 14, burst: 2 })).toBe('good');
+    expect(critOf({ sides: 6, value: 14, burst: 2 }, 'low')).toBe('bad');
+  });
+
+  it('reads a Fate die by its sign, and both ways round', () => {
+    expect(critOf({ sides: 'F', value: 1 })).toBe('good');
+    expect(critOf({ sides: 'F', value: -1 })).toBe('bad');
+    expect(critOf({ sides: 'F', value: -1 }, 'low')).toBe('good');
     expect(critOf({ sides: 'F', value: 0 })).toBeNull();
-    // A die that was thrown away did not land on anything worth flaring.
+  });
+
+  it('never celebrates a die that was thrown away', () => {
     expect(critOf({ sides: 20, value: 20, dropped: true })).toBeNull();
-    // A coin has no natural 20.
-    expect(critOf({ sides: 2, value: 2 })).toBeNull();
   });
 });

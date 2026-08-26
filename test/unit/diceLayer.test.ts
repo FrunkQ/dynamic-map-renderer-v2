@@ -89,21 +89,40 @@ describe('DiceLayer tumble', () => {
     expect(faces()).toEqual(['6', '6']);
   });
 
-  it('marks a best and a worst face only once the die has landed on it', () => {
+  it('marks a good and a bad face only once the die has landed on it', () => {
     layer.showFull(show({ formula: '2d20', dice: [{ sides: 20, value: 20 }, { sides: 20, value: 1 }], modifier: 0, total: 21 }));
     // Mid-tumble the faces are still flickering: nothing may flare yet.
-    expect(root.querySelector('.die--max')).toBeNull();
+    expect(root.querySelector('.die--good')).toBeNull();
     vi.advanceTimersByTime(1000);
-    expect(root.querySelectorAll('.die--max')).toHaveLength(1);
-    expect(root.querySelectorAll('.die--min')).toHaveLength(1);
-    expect(lane().classList.contains('is-allmax')).toBe(false);   // not ALL of them
+    expect(root.querySelectorAll('.die--good')).toHaveLength(1);
+    expect(root.querySelectorAll('.die--bad')).toHaveLength(1);
+    expect(lane().classList.contains('is-allgood')).toBe(false);   // not ALL of them
   });
 
   it('says so differently when every die came up best', () => {
     layer.showFull(show({ formula: '2d6', dice: [{ sides: 6, value: 6 }, { sides: 6, value: 6 }], modifier: 0, total: 12 }));
     vi.advanceTimersByTime(1000);
-    expect(lane().classList.contains('is-allmax')).toBe(true);
-    expect(lane().classList.contains('is-allmin')).toBe(false);
+    expect(lane().classList.contains('is-allgood')).toBe(true);
+    expect(lane().classList.contains('is-allbad')).toBe(false);
+  });
+
+  it('turns the whole thing round when the game wants low rolls', () => {
+    const roll = { formula: '2d20', dice: [{ sides: 20, value: 20 }, { sides: 20, value: 1 }], modifier: 0, total: 21 };
+    layer.showFull({ ...show(roll), celebrate: 'low' as const });
+    vi.advanceTimersByTime(1000);
+    // The 1 is now the triumph and the 20 the disaster.
+    const good = root.querySelector('.die--good')!;
+    expect(good.querySelector('text')!.textContent).toBe('1');
+    const bad = root.querySelector('.die--bad')!;
+    expect(bad.querySelector('text')!.textContent).toBe('20');
+  });
+
+  it('celebrates nothing at all when the table has turned it off', () => {
+    const roll = { formula: '2d6', dice: [{ sides: 6, value: 6 }, { sides: 6, value: 6 }], modifier: 0, total: 12 };
+    layer.showFull({ ...show(roll), celebrate: 'off' as const });
+    vi.advanceTimersByTime(1000);
+    expect(root.querySelector('.die--good')).toBeNull();
+    expect(lane().classList.contains('is-allgood')).toBe(false);
   });
 
   it('gives each roller their own lane, oldest retired when crowded', () => {

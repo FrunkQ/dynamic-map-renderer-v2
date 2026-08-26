@@ -1189,6 +1189,10 @@ export interface MsgPlayerFeatures {
    *  draws immediately rather than waiting for the relay, so it has to know
    *  this in advance. A whisper always overrides it to 'full' locally. */
   diceRollerDetail?: import('./dice/dicePolicy.ts').DiceDetail;
+  /** v2.19.6 — which way is up for this game: 'high' celebrates a natural
+   *  maximum, 'low' celebrates a 1, 'off' skips the theatre. Standing policy
+   *  for the same reason as above, and the projector reads it too. */
+  diceCelebrate?: import('./dice/roll.ts').CelebrateDirection;
   /** v2.17.10 — distance scale for the "Measure from here" ruler, so remote
    *  player views measure on the GM's units. `measureUnitValue` per grid
    *  square, `measureUnitSuffix` tagged on the result (e.g. 5 + "'"). */

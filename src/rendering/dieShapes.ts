@@ -181,8 +181,8 @@ export interface DieElement {
   el: HTMLElement;
   /** Set the numeral — used by the tumble and to land on the real face. */
   setValue: (text: string) => void;
-  /** Mark a best or worst face, once the die has actually landed on it. */
-  setCrit: (crit: 'max' | 'min' | null) => void;
+  /** Mark a celebrated or unlucky face, once the die has landed on it. */
+  setCrit: (crit: 'good' | 'bad' | null) => void;
 }
 
 /**
@@ -291,9 +291,9 @@ export function buildDie(
       text.textContent = next;
       text.setAttribute('font-size', String(fontSizeFor(next)));
     },
-    setCrit: (crit: 'max' | 'min' | null) => {
-      el.classList.toggle('die--max', crit === 'max');
-      el.classList.toggle('die--min', crit === 'min');
+    setCrit: (crit: 'good' | 'bad' | null) => {
+      el.classList.toggle('die--good', crit === 'good');
+      el.classList.toggle('die--bad', crit === 'bad');
     },
   };
 }

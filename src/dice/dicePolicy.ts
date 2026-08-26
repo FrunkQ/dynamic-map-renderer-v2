@@ -45,6 +45,10 @@ export interface DicePolicy {
    *  need no field: they are that player's colour, which they already choose. */
   gmDieBase?: string;
   gmDieInk?:  string;
+  /** v2.19.6 — which way is UP for this game. `high` celebrates a natural
+   *  maximum, `low` celebrates a 1 (roll-under systems, where the maximum is
+   *  the disaster), `off` skips the theatre entirely. */
+  celebrate: import('./roll.ts').CelebrateDirection;
 }
 
 export const DEFAULT_DICE_POLICY: DicePolicy = {
@@ -53,6 +57,7 @@ export const DEFAULT_DICE_POLICY: DicePolicy = {
   othersDetail:       'line',
   tableDetail:        'full',
   rollerDetail:       'auto',
+  celebrate:          'high',
 };
 
 export interface RollContext {
@@ -130,6 +135,7 @@ export function normalisePolicy(raw: Partial<DicePolicy> | undefined | null): Di
     othersDetail:       asDetail(p.othersDetail, DEFAULT_DICE_POLICY.othersDetail),
     tableDetail:        asDetail(p.tableDetail, DEFAULT_DICE_POLICY.tableDetail),
     rollerDetail:       roller,
+    celebrate:          p.celebrate === 'off' || p.celebrate === 'low' ? p.celebrate : 'high',
     ...(typeof p.gmDieBase === 'string' && p.gmDieBase ? { gmDieBase: p.gmDieBase } : {}),
     ...(typeof p.gmDieInk === 'string' && p.gmDieInk ? { gmDieInk: p.gmDieInk } : {}),
   };

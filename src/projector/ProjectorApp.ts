@@ -135,6 +135,7 @@ export class ProjectorApp {
   /** v2.19 — the table screen is a dice TARGET: when the policy says the table
    *  shows rolls in full, the dice land here rather than on five phones. */
   private diceLayer:         DiceLayer         | null = null;
+  private _diceCelebrate: import('../dice/roll.ts').CelebrateDirection = 'high';
   private initiativeRail:    PlayerInitiativeRail | null = null;
   private _annotateClocks:   ClocksLayer | null = null;
   private _annotateTimers:   TimersLayer | null = null;
@@ -868,6 +869,13 @@ export class ProjectorApp {
         this._reRenderPlayerMarkers();
         break;
       }
+      case 'player_features': {
+        // v2.19.6 — the table screen needs the celebration direction too: a
+        // roll-under game celebrates a 1, and the projector is where the table
+        // is looking when it happens.
+        if (msg.diceCelebrate) this._diceCelebrate = msg.diceCelebrate;
+        break;
+      }
       case 'dice_show': {
         // v2.19 Dice — the GM already resolved the policy; this screen only
         // reduces it against its own setting (a stick PC under a table may be
@@ -882,6 +890,7 @@ export class ProjectorApp {
           rollerName: msg.fromName,
           rollerColor: msg.fromColor,
           whisper: msg.whisper,
+          celebrate: this._diceCelebrate,
           ...(msg.dieBase ? { skin: { base: msg.dieBase, ...(msg.dieInk ? { ink: msg.dieInk } : {}) } } : {}),
         };
         if (detail === 'full') this.diceLayer?.showFull(show);

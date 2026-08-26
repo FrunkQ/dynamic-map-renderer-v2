@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.6 - 2026-08-26
+
+**More dice systems, written in plain words.** Alongside `adv` and `dis`, a formula can now say what it does: `1d6 burst` (a die at its maximum rolls again and adds - exploding dice), `4d6 keep 3` (or `keep low 3`), and `12d6 target 5` (a success pool, where the result is how many dice reached 5 rather than their sum). They combine, so L5R roll-and-keep is `5d10 burst keep 3` and World of Darkness is `8d10 burst target 8`. Pools also notice a Shadowrun glitch when more than half the dice come up 1, and say so.
+
+**Celebration can be turned round, or off.** Some games want you to roll LOW, so a natural 1 is the triumph and the maximum is the disaster. In the Dice settings: **off**, **high is best** (the default), or **low is best**. It applies to plain numbered dice as well as shaped ones - it is the result being celebrated, not the artwork.
+
+**Coming back from a StarMap** now returns the Player View window to a corner-sized preview rather than handing it back over your map at whatever size it was.
+
 ## v2.19.5 - 2026-08-26
 
 **Roll your own Pixels dice.** If you own a set of Pixels electronic dice, tap **My dice** on the tray and pair them - and from then on the buttons step aside. Throw your dice on the actual table and the roll appears on everyone's screen a moment later, with everything else exactly as it always is: your colour, the shaped dice, the gold flare on a natural maximum, the fade, and the sentence in the GM's feed (marked *real dice*). Throw a handful and it waits for the table to go quiet before reporting them as one roll; pick a die up and drop it again and it corrects the roll rather than adding to it. Whisper still applies to whatever you throw next.

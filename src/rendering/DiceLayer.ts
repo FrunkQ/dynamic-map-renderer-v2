@@ -18,7 +18,7 @@
  * GM's feed says 12.
  */
 
-import { critOf, type RollOutcome } from '../dice/roll.ts';
+import { critOf, type CelebrateDirection, type RollOutcome } from '../dice/roll.ts';
 import { buildDie, type DieElement } from './dieShapes.ts';
 import { skinFor } from './dieColors.ts';
 import { resolveDiceRender } from '../storage/localSettings.ts';
@@ -36,6 +36,8 @@ export interface DiceShow {
    *  table you know whose dice those are before you read them. The GM's arrive
    *  with their own (black and gold, unless the pack says otherwise). */
   skin?: { base: string; ink?: string };
+  /** Which way is up for this game: a roll-under system celebrates a 1. */
+  celebrate?: CelebrateDirection;
 }
 
 /** How long a `line` sits before fading. Long enough to read across a table. */
@@ -117,6 +119,9 @@ export class DiceLayer {
     let seed = 0;
     for (const die of d.outcome.dice) {
       const built = buildDie(die.sides, faceText(die.sides, die.value), die.dropped === true, style, seed++);
+      // A burst die reads past its own maximum, which would otherwise look like
+      // a mistake; the dashed rim says it went off.
+      if ((die.burst ?? 0) > 0) built.el.classList.add('die--burst');
       faces.appendChild(built.el);
       dieEls.push(built);
     }
@@ -171,17 +176,20 @@ export class DiceLayer {
   private _land(lane: HTMLElement, dieEls: DieElement[], d: DiceShow): void {
     lane.classList.add('is-settled');
     const counted = d.outcome.dice.filter((die) => !die.dropped);
-    let maxes = 0, mins = 0;
+    const direction: CelebrateDirection = d.celebrate ?? 'high';
+    let good = 0, bad = 0;
     for (let i = 0; i < dieEls.length; i++) {
-      const crit = critOf(d.outcome.dice[i]!);
+      const crit = critOf(d.outcome.dice[i]!, direction);
       dieEls[i]!.setCrit(crit);
-      if (crit === 'max') maxes++;
-      if (crit === 'min') mins++;
+      if (crit === 'good') good++;
+      if (crit === 'bad') bad++;
     }
     // Every die at its best (or worst) is a different event from one of them
     // being lucky, and the lane says so rather than the dice repeating it.
-    if (counted.length > 0 && maxes === counted.length) lane.classList.add('is-allmax');
-    if (counted.length > 0 && mins === counted.length) lane.classList.add('is-allmin');
+    if (counted.length > 0 && good === counted.length) lane.classList.add('is-allgood');
+    if (counted.length > 0 && bad === counted.length) lane.classList.add('is-allbad');
+    // A pool that came up mostly ones is its own kind of bad news.
+    if (d.outcome.pool?.glitch && direction !== 'off') lane.classList.add('is-glitch');
     this._fadeAfter(lane, d.rollerKey);
   }
 
@@ -274,7 +282,8 @@ export class DiceLayer {
     const existing = this.lanes.get(d.rollerKey);
     if (existing) {
       // Rolling again catches a fading hand and brings it back.
-      existing.classList.remove('is-settled', 'is-whisper', 'is-leaving', 'is-allmax', 'is-allmin');
+      existing.classList.remove(
+        'is-settled', 'is-whisper', 'is-leaving', 'is-allgood', 'is-allbad', 'is-glitch');
       return existing;
     }
     const lane = document.createElement('div');

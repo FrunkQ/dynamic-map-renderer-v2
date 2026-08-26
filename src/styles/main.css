@@ -7275,15 +7275,18 @@ option.select-option--add {
    die at its best; a cold slate for one at its worst — red is reserved for
    destructive things, and a bad roll is not a mistake you made. */
 .die-rim { stroke: none; stroke-width: 0; }
-.dice-lane.is-settled .die--max .die-rim { stroke: #f2c14e; stroke-width: 5; }
-.dice-lane.is-settled .die--min .die-rim { stroke: #7c8698; stroke-width: 4; }
+.dice-lane.is-settled .die--good .die-rim { stroke: #f2c14e; stroke-width: 5; }
+.dice-lane.is-settled .die--bad .die-rim { stroke: #7c8698; stroke-width: 4; }
 /* Every die at its best is a different event from one of them being lucky. */
-.dice-lane.is-allmax {
+.dice-lane.is-allgood {
   border-top-color: #f2c14e;
   box-shadow: 0 0 18px rgba(242, 193, 78, 0.35);
 }
-.dice-lane.is-allmax .dice-lane-total { color: #f7d98a; animation: dice-crit 700ms ease-out; }
-.dice-lane.is-allmin .dice-lane-total { color: #97a2b4; }
+.dice-lane.is-allgood .dice-lane-total { color: #f7d98a; animation: dice-crit 700ms ease-out; }
+.dice-lane.is-allbad .dice-lane-total { color: #97a2b4; }
+/* A pool mostly showing ones: Shadowrun's glitch, and its cousins. */
+.dice-lane.is-glitch { border-top-color: #b0788f; }
+.dice-lane.is-glitch .dice-lane-label::after { content: ' - glitch'; color: #d09ab0; }
 @keyframes dice-crit {
   0%   { transform: scale(1.35); text-shadow: 0 0 18px rgba(242, 193, 78, 0.9); }
   100% { transform: none; text-shadow: none; }
@@ -7330,6 +7333,9 @@ option.select-option--add {
 .die--plain::after { display: none; }
 .dice-lane.is-plain:not(.is-settled) .die { animation: none; }
 .dice-lane.is-plain.is-settled .die { animation: none; filter: none; }
+/* A die that burst carries a small mark, since its face reads past its own
+   maximum and that would otherwise look like a mistake. */
+.die--burst .die-rim { stroke: rgba(255, 255, 255, 0.5); stroke-width: 2; stroke-dasharray: 6 5; }
 .die::before,
 .die::after { content: ''; position: absolute; pointer-events: none; }
 .die::before {
@@ -7350,7 +7356,11 @@ option.select-option--add {
 .dice-lane.is-settled .die { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
 /* A die at its best glows instead. Must come AFTER the rule above: same
    specificity, so order is what decides which shadow a natural 20 gets. */
-.dice-lane.is-settled .die--max { filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.8)); }
+.dice-lane.is-settled .die--good { filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.8)); }
+/* Plain numbers get the flare too — it is the RESULT being celebrated, not the
+   artwork, so turning the dice down to tiles must not turn the moment off. */
+.dice-lane.is-plain.is-settled .die--good { filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.8)); }
+.dice-lane.is-plain.is-settled .die--bad  { filter: none; }
 .dice-lane.is-settled .die { animation: die-land 220ms ease-out; }
 @keyframes die-shine  { from { transform: translate3d(-130%, 0, 0); } to { transform: translate3d(130%, 0, 0); } }
 @keyframes die-wobble { from { transform: rotate(-9deg) scale(0.94); } to { transform: rotate(9deg) scale(1.05); } }

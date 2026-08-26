@@ -7171,6 +7171,7 @@ export class GMApp {
         policy: getDicePolicy(), fromGm: false, whisper: false,
         tableConnected: this.projectorConnections.size > 0,
       }),
+      diceCelebrate: getDicePolicy().celebrate,
       measureUnitValue:  getMeasureUnitValue(),
       measureUnitSuffix: getMeasureUnitSuffix(),
     });

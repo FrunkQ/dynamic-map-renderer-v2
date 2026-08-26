@@ -276,6 +276,7 @@ export class PlayerApp {
   private _diceTray: PlayerDiceTray | null = null;
   private _diceLayer: DiceLayer | null = null;
   private _diceRollerDetail: DiceDetail = 'full';
+  private _diceCelebrate: import('../dice/roll.ts').CelebrateDirection = 'high';
   /** v2.17.10 — measurement scale received from the GM (player_features), so
    *  the ruler reads in the GM's units. Null until received → falls back to
    *  this browser's local setting (same-browser views) or the 5' default. */
@@ -1484,6 +1485,7 @@ export class PlayerApp {
 
   /** Policy says how much; this device may always say less. */
   private _showDice(detail: DiceDetail, show: import('../rendering/DiceLayer.ts').DiceShow): void {
+    show.celebrate = this._diceCelebrate;
     const effective = reduceDetail(detail, getDiceDetailPreference());
     if (effective === 'full') this._diceLayer?.showFull(show);
     else if (effective === 'line') this._diceLayer?.showLine(show);
@@ -2022,6 +2024,7 @@ export class PlayerApp {
         if (typeof msg.movableMarkers === 'boolean') this.features.movableMarkers = msg.movableMarkers;
         if (typeof msg.dice === 'boolean')          this.features.dice           = msg.dice;
         if (msg.diceRollerDetail) this._diceRollerDetail = msg.diceRollerDetail;
+        if (msg.diceCelebrate) this._diceCelebrate = msg.diceCelebrate;
         if (msg.diceSet || typeof msg.dice === 'boolean') {
           this._diceTray?.update(msg.diceSet, this.features.dice);
         }

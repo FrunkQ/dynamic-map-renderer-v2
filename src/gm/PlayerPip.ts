@@ -28,6 +28,13 @@
 /** Large mode (StarMap maps): clearance for the notice strip, and the canvas margin. */
 const LARGE_TOP = 112;
 const LARGE_MARGIN = 12;
+/**
+ * Coming OUT of large mode the map matters again, so the preview goes back to
+ * being a preview: never wider than this share of the canvas, whatever it was
+ * before. A GM who had it at a third of the screen keeps that; one who had
+ * dragged it huge does not get it back over their map.
+ */
+const RESTORE_MAX_FRACTION = 0.3;
 
 const STORAGE_POSITION = 'dmr_pip_position';
 const STORAGE_VISIBLE  = 'dmr_pip_visible';
@@ -107,11 +114,23 @@ export class PlayerPip {
     this.largeObserver?.disconnect();
     this.largeObserver = null;
     if (this.wasHiddenBeforeLarge) { this.hide(false); return; }
+    this._restoreSmall();
+  }
+
+  /** Back to a corner preview: the GM's map is the thing again. */
+  private _restoreSmall(): void {
     const frame = this.pipFrame;
     if (!frame) return;
     frame.classList.remove('player-pip-frame--large');
-    const w = this._loadWidth();
-    frame.style.width = w !== null ? `${w}px` : '';
+
+    const wrapWidth = this.wrapper.getBoundingClientRect().width;
+    const cap = wrapWidth > 0 ? Math.round(wrapWidth * RESTORE_MAX_FRACTION) : 0;
+    const saved = this._loadWidth();
+    // Cap whatever we are restoring TO — a GM who left it big before the
+    // StarMap should not have it handed back covering the map they just opened.
+    const width = saved !== null && cap > 0 ? Math.min(saved, cap) : saved;
+    frame.style.width = width !== null ? `${width}px` : '';
+
     const pos = this._loadPosition();
     if (pos) { frame.style.left = `${pos.x}%`; frame.style.top = `${pos.y}%`; frame.style.bottom = ''; }
     else { frame.style.left = '12px'; frame.style.top = ''; frame.style.bottom = '12px'; }
