@@ -1,5 +1,41 @@
 # Changelog
 
+## v2.19.20 - 2026-09-08
+
+Internal: connecting to a game no longer starts a request for relay credentials on its own - it waits only for the one the app already made when it started up. An app should not reach the network as a side effect of something else, and the same change in Star System Explorer turned out to be breaking four unrelated tests by doing exactly that.
+
+## v2.19.19 - 2026-09-08
+
+**Remote players now have a relay, and nobody has to set it up.** When a player's network will not carry a direct connection to you, the connection falls back to a relay automatically. Until today there was nothing to fall back to - the free one both apps inherited had quietly stopped existing - which is why some players could join and others never could.
+
+It is the LAST route tried, and that is measured rather than claimed: a relay route ranks about thirty times below a direct one, so every player who can reach you directly still does, straight from their device to yours, and never touches it. When it is used it cannot read anything it carries - the connection is encrypted between the two browsers - and it hides your address and theirs from each other, which a direct connection does not.
+
+Settings > Connections carries a switch to turn it off, and your own relay still takes precedence over ours if you have one.
+
+## v2.19.18 - 2026-09-08
+
+The relay's own side, in `worker/relay` - a small Cloudflare Worker that hands a browser credentials which expire in two hours. It exists because the long-term key must never reach a browser, and something has to do the minting. Its README carries the setup, which is four steps and two of them are secrets that only a person should handle.
+
+It counts two things: which app asked, and what happened. It records no addresses and nothing per visitor - the caller's address is used once, for the rate limiter, and passed straight to it. What fraction of players actually need a relay comes from Cloudflare's own relayed-GB figures set against those counts, so the useful number needs no extra collection.
+
+Not yet deployed, and both apps still ship with it switched off.
+
+## v2.19.17 - 2026-09-08
+
+**Groundwork for a relay nobody has to configure.** Mappadux can now fetch short-lived relay credentials from an endpoint of ours at startup and add them to the list it already uses. It is switched OFF in this build - the endpoint does not exist yet - so nothing changes until it does.
+
+Two things worth knowing about how it will work, because they are built in rather than promised. A relay is the **last** route a browser tries: everyone who can connect directly still does, machine to machine, and never touches it. And when it is used it cannot read anything it carries - the connection is encrypted between the two browsers - while hiding your address and your players' from each other, which a direct connection does not.
+
+Settings will carry a switch to turn it off entirely, appearing only once there is something to switch.
+
+Fixed: once a player's connection was definitively blocked, the "Reconnecting..." countdown wrote over the message explaining why, leaving them with a status that blamed the GM for a fault at their own end. The explanation now stays put; the retries carry on underneath it.
+
+## v2.19.16 - 2026-09-08
+
+Documentation only. `docs/connectivity-that-just-works.md` answers what it would take to make remote play connect without anyone configuring anything: what a relay can and cannot see (it cannot read what it carries, and it hides both ends' addresses from each other), what it would cost on the Cloudflare account already in use (the free allowance covers thousands of sessions), and the part that is actually work - an endpoint holding a secret, and keeping it from becoming a free relay for strangers.
+
+The same fixes are now in Star System Explorer as v3.1.9, which had the fault in a worse form: its player-side handler discarded the error entirely, so a Firefox player saw no message at all.
+
 ## v2.19.15 - 2026-09-08
 
 The dice roller is still being built, so it is now switched off on mappadux.com and stays on beta where it belongs. Nothing is lost: a GM who has already set up a dice pack keeps those settings, they are simply out of reach until the feature is finished.

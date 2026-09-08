@@ -59,6 +59,10 @@ export class ProjectorApp {
    *  (launched with ?gmLocal=1). Such windows ride LocalChannel only and skip
    *  the PeerJS loopback, which browser background-throttling kept tearing down
    *  + reconnecting. Remote tablet projectors (no flag) still use PeerJS. */
+  /** v2.19.17 — ICE has returned a definitive failure; the reconnect messages
+   *  must not talk over the one explanation that is true. */
+  private _iceBlocked = false;
+
   private _gmLocalFlag = (() => {
     try { return new URLSearchParams(location.search).has('gmLocal'); }
     catch { return false; }
@@ -447,16 +451,22 @@ export class ProjectorApp {
     this.connectPanel.hidden = true;
     this._showStatus(`Connecting to ${room}…`);
     this.guest?.destroy();
+    this._iceBlocked = false;
     this.guest = new Guest({
-      onConnected:    () => { this._showStatus('', false); this._sendHello(); },
-      onDisconnected: () => this._showStatus('Disconnected — waiting for GM…'),
+      // v2.19.17 — same as the player: once ICE has failed, "waiting for GM"
+      // blames the wrong end, and the reconnect countdown must not overwrite
+      // the one message that explains what happened.
+      onConnected:    () => { this._iceBlocked = false; this._showStatus('', false); this._sendHello(); },
+      onDisconnected: () => { if (!this._iceBlocked) this._showStatus('Disconnected — waiting for GM…'); },
       onReconnecting: (attempt, delayMs) => {
+        if (this._iceBlocked) return;
         const secs = Math.round(delayMs / 1000);
         this._showStatus(`Reconnecting… (${secs}s, attempt ${attempt})`);
       },
-      onError:   (err) => this._showStatus(`Error: ${err.message}`),
+      onError:   (err) => { if (!this._iceBlocked) this._showStatus(`Error: ${err.message}`); },
       onIceState: (st) => {
-        if (st !== 'ice-failed') return;
+        if (st !== 'ice-failed') { this._iceBlocked = false; return; }
+        this._iceBlocked = true;
         this._showStatus(
           'This network will not carry the connection to the GM. '
           + 'Try another network, or ask the GM for a link with a relay — they have been told.');

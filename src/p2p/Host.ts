@@ -1,7 +1,7 @@
 import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage, SessionState, MarkerIconData, SoundboardAudioData, TextMapVideoElement, TextMapAltItem, MsgStarMapShow, MsgFullState } from '../types.ts';
 import { LocalChannel } from './LocalChannel.ts';
-import { peerConfigFor, loadStoredIce, iceVerdict } from './iceConfig.ts';
+import { peerConfigFor, loadStoredIce, iceVerdict, managedIceReady } from './iceConfig.ts';
 import { generateRoomCode } from './roomCode.ts';
 import { isLocalPlayerStaticOnly } from '../storage/localSettings.ts';
 
@@ -118,6 +118,9 @@ export class Host {
    */
   private _brokerRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly BROKER_RETRY_MS = 60_000;
+  /** v2.19.17 — set by destroy(), so a peer whose start() was waiting on the
+   *  managed relay is not built after the host has already gone. */
+  private _destroyed = false;
 
   constructor(events: HostEvents) {
     this.events = events;
@@ -127,6 +130,16 @@ export class Host {
   /** Start the host. Pass a previously persisted peerId to attempt resumption. */
   start(peerId?: string): void {
     this.requestedRoomCode = peerId ?? null;
+    // v2.19.17 — the managed relay was asked for at startup; give it the last
+    // moment to arrive before we build the peer, because ICE config is fixed at
+    // construction and cannot be added to afterwards. Resolves instantly once
+    // the answer is in (it usually is by now), and gives up quickly if not.
+    // `requestedRoomCode` is already set, so the roomCode getter still answers
+    // during the wait.
+    void managedIceReady().then(() => { if (!this._destroyed) this._openPeer(peerId); });
+  }
+
+  private _openPeer(peerId?: string): void {
     // v2.18 — BYO STUN/TURN from Settings (prepended to PeerJS defaults) so remote players
     // behind UDP-blocking networks can relay over TLS 443. Same list rides ?ice= on join URLs.
     const cfg = peerConfigFor(loadStoredIce());
@@ -450,6 +463,7 @@ export class Host {
   }
 
   destroy(): void {
+    this._destroyed = true;
     this._clearBrokerRetry();
     this.local.destroy();
     for (const conn of this.connections.values()) conn.close();

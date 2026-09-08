@@ -1,0 +1,29 @@
+name = "relay-ice"
+main = "src/index.js"
+compatibility_date = "2026-09-08"
+
+# Counts only: which app asked, and what happened. No IPs, no per-visitor rows.
+# Query it with the Workers Analytics Engine SQL API, or from the dashboard.
+# ENABLE Analytics Engine on the account first (one click, Workers ->
+# Analytics Engine in the dashboard), then uncomment and redeploy. The Worker
+# already tolerates the binding being absent, so it runs either way.
+# [[analytics_engine_datasets]]
+# binding = "RELAY_ANALYTICS"
+# dataset = "relay_ice"
+
+# Without this the endpoint is a free TURN relay for whoever finds it.
+# 30 requests per minute per address is far above any honest use: a browser
+# asks once per page load and then caches the answer for two hours.
+[[ratelimits]]
+name = "RELAY_LIMIT"
+# Unique per ACCOUNT, not per Worker: if another Worker on this account already
+# uses 1001, pick a different number here.
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+# Secrets — set with `wrangler secret put`, NEVER written here:
+#   TURN_KEY_ID
+#   TURN_KEY_API_TOKEN
