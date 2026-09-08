@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.19.15 - 2026-09-08
+
+The dice roller is still being built, so it is now switched off on mappadux.com and stays on beta where it belongs. Nothing is lost: a GM who has already set up a dice pack keeps those settings, they are simply out of reach until the feature is finished.
+
 ## v2.19.14 - 2026-09-08
 
 **When a player cannot join, you are now told.** Until now they simply never appeared: the player saw an error they could do nothing about, and the GM had no idea anyone had tried. Player Views > Player connections now says so, and says which fix applies - add a relay, or re-share your link so it carries the one you already have.
