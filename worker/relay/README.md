@@ -15,6 +15,10 @@ is the last route tried rather than the first.
 
 ---
 
+**Deployed 2026-09-08:** `https://relay-ice.orange-tree-847c.workers.dev`
+— live, rate-limited and origin-gated, and returning 503 until the secrets in
+step 2 are set. Neither app calls it yet.
+
 ## Setting it up
 
 Steps 1 and 2 are yours: they involve an account and a secret, and nothing

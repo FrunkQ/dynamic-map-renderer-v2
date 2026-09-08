@@ -4,9 +4,12 @@ compatibility_date = "2026-09-08"
 
 # Counts only: which app asked, and what happened. No IPs, no per-visitor rows.
 # Query it with the Workers Analytics Engine SQL API, or from the dashboard.
-[[analytics_engine_datasets]]
-binding = "RELAY_ANALYTICS"
-dataset = "relay_ice"
+# ENABLE Analytics Engine on the account first (one click, Workers ->
+# Analytics Engine in the dashboard), then uncomment and redeploy. The Worker
+# already tolerates the binding being absent, so it runs either way.
+# [[analytics_engine_datasets]]
+# binding = "RELAY_ANALYTICS"
+# dataset = "relay_ice"
 
 # Without this the endpoint is a free TURN relay for whoever finds it.
 # 30 requests per minute per address is far above any honest use: a browser
