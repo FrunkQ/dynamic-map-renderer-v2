@@ -1,5 +1,107 @@
 # Changelog
 
+## v2.19.14 - 2026-09-08
+
+**When a player cannot join, you are now told.** Until now they simply never appeared: the player saw an error they could do nothing about, and the GM had no idea anyone had tried. Player Views > Player connections now says so, and says which fix applies - add a relay, or re-share your link so it carries the one you already have.
+
+**Settings > Connections gained "Test these servers"** - checks in about five seconds that a relay is reachable and its credentials work, before a game rather than during one.
+
+**And it found something.** The fallback relay that ships with the underlying networking library no longer exists - its addresses stopped resolving. So "no relay configured" quietly meant no relay at all, for anybody, and remote players could only connect when their network happened to allow a direct route. The Settings text used to say otherwise; it now tells the truth. If players have ever had trouble joining, adding a relay is very likely the answer: docs/connection-troubleshooting.md walks through it.
+
+Player-facing messages now lead with the thing a player can actually do - switch between wi-fi and mobile data, which often fixes it on the spot.
+
+## v2.19.13 - 2026-09-08
+
+Fixed: a player whose connection failed on Firefox saw a raw "P2P negotiation error" instead of Mappadux's own explanation. The two apps watched only one of a connection's two state machines, and Firefox is the browser where they disagree - so the failure never reached our own handler. Both are watched now, and PeerJS's error is treated as what it actually is: an ICE verdict, not a protocol fault.
+
+This does not change whether a connection succeeds. If yours are failing on a mobile network, the cure is a `turns:` relay on port 443 in Settings > Connections - see docs/p2p-ice-verdict-crossrepo.md.
+
+## v2.19.12 - 2026-08-26
+
+A plain word about privacy, in About, in Settings and in the README: mappadux.com counts page views so I know how many people use it - no cookies, no accounts, nothing that identifies you or follows you elsewhere, and nothing at all about your maps, packs or table. Self-hosted builds contain none of it.
+
+## v2.19.11 - 2026-08-26
+
+Pairing dice is a once-a-game thing, so it now lives with the rest of the setup rather than on the dice rail: yours in Settings > Dice, a player's in their right-click menu. The rail is for playing.
+
+## v2.19.10 - 2026-08-26
+
+Third-party notices completed: every runtime dependency and all twelve bundled font families now carry their copyright line. Two of the fonts turn out to be Apache-2.0 rather than OFL, and are listed as such.
+
+## v2.19.9 - 2026-08-26
+
+Credit where it is due: Pixels dice support is acknowledged in About, in the part of it a map pack cannot overwrite, and a new THIRD-PARTY-NOTICES.md carries the licence notices for what Mappadux ships. Mappadux asks its users to credit the creators they build on, so it should do the same.
+
+## v2.19.8 - 2026-08-26
+
+**Pair your Pixels dice from Settings > Dice**, not just from the tray - with a plain answer to "where do I pair these?", the dice you have paired, and what each one is doing. And a new **How to write a roll** reference next to the formula box: every mechanic, what it does, and an example you can click to drop straight into the box.
+
+**Physical dice made much more robust**, after a proper read of the manufacturer's developer guide. Connecting now retries with a back-off (Windows reports a die as disconnected about four seconds before the die agrees, so the obvious approach fails); a die that drops out says so on the tray instead of going quiet, and tries to come back by itself; **the on-screen dice reappear whenever no physical die is connected**, so you are never left with nothing to roll; a die you have paired before reconnects on its own next time, with no browser prompt; and Mappadux hands your dice back when the page closes, so the Pixels app can have them again.
+
+If you bump a die that had already landed, the tray now says so and counts the new roll - rather than quietly changing the answer while the table sees something else.
+
+## v2.19.7 - 2026-08-26
+
+**Dice roll across the map.** They come in from an edge, bounce off the sides a couple of times and settle where they fall, with the total catching up underneath them - instead of lining up in a corner. It is all theatre: the result is decided before anything moves, so the dice only have to look like they are rolling. Nothing ever lands under the tray or off the edge, on any screen size.
+
+**The GM gets the players' rail.** Your dice are an overlay along the bottom of your canvas now - the same one players get, and where your own Pixels dice pair. Your own rolls land on your canvas; everyone else's still go quietly to the feed. It can be switched off per screen.
+
+**Dice setup moved out of the sidebar into Settings > Dice**, because that is what it is: the set, the systems, who sees what, the colours and the celebration direction all live there, and the sidebar has one less panel. Eight ready-made systems to start from - d20, d6 pool, Fate/Blades, Shadowrun, L5R, World of Darkness, Savage Worlds and roll-under - and the formula box tells you what a roll can come to as you type it.
+
+## v2.19.6 - 2026-08-26
+
+**More dice systems, written in plain words.** Alongside `adv` and `dis`, a formula can now say what it does: `1d6 burst` (a die at its maximum rolls again and adds - exploding dice), `4d6 keep 3` (or `keep low 3`), and `12d6 target 5` (a success pool, where the result is how many dice reached 5 rather than their sum). They combine, so L5R roll-and-keep is `5d10 burst keep 3` and World of Darkness is `8d10 burst target 8`. Pools also notice a Shadowrun glitch when more than half the dice come up 1, and say so.
+
+**Celebration can be turned round, or off.** Some games want you to roll LOW, so a natural 1 is the triumph and the maximum is the disaster. In the Dice settings: **off**, **high is best** (the default), or **low is best**. It applies to plain numbered dice as well as shaped ones - it is the result being celebrated, not the artwork.
+
+**Coming back from a StarMap** now returns the Player View window to a corner-sized preview rather than handing it back over your map at whatever size it was.
+
+## v2.19.5 - 2026-08-26
+
+**Roll your own Pixels dice.** If you own a set of Pixels electronic dice, tap **My dice** on the tray and pair them - and from then on the buttons step aside. Throw your dice on the actual table and the roll appears on everyone's screen a moment later, with everything else exactly as it always is: your colour, the shaped dice, the gold flare on a natural maximum, the fade, and the sentence in the GM's feed (marked *real dice*). Throw a handful and it waits for the table to go quiet before reporting them as one roll; pick a die up and drop it again and it corrects the roll rather than adding to it. Whisper still applies to whatever you throw next.
+
+The dice keep doing their own light show - that lives on the die itself and is configured in the Pixels app, so it is none of Mappadux's business.
+
+Pairing is only offered where it can actually work: Chrome, Edge or Android, on the https site. It needs a secure connection, so a player who joined over a local network address will not see the button. Nobody without dice downloads anything extra.
+
+## v2.19.4 - 2026-08-26
+
+**Dice are made of the roller's colour, and mottled like real ones.** A player's dice are their own colour - the one on their token - so the table knows whose they are before reading them, with facets lit and shaded from it and numerals in whatever stays readable (pick pale yellow and you get dark numbers). Each die carries five soft blobs of light and shade in the material, the same ones every time it tumbles. **The GM's dice are black with gold numerals**, and both ends are customisable in the Dice panel.
+
+**Dice now fade.** They sit for about seven seconds after landing - twelve on the table screen, which people look up at a beat later - and then go. What remains is the sentence in your feed: `Alex rolled 1+2+2=5 (on 3d6 [3-18])`. The range is the point of it: a 5 means nothing until you know it was 3d6. Rolling again catches a fading hand and brings it back.
+
+**A die at its best glows.** A natural maximum takes a gold rim and glow, a minimum a cold slate one, and when every die in a hand comes up best the whole lane lights and the total pulses. Not red for a bad roll - red means destructive here, and a bad roll is not a mistake you made.
+
+## v2.19.3 - 2026-08-26
+
+**Shaped dice or plain numbers, your choice, per screen.** A new *Dice appearance* selector in Settings > Performance: **Automatic**, **Shaped dice**, or **Plain numbers**. Plain is genuinely plain - a rounded tile and the number, no facets, no shine, no wobble, no shadow - for a modest screen or for anyone who would rather have the number than the theatre. Automatic picks plain when the device reports very little memory or few cores, or when you have asked your system for less motion.
+
+Players get the same choice for their own device in their right-click menu, beside the existing "Dice show me" control. The two are different questions and stay separate: *how much* you see of a roll (the dice, a line, or nothing) is the table's business and travels with the pack; *what they look like* is yours alone and never travels. Either way it takes effect on the next roll, with no reload.
+
+## v2.19.2 - 2026-08-26
+
+**Dice that look like dice.** Each one is now cut to its own silhouette - the d20 hexagon with a triangle looking at you, the d4 triangle, the d8 diamond, the d10 kite, the d12 pentagon, the d6 bevelled cube - and shaded across facets with the light coming from the top left, tinted towards the roller's colour. They wobble and catch a moving highlight while they are in the air, then land with a bounce and a shadow. A die advantage threw away is struck through rather than hidden, because seeing what you beat is half the pleasure.
+
+It is faked, deliberately: no 3D geometry, no physics, no new dependency, and no filter running while anything moves - the table screen is usually the weakest device in the house. The result was decided before the roll started; the animation only has to look like one.
+
+Also fixed: rolling again before the last roll landed now belongs entirely to the new roll, and a tab that was hidden mid-tumble comes back to dice that have landed rather than a roll still going.
+
+## v2.19.1 - 2026-08-26
+
+Importing a pack now redraws the Dice panel, so you see the set the pack just handed you rather than the one you had before. Tests for the whisper timer.
+
+## v2.19.0 - 2026-08-26
+
+**Dice.** You write the rolls your game asks for - "Attack", "1d20+5" - in the new **Dice** panel, and every player gets them as a tray of chips on their own screen. One tap is one roll. There is no formula to type, no modifier picker and no dialog: advantage and damage are their own chips, because you decided the vocabulary. Three presets (d20, d6 pool, Fate/Blades) fill the list in one click, and the whole set travels inside the pack, so handing someone your pack hands them the dice too.
+
+**Rolls reach you as chat, not as toasts.** A roll lands in that player's message thread as a chip - what they called it, what it was, and the total big enough to read across a table - and never covers your map. The new **All players** button beside the Players count opens one feed of every message and every roll from everyone, with All / Rolls / Chat filters. It is meant to be left open; while it is, nothing counts as unread.
+
+**Who sees what is yours to set**, under "Who sees what" in the Dice panel: where player rolls go, and whether the table screen, the other players and the roller each get the dice rolling, a line of text, or nothing. The table screen is a dice target - with one connected, dice land there, big, and stay until that person rolls again, one lane per roller, and the roller keeps a line on their own phone because everyone is looking up anyway. Your own rolls stay private unless you say otherwise, or star one entry as the loud one.
+
+**Whisper.** A player can arm Whisper on their tray and the next roll goes to you and nobody else - not to the table screen, not to another player, and not onto the wire at all. The whole tray glows while it is armed, and it disarms itself after ten minutes and says so, because a mode you have forgotten you are in is the one that leaks a secret roll.
+
+Every player can also turn dice down on their own device - the dice, a line, or nothing at all - from the right-click menu, and no pack can override that. Dice can be switched off for the table entirely in Settings > Player Permissions; your own dice keep working.
+
 ## v2.18.13 — 2026-08-25
 
 Dropped the "not on a StarMap" label from the greyed panels - the ghosting already says it.

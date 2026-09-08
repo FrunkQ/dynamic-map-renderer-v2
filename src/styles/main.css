@@ -7183,6 +7183,368 @@ option.select-option--add {
   word-break: break-word;
 }
 
+/* ─── v2.19 Dice: the tray, and where dice land ────────────────────────────
+   Screen space on every surface. The tray is the player's whole interaction:
+   a rail of chips, one tap per roll. Indigo means WHISPER here and in the GM's
+   feed — green and orange are reserved for view identity, and red/yellow
+   already mean danger and caution. */
+.dice-tray {
+  position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+  /* Clears the fullscreen button (bottom-right) on a phone, symmetrically, so
+     the rail scrolls rather than sliding under it. */
+  z-index: 9; max-width: min(calc(100vw - 110px), 900px);
+  padding: 5px; border-radius: 12px;
+  background: rgba(16, 19, 28, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  opacity: 0.9; transition: opacity 140ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.dice-tray:hover { opacity: 1; }
+/* On the GM screen the tray lives INSIDE the canvas, so it centres over the map
+   rather than over the window (which the sidebar makes a different thing). */
+#canvas-wrapper .dice-tray { position: absolute; max-width: min(calc(100% - 24px), 900px); }
+.dice-tray[hidden] { display: none; }
+.dice-tray-rail { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: thin; }
+.dice-chip {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  min-width: 58px; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.07); color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.dice-chip:hover  { background: rgba(255, 255, 255, 0.15); }
+.dice-chip:active { transform: translateY(1px); }
+.dice-chip-label   { font-weight: 650; font-size: 13px; line-height: 1.1; }
+.dice-chip-formula { font-size: 10px; color: var(--text-dim); font-family: ui-monospace, monospace; }
+/* Real dice on the table: the chips step aside and the tray becomes a status
+   strip. The rules stay, which is why the whisper toggle is still beside it. */
+.dice-physical-status {
+  flex: 0 0 auto; display: flex; align-items: center;
+  padding: 5px 10px; border-radius: 8px; font-size: 12px;
+  color: var(--text-secondary); background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-tray.is-collecting .dice-physical-status {
+  color: var(--text-primary); border-color: rgba(255, 255, 255, 0.4);
+}
+.dice-pair-btn {
+  flex: 0 0 auto; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  font-size: 11px; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04); border: 1px dashed rgba(255, 255, 255, 0.22);
+}
+.dice-pair-btn:hover { color: var(--text-primary); }
+.dice-whisper-toggle {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 8px; cursor: pointer; font-size: 11px;
+  background: rgba(255, 255, 255, 0.04); color: var(--text-dim);
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+}
+.dice-whisper-toggle:hover { color: var(--text-primary); }
+.dice-whisper-toggle.is-on {
+  color: #c7d2fe; background: rgba(129, 140, 248, 0.18);
+  border-style: solid; border-color: rgba(165, 180, 252, 0.65);
+}
+/* Armed: the WHOLE tray changes, not just the toggle — this is a mode, and a
+   mode you have forgotten you are in is the one that leaks a secret roll. */
+.dice-tray.is-whisper {
+  border-color: rgba(165, 180, 252, 0.6);
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.35), 0 0 18px rgba(99, 102, 241, 0.45);
+  background: rgba(23, 23, 45, 0.9);
+}
+.dice-tray.is-whisper .dice-chip { filter: saturate(0.55); border-color: rgba(165, 180, 252, 0.3); }
+
+/* v2.19.8 — dice are THROWN across the surface and come to rest where they
+   fall, rather than lining up in a slot. The lane is now the whole surface: one
+   per roller, so two people rolling at once keep their own dice and their own
+   total. Everything is transform-positioned, so nothing reflows mid-throw. */
+.dice-layer { position: absolute; inset: 0; z-index: 8; pointer-events: none; overflow: hidden; }
+.dice-lanes { position: absolute; inset: 0; }
+.dice-lane { position: absolute; inset: 0; }
+.dice-faces { position: absolute; inset: 0; }
+.die { position: absolute; top: 0; left: 0; will-change: transform; }
+/* The total catches up with the dice: parked under where they landed. */
+.dice-caption {
+  position: absolute; top: 0; left: 0;
+  display: flex; align-items: baseline; gap: 6px; white-space: nowrap;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(12, 14, 20, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid var(--roller-color, rgba(255, 255, 255, 0.4));
+  opacity: 0; transition: opacity 220ms ease 120ms;
+}
+.dice-lane.is-settled .dice-caption { opacity: 1; }
+.dice-lane.is-whisper .dice-caption { border-color: rgba(165, 180, 252, 0.6); background: rgba(24, 24, 48, 0.86); }
+/* Dice are a moment, not a record: they fade a few seconds after landing and
+   the roll survives as a sentence in the GM's feed. Rolling again catches a
+   fading hand and brings it back. */
+.dice-lane { transition: opacity 600ms ease, transform 600ms ease; }
+.dice-lane.is-leaving { opacity: 0; transform: translateY(8px) scale(0.96); }
+
+/* A best or worst face, marked only once the die has LANDED on it. Gold for a
+   die at its best; a cold slate for one at its worst — red is reserved for
+   destructive things, and a bad roll is not a mistake you made. */
+.die-rim { stroke: none; stroke-width: 0; }
+.dice-lane.is-settled .die--good .die-rim { stroke: #f2c14e; stroke-width: 5; }
+.dice-lane.is-settled .die--bad .die-rim { stroke: #7c8698; stroke-width: 4; }
+/* Every die at its best is a different event from one of them being lucky. */
+.dice-lane.is-allgood .dice-caption {
+  border-color: #f2c14e;
+  box-shadow: 0 0 18px rgba(242, 193, 78, 0.35);
+}
+.dice-lane.is-allgood .dice-lane-total { color: #f7d98a; animation: dice-crit 700ms ease-out; }
+.dice-lane.is-allbad .dice-lane-total { color: #97a2b4; }
+/* A pool mostly showing ones: Shadowrun's glitch, and its cousins. */
+.dice-lane.is-glitch .dice-caption { border-color: #b0788f; }
+.dice-lane.is-glitch .dice-lane-label::after { content: ' - glitch'; color: #d09ab0; }
+@keyframes dice-crit {
+  0%   { transform: scale(1.35); text-shadow: 0 0 18px rgba(242, 193, 78, 0.9); }
+  100% { transform: none; text-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dice-lane.is-allmax .dice-lane-total { animation: none; }
+}
+.dice-lane-name  { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+.dice-lane-label { font-size: 10px; color: var(--text-dim); }
+
+/* v2.19.2 — a die that looks like a die. The silhouette comes from a clip-path
+   the shape table also draws the facets from (src/rendering/dieShapes.ts), so
+   the two can never drift. Three tones from ONE tint, light from the top left:
+   no geometry, no physics, no dependency, and nothing filters while anything
+   moves — the table screen is the weakest device in the house. */
+.dice-layer {
+  --die-hi: #f6f8ff; --die-mid: #dde3f1; --die-lo: #b7c0d6; --die-ink: #0e1119;
+}
+/* The tones are computed per hand in dieColors.ts and set on the lane inline —
+   a player's dice ARE their colour, and the GM's are black with gold. These are
+   only the fallbacks for a lane that somehow arrives without a skin. */
+.dice-lane { --die-base: #dde3f1; --die-hi: #f7f9ff; --die-mid: #dde3f1; --die-lo: #aeb8d0; }
+.die { position: relative; flex: 0 0 auto; width: 30px; height: 30px; }
+.die-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.die-text {
+  fill: var(--die-ink); font-weight: 800; font-variant-numeric: tabular-nums;
+  font-family: inherit;
+  /* A hairline of the die's own colour around the glyph, drawn UNDER it: the
+     mottling never gets to touch a numeral, so the number stays the clearest
+     thing on the die at table distance. */
+  paint-order: stroke; stroke: var(--die-base); stroke-width: 3px; stroke-linejoin: round;
+}
+/* Cast, not painted: soft blobs of light and shade in the material itself. */
+.die-mottle { pointer-events: none; }
+.die-slash { stroke: rgba(16, 19, 28, 0.6); stroke-width: 7; stroke-linecap: round; }
+.die--dropped { opacity: 0.45; }
+/* The shine. A static rim highlight where the light is, plus a sweep across the
+   facets while the die is still in the air. */
+/* Plain numbers: a rounded tile and the numeral, nothing else. No shine, no
+   wobble, no bounce — the option for a weak screen or a GM who wants the number
+   and not the theatre. */
+.die--plain::before,
+.die--plain::after { display: none; }
+.dice-lane.is-plain:not(.is-settled) .die { animation: none; }
+.dice-lane.is-plain.is-settled .die { animation: none; filter: none; }
+/* A die that burst carries a small mark, since its face reads past its own
+   maximum and that would otherwise look like a mistake. */
+.die--burst .die-rim { stroke: rgba(255, 255, 255, 0.5); stroke-width: 2; stroke-dasharray: 6 5; }
+.die::before,
+.die::after { content: ''; position: absolute; pointer-events: none; }
+.die::before {
+  inset: 0; z-index: 1;
+  background: radial-gradient(120% 90% at 20% 10%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 55%);
+}
+.die::after {
+  inset: -40%; z-index: 2;
+  background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.75) 50%, transparent 58%);
+  transform: translate3d(-130%, 0, 0);
+}
+.dice-lane:not(.is-settled) .die::after { animation: die-shine 850ms linear infinite; }
+
+/* The shadow arrives only once they land: no filter runs during the animation. */
+.dice-lane.is-settled .die { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+/* A die at its best glows instead. Must come AFTER the rule above: same
+   specificity, so order is what decides which shadow a natural 20 gets. */
+.dice-lane.is-settled .die--good { filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.8)); }
+/* Plain numbers get the flare too — it is the RESULT being celebrated, not the
+   artwork, so turning the dice down to tiles must not turn the moment off. */
+.dice-lane.is-plain.is-settled .die--good { filter: drop-shadow(0 0 6px rgba(242, 193, 78, 0.8)); }
+.dice-lane.is-plain.is-settled .die--bad  { filter: none; }
+@keyframes die-shine  { from { transform: translate3d(-130%, 0, 0); } to { transform: translate3d(130%, 0, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .dice-lane .die, .dice-lane .die::after { animation: none !important; }
+}
+.dice-lane-total {
+  font-size: 18px; font-weight: 800; line-height: 1;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.dice-lane.is-settled .dice-lane-total { animation: dice-pop 260ms ease-out; }
+@keyframes dice-pop { from { transform: scale(0.7); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
+/* The table screen is read from across a room. */
+.dice-layer--table .dice-caption { padding: 5px 14px; gap: 10px; }
+.dice-layer--table .dice-lane-total { font-size: 30px; }
+.dice-layer--table .dice-lane-name  { font-size: 15px; }
+.dice-layer--table .dice-lane-label { font-size: 13px; }
+.dice-layer--table .dice-lane.is-settled .die { filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.5)); }
+.dice-layer--table .dice-lane-total { font-size: 40px; }
+.dice-layer--table .dice-lane-name  { font-size: 15px; }
+.dice-layer--table .dice-lane-label { font-size: 13px; }
+
+/* A line: someone else rolled. Enough to follow, never enough to take over. */
+.dice-lines {
+  position: absolute; right: 10px; bottom: 74px;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+}
+.dice-line {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(12, 14, 20, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid var(--roller-color, rgba(255, 255, 255, 0.4));
+  font-size: 12px; color: var(--text-secondary);
+  animation: dice-line-in 180ms ease-out;
+  transition: opacity 380ms ease, transform 380ms ease;
+}
+.dice-line.is-whisper { border-color: rgba(165, 180, 252, 0.6); }
+.dice-line.is-leaving { opacity: 0; transform: translateY(-4px); }
+.dice-line-who   { font-weight: 700; }
+.dice-line-what  { color: var(--text-primary); }
+.dice-line-faces { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); }
+.dice-line-total { font-weight: 800; font-size: 15px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+@keyframes dice-line-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.dice-layer--table .dice-line { font-size: 16px; }
+.dice-layer--table .dice-line-total { font-size: 22px; }
+/* A StarMap fills the surface with someone else's app; dice still belong to
+   the people at the table, so they stay on top of it. */
+body.starmap-active .dice-layer { z-index: 8; }
+
+/* ─── v2.19 Dice: the GM's set editor ──────────────────────────────────────
+   One row per entry. The row IS the roll button — a GM reaching for their own
+   dice should not have to find a separate control — with the public star and
+   the delete handle alongside. */
+.dice-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--space-xs); }
+.dice-row { display: flex; align-items: stretch; gap: 4px; }
+.dice-row-roll {
+  flex: 1 1 auto; display: flex; align-items: baseline; gap: var(--space-xs);
+  padding: 5px 8px; border-radius: 6px; cursor: pointer; text-align: left;
+  background: rgba(255, 255, 255, 0.05); color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-row-roll:hover { background: rgba(255, 255, 255, 0.12); }
+.dice-row-label   { font-weight: 600; font-size: var(--font-size-sm); }
+.dice-row-formula { margin-left: auto; color: var(--text-dim); font-size: 11px; font-family: ui-monospace, monospace; }
+.dice-row-public {
+  flex: 0 0 auto; width: 26px; border-radius: 6px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.14); font-size: 12px; line-height: 1;
+}
+.dice-row-public.is-on { color: #cfe0ff; border-color: rgba(140, 170, 255, 0.5); background: rgba(140, 170, 255, 0.14); }
+.dice-row-delete {
+  flex: 0 0 auto; width: 26px; border-radius: 6px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.04); color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-row-delete:hover { color: var(--danger, #ef4444); border-color: rgba(239, 68, 68, 0.5); }
+.dice-add-row .dice-formula-input { font-family: ui-monospace, monospace; }
+.dice-add-row .dice-formula-input.is-invalid { border-color: rgba(239, 68, 68, 0.7); }
+.dice-empty { margin: 0 0 var(--space-xs); color: var(--text-dim); font-size: 11px; line-height: 1.4; }
+.dice-error { margin: 0 0 var(--space-xs); color: #ff8a8a; font-size: 11px; line-height: 1.4; }
+.dice-error[hidden] { display: none; }
+.dice-policy { margin-top: var(--space-sm); }
+.dice-policy > summary { cursor: pointer; font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: var(--space-xs); }
+.dice-policy > summary:hover { color: var(--text-primary); }
+/* The mechanics reference: folded away, with copyable examples. */
+.dice-help-list { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px var(--space-sm); align-items: baseline; }
+.dice-help-list dt {
+  font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700;
+  color: var(--text-primary); white-space: nowrap;
+}
+.dice-help-list dd { margin: 0; font-size: 11px; line-height: 1.45; color: var(--text-secondary); }
+.dice-help-example {
+  display: inline-block; margin-top: 2px; padding: 1px 6px; border-radius: 4px; cursor: pointer;
+  font-family: ui-monospace, monospace; font-size: 11px;
+  background: rgba(255, 255, 255, 0.07); color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.dice-help-example:hover { background: rgba(255, 255, 255, 0.15); }
+.dice-pixels .btn { margin-top: var(--space-xs); }
+.dice-row-roll--static { cursor: default; }
+.dice-row-roll--static:hover { background: rgba(255, 255, 255, 0.05); }
+
+/* Third-party acknowledgements, in the part of About a pack cannot overwrite. */
+.about-mpx-credits {
+  margin-top: 2px; font-size: 10px; line-height: 1.4; color: var(--text-dim);
+}
+.about-mpx-credits a { color: inherit; text-decoration: underline; }
+.about-mpx-credits a:hover { color: var(--text-primary); }
+
+.dice-color-pair { display: flex; align-items: center; gap: 6px; }
+.dice-color {
+  width: 34px; height: 26px; padding: 0; cursor: pointer;
+  background: none; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 5px;
+}
+
+/* ─── v2.19 Dice in the feed ───────────────────────────────────────────────
+   A roll is not a sentence, so it does not render as one: what it was called,
+   what was rolled, what it came to — the total big enough to read across a
+   table. Indigo marks a whisper here and on the player tray, because green and
+   orange are reserved for view identity and red/yellow already mean danger and
+   caution. */
+.mt-msg--roll .mt-msg-head { margin-bottom: 2px; }
+.mt-roll {
+  display: flex; align-items: baseline; gap: var(--space-xs); flex-wrap: wrap;
+  padding: 4px 8px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--roll-color, rgba(255, 255, 255, 0.25));
+}
+.mt-roll-label     { font-weight: 700; color: var(--text-primary); font-size: var(--font-size-sm); }
+.mt-roll-formula   { color: var(--text-dim); font-size: 11px; font-family: ui-monospace, monospace; }
+.mt-roll-breakdown { color: var(--text-secondary); font-size: 11px; font-family: ui-monospace, monospace; }
+.mt-roll-total {
+  margin-left: auto; font-size: 20px; font-weight: 800; line-height: 1;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.mt-msg--whisper .mt-roll {
+  background: rgba(129, 140, 248, 0.12);
+  border-left-color: #818cf8;
+}
+/* A roll that happened on the table rather than on a screen. */
+.mt-roll-real {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim); border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px; padding: 0 6px;
+}
+.mt-msg-whisper-tag {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #a5b4fc; border: 1px solid rgba(165, 180, 252, 0.45);
+  border-radius: 999px; padding: 0 6px;
+}
+.mt-msg-reply {
+  background: none; border: 0; padding: 0 4px; cursor: pointer;
+  color: var(--text-dim); font-size: 11px; text-decoration: underline;
+}
+.mt-msg-reply:hover { color: var(--text-primary); }
+
+/* All Players feed — filters across the top, one merged thread below. */
+.mt-filterbar {
+  flex: 0 0 auto; display: flex; gap: 4px;
+  padding: var(--space-sm) var(--space-sm) 0;
+}
+.mt-filter {
+  padding: 2px 10px; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.06); color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.14); font-size: 11px;
+}
+.mt-filter:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
+.mt-filter.is-active {
+  background: rgba(255, 255, 255, 0.16); color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.all-threads-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 15px; height: 15px;
+  padding: 0 3px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28); color: var(--text-primary);
+  font-size: 9px; line-height: 15px; text-align: center; font-weight: 700;
+}
+.all-threads-badge[hidden] { display: none; }
+#all-threads-btn { position: relative; }
+
 .mt-composer {
   flex: 0 0 auto;
   display: flex;

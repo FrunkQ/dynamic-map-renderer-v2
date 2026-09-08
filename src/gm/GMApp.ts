@@ -31,6 +31,39 @@ import { SoundboardPanel, type SoundboardBroadcast } from './SoundboardPanel.ts'
 import { PlayersPanel } from './PlayersPanel.ts';
 import { MessageThreads } from './MessageThreads.ts';
 import { buildMessageThreadPanel } from './MessageThreadPanel.ts';
+import { buildAllThreadsPanel, type AllThreadsFilter } from './AllThreadsPanel.ts';
+
+import { rollFormula, describeRollSentence, type RollOutcome } from '../dice/roll.ts';
+import { DiceLayer } from '../rendering/DiceLayer.ts';
+import { PlayerDiceTray } from '../player/PlayerDiceTray.ts';
+import { isPhysicalDiceSupported } from '../dice/physicalRoll.ts';
+import { detailFor } from '../dice/dicePolicy.ts';
+import { GM_DIE_BASE, GM_DIE_INK } from '../rendering/dieColors.ts';
+
+/** v2.19 — the GM's own rolls need a thread to live in; they have no player id.
+ *  Never collides with a real one (those are generated ids). */
+const GM_THREAD_KEY = '__gm__';
+
+/**
+ * A roll arrives already rolled — we trust the table, but not the bytes. Shape
+ * anything malformed away rather than rendering junk on the projector.
+ */
+function _sanitiseOutcome(raw: RollOutcome | undefined): RollOutcome | null {
+  if (!raw || !Array.isArray(raw.dice) || raw.dice.length === 0 || raw.dice.length > 100) return null;
+  if (typeof raw.total !== 'number' || !Number.isFinite(raw.total)) return null;
+  const dice = raw.dice
+    .filter((d) => d && typeof d.value === 'number' && Number.isFinite(d.value)
+      && (d.sides === 'F' || (typeof d.sides === 'number' && d.sides >= 2 && d.sides <= 1000)))
+    .map((d) => ({ sides: d.sides, value: Math.trunc(d.value), ...(d.dropped ? { dropped: true as const } : {}) }));
+  if (dice.length === 0) return null;
+  return {
+    formula: String(raw.formula ?? '').slice(0, 40),
+    dice,
+    modifier: Number.isFinite(raw.modifier) ? Math.trunc(raw.modifier) : 0,
+    total: Math.trunc(raw.total),
+    ...(raw.mode === 'adv' || raw.mode === 'dis' ? { mode: raw.mode } : {}),
+  };
+}
 import { PlayerRegistry } from '../players/PlayerRegistry.ts';
 import { assetToPlayerIcon } from '../players/playerIcon.ts';
 import { PingLayer } from '../rendering/PingLayer.ts';
@@ -53,7 +86,8 @@ import { transitionRegistry } from '../transitions/TransitionRegistry.ts';
 import { Host } from '../p2p/Host.ts';
 import { generateRoomCode, generateInstanceId } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, getMap, saveMap, deleteMap, clearAssetLibraries, clearEverything, getActiveInstanceId } from '../storage/db.ts';
-import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag } from '../storage/localSettings.ts';
+import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet, isGmDiceTrayShown, getKnownPixels } from '../storage/localSettings.ts';
+import { blockedJoinerAdvice } from '../p2p/iceConfig.ts';
 import { seedDefaultMaps, reseedWelcomePack, WELCOME_PACK_VERSION } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
@@ -415,6 +449,11 @@ export class GMApp {
   /** The playerId whose thread side panel is currently open, or null.
    *  Read by addIncoming to skip unread bumps for the active thread. */
   private _openThreadPlayerId: string | null = null;
+  /** v2.19 — the All Players feed is open, so EVERY thread is on screen and
+   *  nothing should bump an unread counter. Passed to addIncoming as '*'. */
+  private _allThreadsOpen = false;
+  private _allThreadsPanel: import('./SidePanel.ts').SidePanelHandle | null = null;
+  private _allThreadsFilter: AllThreadsFilter = 'all';
   /** Handle to the open thread SidePanel (one at a time). */
   private _threadSidePanel: import('./SidePanel.ts').SidePanelHandle | null = null;
   /** Ping pulses relayed from players — persist on the GM until dismissed. */
@@ -601,6 +640,7 @@ export class GMApp {
     this.host = new Host({
       onReady: (code) => this.onHostReady(code),
       onPeerConnected:    (id) => this.onPeerConnected(id),
+      onPeerBlocked:      (id) => this._onJoinerBlocked(id),
       onPeerDisconnected: (id) => this.onPeerDisconnected(id),
       onError: (err) => this.onP2PError(err),
       onPeerMessage: (peerId, msg) => this.onPeerMessage(peerId, msg),
@@ -2257,6 +2297,34 @@ export class GMApp {
     const scaled       = this.projectorConnections.size;
 
     list.replaceChildren();
+
+    // v2.19.14 — anyone who tried and could not get through goes FIRST: this is
+    // the panel a GM opens when a player says "I can't join", and the answer
+    // should be waiting for them rather than hidden in a log.
+    if (this._blockedJoiners.size > 0) {
+      const li = document.createElement('li');
+      li.className = 'conn-blocked';
+      const n = this._blockedJoiners.size;
+      const advice = blockedJoinerAdvice((loadStoredIce() ?? []).length > 0);
+      const head = document.createElement('strong');
+      head.textContent = n === 1
+        ? '1 player could not connect'
+        : `${n} players could not connect`;
+      const why = document.createElement('span');
+      why.className = 'conn-blocked-why';
+      why.textContent = advice === 'add-relay'
+        ? ' — their network would not carry it. A relay fixes this: add one below, then re-share the link.'
+        : ' — you have a relay set up, so their link probably pre-dates it. Re-share the QR or link below.';
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'btn btn--ghost btn--xs';
+      clear.textContent = 'Clear';
+      clear.title = 'Forget these attempts';
+      clear.addEventListener('click', () => { this._blockedJoiners.clear(); this._renderConnectionsSummary(); });
+      li.append(head, why, clear);
+      list.appendChild(li);
+    }
+
     if (localWindows + scaled + remote === 0) {
       const li = document.createElement('li');
       li.className = 'conn-empty';
@@ -4058,6 +4126,28 @@ export class GMApp {
       this.host.broadcast({ type: 'ping_show', pingId: msg.pingId, x: msg.x, y: msg.y, color, name });
       return;
     }
+    if (msg.type === 'dice_roll') {
+      // v2.19 — the player already rolled; we relay, we never re-roll. Dropping
+      // it here is what "players may not roll" means for a stale client.
+      if (!areDiceEnabled()) return;
+      if (this._seenUpstream(msg.rollId)) return;
+      const outcome = _sanitiseOutcome(msg.roll);
+      if (!outcome) return;
+      const player = this.playerRegistry.playerForClient(msg.clientId);
+      this._publishRoll({
+        rollId: msg.rollId,
+        label: (msg.label || 'Roll').slice(0, 24),
+        outcome,
+        fromPlayerId: msg.playerId,
+        fromName: player?.characterName || player?.playerName || 'Player',
+        fromColor: player?.color ?? '#3b82f6',
+        whisper: msg.whisper === true,
+        fromGm: false,
+        rollerClientId: msg.clientId,
+        physical: msg.physical === true,
+      });
+      return;
+    }
     if (msg.type === 'player_message') {
       if (!isMessagingEnabled()) return; // GM has messaging switched off
       if (this._seenUpstream(msg.messageId)) return;
@@ -4095,7 +4185,7 @@ export class GMApp {
         origin: msg.toPlayerId ? 'peer-bound' : 'gm-bound',
         ...(suggestionsPromise ? { suggestionsPromise } : {}),
       };
-      this._messageThreads.addIncoming(senderPlayerId, entry, this._openThreadPlayerId);
+      this._messageThreads.addIncoming(senderPlayerId, entry, this._visibleThreadKey());
       // v2.16.49 — peer-bound messages also land in the RECIPIENT's
       // thread so the GM can monitor both sides from either badge.
       // Orange unread bumps on the recipient row; the message reads
@@ -4103,7 +4193,7 @@ export class GMApp {
       // recipient is the player whose thread is currently open, the
       // bump is skipped and the body refresh handles the live update.
       if (msg.toPlayerId) {
-        this._messageThreads.addIncoming(msg.toPlayerId, entry, this._openThreadPlayerId);
+        this._messageThreads.addIncoming(msg.toPlayerId, entry, this._visibleThreadKey());
         // Player→player: relay to the addressed player so their PlayerApp
         // shows the toast.
         this.host.broadcast({
@@ -4203,6 +4293,9 @@ export class GMApp {
       const primary = this._primaryProjector();
       if (primary) this.projectorEditor?.setConnection(primary);
       this.refreshProjectorStatus();
+      // v2.19 — with a table screen present, a roller's own dice go to the
+      // table and they keep a line. Tell the trays that changed.
+      if (wasNew) this._broadcastPlayerFeatures();
       // A new projector might have just calibrated — re-read the setup list
       // so the picker reflects what's now in localStorage.
       this.refreshProjectorSetupSelect();
@@ -6403,6 +6496,23 @@ export class GMApp {
     this._refreshRectOverlays();
   }
 
+  /**
+   * v2.19.14 — a player got as far as our broker and then their network refused
+   * to carry the connection. THEY cannot fix it: the relay travels in the link
+   * they opened, so only the GM can. Say so where the GM will be looking when
+   * someone tells them "I can't get in" — beside the join QR — and say which of
+   * the two fixes applies.
+   */
+  private _onJoinerBlocked(peerId: string): void {
+    this._blockedJoiners.add(peerId);
+    const advice = blockedJoinerAdvice((loadStoredIce() ?? []).length > 0);
+    this.setStatus(advice === 'add-relay'
+      ? 'A player could not connect — their network blocked it. Add a relay in Settings > Connections and re-share the link.'
+      : 'A player could not connect. Your relay may not be in the link they used — re-share the QR or link.', 'warn');
+    this._renderConnectionsSummary();
+  }
+  private _blockedJoiners = new Set<string>();
+
   private setStatus(msg: string, level: 'ok' | 'warn' | 'error'): void {
     // v2.17.20 — feed the quiet activity log instead of the always-on bar, so
     // connection chatter never parks itself over the panels during play.
@@ -7002,6 +7112,122 @@ export class GMApp {
     return false;
   }
 
+  // ── v2.19 Dice (docs/dice-design.md) ──────────────────────────────────────
+
+  /** The GM rolled one of their own set. Private unless the policy says
+   *  otherwise, or the entry is marked public. */
+  private _rollAsGm(entry: import('../types.ts').DiceButton): void {
+    const outcome = rollFormula(entry.formula);
+    if (!outcome) return;
+    this._publishGmRoll(entry.label, outcome, entry.public === true);
+  }
+
+  /** One path for the GM's dice, whether tapped on the rail or thrown. */
+  private _publishGmRoll(label: string, outcome: RollOutcome, forcePublic: boolean): void {
+    const rollId = generateId();
+    const policy = getDicePolicy();
+    this._publishRoll({
+      rollId,
+      label,
+      outcome,
+      fromPlayerId: null,
+      fromName: 'You',
+      fromColor: '#cfe0ff',
+      whisper: false,
+      fromGm: true,
+      forcePublic,
+    });
+    // The GM does not want everyone ELSE's dice thrown at their screen — that
+    // is what the feed is for — but their OWN roll they just made is worth
+    // watching land.
+    this._diceLayer?.showFull({
+      rollId,
+      label,
+      outcome,
+      rollerKey: GM_THREAD_KEY,
+      rollerName: 'You',
+      rollerColor: '#cfe0ff',
+      celebrate: policy.celebrate,
+      skin: {
+        base: policy.gmDieBase ?? GM_DIE_BASE,
+        ...(policy.gmDieInk ?? GM_DIE_INK ? { ink: policy.gmDieInk ?? GM_DIE_INK } : {}),
+      },
+    });
+  }
+
+  /**
+   * The single place a roll becomes visible to anyone. Resolves the pack policy
+   * ONCE here and ships the answer, so no viewer needs a copy of the policy —
+   * it only reduces what it is told against its own preference and its device.
+   * The faces are never recomputed: whoever rolled decided them.
+   */
+  private _publishRoll(r: {
+    rollId: string; label: string; outcome: RollOutcome;
+    fromPlayerId: string | null; fromName: string; fromColor: string;
+    whisper: boolean; fromGm: boolean; forcePublic?: boolean;
+    /** The window that rolled it, so its own echo can be ignored there. */
+    rollerClientId?: string | null;
+    /** Thrown on real dice rather than tapped. */
+    physical?: boolean;
+  }): void {
+    const ctx = {
+      policy: getDicePolicy(),
+      fromGm: r.fromGm,
+      whisper: r.whisper,
+      tableConnected: this.projectorConnections.size > 0,
+      ...(r.forcePublic ? { forcePublic: true } : {}),
+    };
+    const detailGm     = detailFor('gm', ctx);
+    const detailOthers = detailFor('other', ctx);
+    const detailTable  = detailFor('table', ctx);
+
+    // The GM's own copy: a line in the feed, never a toast over the map.
+    if (detailGm !== 'none') {
+      const threadKey = r.fromPlayerId ?? GM_THREAD_KEY;
+      const entry = {
+        id: r.rollId,
+        fromKind: (r.fromGm ? 'gm' : 'player') as 'gm' | 'player',
+        fromPlayerId: r.fromPlayerId,
+        fromName: r.fromName,
+        fromColor: r.fromColor,
+        toPlayerId: null,
+        // The sentence is the RECORD — the dice themselves fade off the screen
+        // after a few seconds, and this is what anyone reads afterwards.
+        text: `${r.fromName} rolled ${describeRollSentence(r.outcome)}`,
+        at: Date.now(),
+        origin: 'gm-bound' as const,
+        kind: 'roll' as const,
+        roll: { label: r.label, outcome: r.outcome, whisper: r.whisper, physical: r.physical === true },
+      };
+      if (r.fromGm) this._messageThreads.addOutgoing(threadKey, entry);
+      else this._messageThreads.addIncoming(threadKey, entry, this._visibleThreadKey());
+    }
+
+    // A whisper is NOT broadcast at all. Sending it with "do not look" flags
+    // would leave the secret on the wire for anyone with a console open; the
+    // GM has it in the feed above and the roller drew it themselves.
+    // Likewise a roll nobody would render: the relay would be pure noise.
+    if (r.whisper || (detailOthers === 'none' && detailTable === 'none')) return;
+
+    this.host.broadcast({
+      type: 'dice_show',
+      rollId: r.rollId,
+      label: r.label,
+      roll: r.outcome,
+      fromPlayerId: r.fromPlayerId,
+      fromName: r.fromName,
+      fromColor: r.fromColor,
+      whisper: r.whisper,
+      ...(r.physical ? { physical: true } : {}),
+      detailOthers,
+      detailTable,
+      rollerClientId: r.rollerClientId ?? null,
+      // The GM's dice are their own thing; a player's are that player's colour,
+      // which every viewer already has in `fromColor`.
+      ...(r.fromGm ? { dieBase: ctx.policy.gmDieBase ?? GM_DIE_BASE, dieInk: ctx.policy.gmDieInk ?? GM_DIE_INK } : {}),
+    });
+  }
+
   /** Tell player views which Player-Voice interactions are currently allowed,
    *  so they can hide disabled affordances. */
   private _broadcastPlayerFeatures(): void {
@@ -7010,6 +7236,15 @@ export class GMApp {
       pings: arePingsEnabled(),
       messaging: isMessagingEnabled(),
       movableMarkers: arePlayerMarkersMovable(),
+      dice: areDiceEnabled(),
+      diceSet: getDiceSet(),
+      // Standing policy: a roller draws their own roll without waiting for the
+      // relay, so it needs this in advance. 'auto' is resolved here.
+      diceRollerDetail: detailFor('roller', {
+        policy: getDicePolicy(), fromGm: false, whisper: false,
+        tableConnected: this.projectorConnections.size > 0,
+      }),
+      diceCelebrate: getDicePolicy().celebrate,
       measureUnitValue:  getMeasureUnitValue(),
       measureUnitSuffix: getMeasureUnitSuffix(),
     });
@@ -7288,7 +7523,117 @@ export class GMApp {
       // If the open side panel's thread changed, refresh its body so the
       // new message shows up immediately.
       this._threadSidePanel?.refresh();
+      this._allThreadsPanel?.refresh();
+      this._refreshAllThreadsBadge();
     });
+    const btn = document.getElementById('all-threads-btn');
+    if (btn) btn.onclick = () => this._openAllThreads();
+    this._refreshAllThreadsBadge();
+
+    this._mountDiceOverlay();
+  }
+
+  /**
+   * v2.19.7 — the GM's dice are an OVERLAY, the same rail the players get.
+   * Everything else about dice is setup and lives in Settings; mid-game the
+   * only thing you need is the dice themselves.
+   */
+  private _diceTray: PlayerDiceTray | null = null;
+  private _diceLayer: DiceLayer | null = null;
+  private _gmPixels: import('../dice/pixelsLink.ts').PixelsLink | null = null;
+
+  private _mountDiceOverlay(): void {
+    const layerEl = document.getElementById('dice-layer');
+    if (layerEl && !this._diceLayer) this._diceLayer = new DiceLayer(layerEl, 'viewer');
+    const trayEl = document.getElementById('dice-tray');
+    if (trayEl && !this._diceTray) {
+      // A GM may want both: their own dice for the moments that deserve them,
+      // and the rail for everything else. Pairing is in Settings > Dice — once
+      // a game, not something to trip over mid-play.
+      this._diceTray = new PlayerDiceTray(trayEl, {
+        onRoll: (entry) => this._rollAsGm(entry),
+      });
+      void this._reconnectGmDice();
+    }
+    this._refreshDiceOverlay();
+  }
+
+  /** Keep the overlay in step with the set. Note the GM's rail does NOT follow
+   *  the player permission: switching players' dice off is about players, and
+   *  rolling for the table is still useful when they may not. */
+  private _refreshDiceOverlay(): void {
+    this._diceTray?.update(getDiceSet(), isGmDiceTrayShown());
+  }
+
+  /** The GM's own physical dice — same mirror the players get. */
+  private async _connectGmDice(): Promise<void> {
+    if (!isPhysicalDiceSupported()) return;
+    try { await (await this._gmPixelsLink())?.addDie(); }
+    catch { /* chooser cancelled, or the die would not connect */ }
+  }
+
+  /** Dice this browser already knows come back with no chooser and no tap. */
+  private async _reconnectGmDice(): Promise<void> {
+    if (!isPhysicalDiceSupported() || getKnownPixels().length === 0) return;
+    try { await (await this._gmPixelsLink())?.reconnectKnown(); } catch { /* not around */ }
+  }
+
+  private async _gmPixelsLink(): Promise<import('../dice/pixelsLink.ts').PixelsLink | null> {
+    if (this._gmPixels) return this._gmPixels;
+    const { PixelsLink } = await import('../dice/pixelsLink.ts');
+    this._gmPixels = new PixelsLink({
+      onRoll: (outcome) => this._publishGmRoll(outcome.formula, outcome, false),
+      onCollecting: (c) => this._diceTray?.setCollecting(c.count, c.rerolled),
+      onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(
+        dice.map((d) => ({ id: d.id, name: d.name, status: d.status }))),
+    });
+    return this._gmPixels;
+  }
+
+  /** Which thread (if any) is already on screen — '*' when the All Players feed
+   *  is open, since that shows every thread at once. */
+  private _visibleThreadKey(): string | null {
+    return this._allThreadsOpen ? '*' : this._openThreadPlayerId;
+  }
+
+  /** v2.19 — every player's messages and rolls in one feed. Rolls are why this
+   *  exists: they must not arrive as toasts over the GM's map, so they arrive
+   *  here, and a GM who wants to watch the table leaves this open. */
+  private _openAllThreads(): void {
+    void import('./SidePanel.ts').then(({ openSidePanel }) => {
+      this._threadSidePanel?.close();
+      this._allThreadsOpen = true;
+      this._messageThreads.markAllRead();
+      this._allThreadsPanel = openSidePanel({
+        title: 'All players',
+        populate: (body) => buildAllThreadsPanel(body, {
+          rows: this._messageThreads.snapshotAll(),
+          filter: this._allThreadsFilter,
+          onFilter: (f) => { this._allThreadsFilter = f; this._allThreadsPanel?.refresh(); },
+          // Replying means picking someone: hand off to that player's own thread.
+          onOpenThread: (playerId) => this._openMessageThread(playerId),
+        }),
+        onClose: () => {
+          this._messageThreads.markAllSeen();
+          this._allThreadsOpen = false;
+          this._allThreadsPanel = null;
+          this._refreshAllThreadsBadge();
+        },
+      });
+      this._refreshAllThreadsBadge();
+    });
+  }
+
+  /** A quiet count on the All Players button. Rolls are included here — this is
+   *  the one place they are counted — but they never reach a player row's red
+   *  badge, which still means "someone is talking to you". */
+  private _refreshAllThreadsBadge(): void {
+    const badge = document.getElementById('all-threads-badge');
+    if (!badge) return;
+    const { gm, peer, rolls } = this._messageThreads.unreadTotals();
+    const n = gm + peer + rolls;
+    badge.hidden = n === 0;
+    badge.textContent = n > 99 ? '99+' : String(n);
   }
 
   /** Open / refresh the thread SidePanel for a given player. Clears that
@@ -7887,6 +8232,18 @@ export class GMApp {
         await clearEverything();
         location.reload();
       },
+      onDiceChanged: () => {
+        this._broadcastPlayerFeatures();
+        this._refreshDiceOverlay();
+      },
+      // Pairing is setup, so it is answerable from Settings as well as from the
+      // tray — "where do I pair these?" should not need a hunt.
+      pixels: {
+        supported: isPhysicalDiceSupported(),
+        list: () => (this._gmPixels?.connected ?? []).map((d) => ({ id: d.id, name: d.name, status: d.status })),
+        pair: () => this._connectGmDice(),
+        forget: (id: string) => this._gmPixels?.removeDie(id) ?? Promise.resolve(),
+      },
       onDeleteAllData: async () => {
         // Nuke everything: IDB + ALL local settings (including API keys,
         // projector setups, and the suppress-seed flag). On reload init
@@ -8114,6 +8471,9 @@ export class GMApp {
       // the initiative event re-sorts the tracker to the imported direction.
       this._broadcastPlayerFeatures();
       this.initiativeTracker?.setSortDirection(getInitiativeSortDirection());
+      // v2.19 — the pack carries its own dice: the overlay shows the set the GM
+      // was just handed rather than the one they had before.
+      this._refreshDiceOverlay();
 
       // Retrofit pass — auto-detect grid scale on any map in the loaded pack
       // that doesn't already carry one. Manually-calibrated maps and no-grid

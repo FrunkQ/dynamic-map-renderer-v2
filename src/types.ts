@@ -1177,6 +1177,22 @@ export interface MsgPlayerFeatures {
   pings?:          boolean;
   messaging?:      boolean;
   movableMarkers?: boolean;
+  /** v2.19 — may players roll dice at all. Off hides the tray and the menu
+   *  entry, and the GM drops any roll a stale client still sends. */
+  dice?:           boolean;
+  /** v2.19 — the set itself: what the tray shows. Sent with the permission so
+   *  a player who joins mid-session gets the GM's vocabulary, and an edit
+   *  reaches every tray without a reload. */
+  diceSet?:        DiceButton[];
+  /** v2.19 — how a roller sees their OWN roll, resolved from the pack policy
+   *  by the GM (including 'auto'). Standing policy, not per-roll: the roller
+   *  draws immediately rather than waiting for the relay, so it has to know
+   *  this in advance. A whisper always overrides it to 'full' locally. */
+  diceRollerDetail?: import('./dice/dicePolicy.ts').DiceDetail;
+  /** v2.19.6 — which way is up for this game: 'high' celebrates a natural
+   *  maximum, 'low' celebrates a 1, 'off' skips the theatre. Standing policy
+   *  for the same reason as above, and the projector reads it too. */
+  diceCelebrate?: import('./dice/roll.ts').CelebrateDirection;
   /** v2.17.10 — distance scale for the "Measure from here" ruler, so remote
    *  player views measure on the GM's units. `measureUnitValue` per grid
    *  square, `measureUnitSuffix` tagged on the result (e.g. 5 + "'"). */
@@ -1524,6 +1540,67 @@ export interface MsgVideoPlayback {
   volume: number;
 }
 
+/**
+ * v2.19 Dice. One entry in the GM's dice set: a named formula a player taps.
+ * Travels with the pack, so a set belongs to the game rather than to a person.
+ */
+export interface DiceButton {
+  id: string;
+  label: string;
+  formula: string;
+  /** A GM entry that reaches the room even when GM rolls are private. */
+  public?: boolean;
+}
+
+/**
+ * v2.19 Dice. Player -> GM: a roll THE PLAYER ALREADY MADE. The faces travel;
+ * nothing downstream re-rolls them, or the table screen lands on 17 while the
+ * chat says 12. `label` is the set entry's name ("Attack"), kept alongside the
+ * formula so a feed line reads the way the GM wrote it.
+ */
+export interface MsgDiceRoll {
+  type: 'dice_roll';
+  playerId: string;
+  clientId: string;
+  rollId:   string;
+  label:    string;
+  roll:     import('./dice/roll.ts').RollOutcome;
+  /** GM + roller only, whatever the pack policy says. */
+  whisper:  boolean;
+  /** v2.19.5 — thrown on real dice rather than tapped. */
+  physical?: boolean;
+}
+
+/**
+ * v2.19 Dice. GM -> everyone: the relay, exactly like `ping_show`. The GM has
+ * already resolved the pack policy, so a viewer never needs a copy of it — it
+ * reduces what it is told against its own preference and its device.
+ */
+export interface MsgDiceShow {
+  type: 'dice_show';
+  rollId:  string;
+  label:   string;
+  roll:    import('./dice/roll.ts').RollOutcome;
+  /** null when the GM rolled it. */
+  fromPlayerId: string | null;
+  fromName:  string;
+  fromColor: string;
+  whisper:   boolean;
+  /** v2.19.5 — thrown on real dice rather than tapped. */
+  physical?: boolean;
+  /** How players who did NOT roll should show it. */
+  detailOthers: import('./dice/dicePolicy.ts').DiceDetail;
+  /** How the table screen (projector / scaled view) should show it. */
+  detailTable:  import('./dice/dicePolicy.ts').DiceDetail;
+  /** The window that rolled it, so it can ignore this echo: a roller draws
+   *  their own roll immediately rather than waiting for the relay. */
+  rollerClientId: string | null;
+  /** v2.19.4 — what the dice are made of. Absent means "the roller's colour",
+   *  which is what a player's dice always are; the GM's carry their own. */
+  dieBase?: string;
+  dieInk?:  string;
+}
+
 export type GMMessage =
   | MsgFullState
   | MsgViewUpdate
@@ -1560,6 +1637,8 @@ export type GMMessage =
   | MsgPlayerRoster
   | MsgPlayerPing
   | MsgPingShow
+  | MsgDiceRoll
+  | MsgDiceShow
   | MsgPlayerFeatures
   | MsgPlayerMessage
   | MsgMessageDeliver

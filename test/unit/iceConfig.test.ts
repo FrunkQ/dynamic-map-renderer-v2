@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodeIceParam, parseIceParam, parseIceText, iceToText, peerConfigFor, DEFAULT_ICE } from '../../src/p2p/iceConfig.ts';
+import { encodeIceParam, parseIceParam, parseIceText, iceToText, peerConfigFor, DEFAULT_ICE, iceVerdict } from '../../src/p2p/iceConfig.ts';
 
 describe('iceConfig', () => {
   it('round-trips a TURN/TURNS list through the URL param', () => {
@@ -19,6 +19,30 @@ describe('iceConfig', () => {
     expect(peerConfigFor(null)).toBeUndefined();
     expect(peerConfigFor([])).toBeUndefined();
   });
+  it('reads the verdict from EITHER state machine, because browsers disagree', () => {
+    // Chrome drives both together...
+    expect(iceVerdict({ connectionState: 'failed', iceConnectionState: 'failed' })).toBe('ice-failed');
+    expect(iceVerdict({ connectionState: 'connected', iceConnectionState: 'connected' })).toBe('connected');
+    // ...Firefox does not: ICE can be dead while the aggregate still says
+    // 'disconnected'. Watching only connectionState loses the verdict there,
+    // which is how a Firefox player got PeerJS's raw error instead of ours.
+    expect(iceVerdict({ connectionState: 'disconnected', iceConnectionState: 'failed' })).toBe('ice-failed');
+    expect(iceVerdict({ connectionState: 'connecting', iceConnectionState: 'failed' })).toBe('ice-failed');
+    // ...and the other way round, for whatever browser does the reverse.
+    expect(iceVerdict({ connectionState: 'failed', iceConnectionState: 'checking' })).toBe('ice-failed');
+  });
+
+  it('treats ICE completion as connected, and a wobble as no verdict at all', () => {
+    expect(iceVerdict({ iceConnectionState: 'completed' })).toBe('connected');
+    // 'disconnected' routinely recovers. Calling it a failure would tell a
+    // player their game had died in the middle of a scene.
+    expect(iceVerdict({ connectionState: 'disconnected' })).toBeNull();
+    expect(iceVerdict({ connectionState: 'connecting', iceConnectionState: 'checking' })).toBeNull();
+    expect(iceVerdict({})).toBeNull();
+    expect(iceVerdict(null)).toBeNull();
+    expect(iceVerdict(undefined)).toBeNull();
+  });
+
   it('rejects junk and non-ICE schemes', () => {
     expect(parseIceParam('!!!')).toBeNull();
     expect(parseIceParam(encodeIceParam([{ urls: 'https://evil' } as any]))).toBeNull();

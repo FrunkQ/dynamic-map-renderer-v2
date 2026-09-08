@@ -1,6 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage } from '../types.ts';
-import { peerConfigFor, type IceServerEntry } from './iceConfig.ts';
+import { peerConfigFor, iceVerdict, type IceServerEntry } from './iceConfig.ts';
 import { LocalChannel } from './LocalChannel.ts';
 
 export interface GuestEvents {
@@ -171,14 +171,22 @@ export class Guest {
       const conn = peer.connect(roomCode, { reliable: true, serialization: 'raw' });
       this.conn = conn;
       this.setupConnection(conn);
-      // ICE failure detection on the underlying RTCPeerConnection.
+      // ICE failure detection on the underlying RTCPeerConnection. BOTH state
+      // machines are watched, and both events listened for: Chrome moves them
+      // together, Firefox does not (see iceVerdict). Watching only
+      // `connectionState` loses the verdict on Firefox, and the player gets
+      // PeerJS's raw "negotiation error" instead of an explanation.
       const watch = () => {
         const pc: RTCPeerConnection | undefined = (conn as any).peerConnection;
         if (!pc) { if (!this._destroyed) setTimeout(watch, 250); return; }
-        pc.addEventListener('connectionstatechange', () => {
-          if (pc.connectionState === 'failed') this.events.onIceState?.('ice-failed');
-          if (pc.connectionState === 'connected') this.events.onIceState?.(null);
-        });
+        const report = () => {
+          const verdict = iceVerdict(pc);
+          if (verdict === 'ice-failed') this.events.onIceState?.('ice-failed');
+          else if (verdict === 'connected') this.events.onIceState?.(null);
+        };
+        pc.addEventListener('connectionstatechange', report);
+        pc.addEventListener('iceconnectionstatechange', report);
+        report();   // it may have settled before we got the handle
       };
       watch();
     });
@@ -247,6 +255,13 @@ export class Guest {
 
     conn.on('error', (err) => {
       if (this._destroyed) return;
+      // PeerJS raises 'negotiation-failed' from ONE place: iceConnectionState
+      // === 'failed'. It is an ICE verdict wearing a misleading name, so treat
+      // it as one — a backstop for any browser where neither state event
+      // reached us.
+      if ((err as { type?: string }).type === 'negotiation-failed') {
+        this.events.onIceState?.('ice-failed');
+      }
       if (this._reconnectCode) {
         this._scheduleReconnect();
       } else {

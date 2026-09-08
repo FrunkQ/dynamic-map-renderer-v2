@@ -114,6 +114,14 @@
       <!-- v2.16.92 — defaults closed; PlayersPanel opens it on first load
            if any players already exist (e.g. saved offline players). -->
       <button type="button" class="panel-title" aria-expanded="false">Players<span id="players-count-badge" class="panel-count-badge" title="Players connected / total"></span></button>
+      <!-- v2.19 — one feed for the whole table: every player's messages AND their
+           dice rolls, merged. Meant to be left open during play. -->
+      <button type="button" id="all-threads-btn" class="panel-edit-btn" title="All players — every message and dice roll in one feed" aria-label="All players feed">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span id="all-threads-badge" class="all-threads-badge" hidden></span>
+      </button>
       <div class="panel-body" hidden>
         <div id="players-list" class="players-list"></div>
         <button id="call-initiative-btn" class="btn btn--full call-initiative-btn" title="Open the initiative tracker and broadcast a roll prompt to every connected player.">Call for Initiative</button>
@@ -742,6 +750,11 @@
            opaque ground (so no stale map texture shows through), the notice strip below, and the
            Player View window enlarged over it. -->
       <div id="starmap-standin" class="starmap-standin" hidden></div>
+      <!-- v2.19.7 — the GM rolls from an overlay, like the players do: once a
+           game is running you want the dice, not the settings that made them.
+           Everything else about dice lives in Settings > Dice. -->
+      <div id="dice-layer"></div>
+      <div id="dice-tray" hidden></div>
       <!-- v2.18.10 — both StarMap notices share ONE top-centre column, directly under the
            undo/redo bar. The GM's eye is already up there, and the hint's old bottom placement
            sat behind the Player View pip. -->

@@ -19,7 +19,15 @@ import { StarMapLayer } from '../rendering/StarMapLayer.ts';
 import { parseIceParam } from '../p2p/iceConfig.ts';
 import { TextMapAltText } from '../rendering/TextMapAltText.ts';
 import { PlayerInitiativeRollModal } from './PlayerInitiativeRollModal.ts';
-import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix } from '../storage/localSettings.ts';
+import { showFullPlayerUiInPreview, getMeasureUnitValue, getMeasureUnitSuffix,
+  getDiceDetailPreference, setDiceDetailPreference,
+  getDiceRenderPreference, setDiceRenderPreference } from '../storage/localSettings.ts';
+import { DiceLayer } from '../rendering/DiceLayer.ts';
+import { PlayerDiceTray } from './PlayerDiceTray.ts';
+import { rollFormula, type RollOutcome } from '../dice/roll.ts';
+import { isPhysicalDiceSupported } from '../dice/physicalRoll.ts';
+import { getKnownPixels } from '../storage/localSettings.ts';
+import { reduceDetail, type DiceDetail } from '../dice/dicePolicy.ts';
 import { Viewer } from '../viewers/Viewer.ts';
 import { PROFILE_PLAYER } from '../viewers/profiles.ts';
 import { drawGrid } from '../viewers/strategies/drawGrid.ts';
@@ -262,7 +270,14 @@ export class PlayerApp {
   private roster: Array<{ id: string; playerName: string; characterName: string; color: string; connected: boolean }> = [];
   /** Player-Voice features the GM currently allows. Default-on until the GM
    *  says otherwise (mirrors the default-enabled settings). */
-  private features = { pings: true, messaging: true, movableMarkers: true };
+  private features = { pings: true, messaging: true, movableMarkers: true, dice: true };
+  /** v2.19 Dice. The tray is the GM's set; the layer is where a roll is shown.
+   *  `diceRollerDetail` is standing policy from the GM, because a roller draws
+   *  their own roll immediately rather than waiting for the relay. */
+  private _diceTray: PlayerDiceTray | null = null;
+  private _diceLayer: DiceLayer | null = null;
+  private _diceRollerDetail: DiceDetail = 'full';
+  private _diceCelebrate: import('../dice/roll.ts').CelebrateDirection = 'high';
   /** v2.17.10 — measurement scale received from the GM (player_features), so
    *  the ruler reads in the GM's units. Null until received → falls back to
    *  this browser's local setting (same-browser views) or the 5' default. */
@@ -409,6 +424,30 @@ export class PlayerApp {
     // what players may do inside SSE); kept warm when hidden.
     const starMapEl = document.getElementById('starmap-layer');
     if (starMapEl) this._starMap = new StarMapLayer(starMapEl, 'viewer');
+
+    // v2.19 Dice. Both surfaces are screen-space overlays; the tray is inert
+    // until the GM sends a set, so a table that does not use dice sees nothing.
+    const diceLayerEl = document.getElementById('dice-layer');
+    if (diceLayerEl) this._diceLayer = new DiceLayer(diceLayerEl, 'viewer');
+    const diceTrayEl = document.getElementById('dice-tray');
+    if (diceTrayEl && !this._isPreviewMode()) {
+      this._diceTray = new PlayerDiceTray(diceTrayEl, {
+        onRoll: (entry, whisper) => void this._rollDice(entry, whisper),
+        onWhisperChange: (armed, reason) => {
+          // Never let the mode change silently: the first they would know is a
+          // secret roll on the table screen.
+          if (!armed && reason === 'timeout') this._diceLayer?.showLine({
+            rollId: `whisper-off-${Date.now()}`,
+            label: 'Whisper off',
+            outcome: { formula: 'after ten minutes', dice: [], modifier: 0, total: 0 },
+            rollerKey: '__notice__', rollerName: 'Dice', rollerColor: '#a5b4fc',
+          });
+        },
+      });
+      // Dice already known to this browser come back by themselves; pairing a
+      // new one is in the action menu, since it is a once-a-game thing.
+      void this._reconnectKnownDice();
+    }
     // v2.16.77 — read-only whiteboard mirrored from the GM.
     const boardEl = document.getElementById('annotate-whiteboard') as HTMLCanvasElement | null;
     if (boardEl) this._annotateBoard = new WhiteboardLayer(boardEl, (x, y) => this.renderer.mapNormToCanvasCss(x, y));
@@ -995,7 +1034,16 @@ export class PlayerApp {
       onError: (err)  => this.setStatus(`Error: ${err.message}`),
       // v2.18 — honest verdict when neither a direct nor relayed path exists (UDP blocked,
       // no TLS relay): say so instead of "Connecting…" forever. Reconnect keeps trying.
-      onIceState: (st) => { if (st === 'ice-failed') this.setStatus('Connection blocked by this network — it will not carry a direct or relayed link to the GM (UDP blocked, no relay). Ask the GM for a link with a relay, or try another network.'); },
+      onIceState: (st) => {
+        if (st !== 'ice-failed') return;
+        // Two sentences, in the order a player can act on them: the thing THEY
+        // can try, then the thing to ask for. Your GM has been told as well —
+        // worth saying, because otherwise the natural move is to keep retrying.
+        this.setStatus(
+          'This network will not carry the connection to your GM. '
+          + 'Try switching between wi-fi and mobile data — that often fixes it on the spot. '
+          + 'If not, ask your GM for a new link: they have been told, and adding a relay on their side fixes it.');
+      },
       onMessage: (msg, blob) => this.handleMessage(msg, blob),
     });
     // v2.18 — BYO relay from the join URL (?ice=), set before dialling.
@@ -1315,6 +1363,37 @@ export class PlayerApp {
     if (resetBtn && !resetBtn.hidden) {
       items.push({ label: 'Reset view to GM\'s', onSelect: () => resetBtn.click() });
     }
+    // v2.19 — a pack sets the ceiling for dice; this is how a player lowers it
+    // on their own screen. Cycles rather than nesting a submenu.
+    if (this.features.dice) {
+      const current = getDiceDetailPreference();
+      const nextOf: Record<DiceDetail, DiceDetail> = { full: 'line', line: 'none', none: 'full' };
+      const wording: Record<DiceDetail, string> = { full: 'the dice', line: 'a line of text', none: 'nothing' };
+      items.push({
+        label: `Dice show me: ${wording[current]}`,
+        onSelect: () => setDiceDetailPreference(nextOf[current]),
+      });
+      // Pairing your own dice: once a game, so it lives here rather than on the
+      // rail. Only offered where Web Bluetooth can actually work.
+      if (isPhysicalDiceSupported()) {
+        const paired = this._pixels?.connected.length ?? 0;
+        items.push({
+          label: paired > 0 ? `Pair another die (${paired} connected)` : 'Use my own Pixels dice…',
+          onSelect: () => void this._connectPhysicalDice(),
+        });
+      }
+      // The other axis: not how much, but what they look like. Only worth
+      // offering when this player is actually being shown dice.
+      if (current === 'full') {
+        const look = getDiceRenderPreference();
+        const nextLook = { auto: 'shaped', shaped: 'plain', plain: 'auto' } as const;
+        const lookWording = { auto: 'automatic', shaped: 'shaped dice', plain: 'plain numbers' } as const;
+        items.push({
+          label: `Dice look: ${lookWording[look]}`,
+          onSelect: () => setDiceRenderPreference(nextLook[look]),
+        });
+      }
+    }
     // v2.17.21 — connection/activity log on demand only (no corner indicator).
     items.push({ label: 'Show activity', onSelect: () => this.messageLog?.show({ x: clientX, y: clientY }) });
     this._actionMenu.open(clientX, clientY, items);
@@ -1348,6 +1427,101 @@ export class PlayerApp {
       return;
     }
     this._emitPing(x, y);
+  }
+
+  // ── v2.19 Dice (docs/dice-design.md) ──────────────────────────────────────
+
+  /** Tap to roll. We roll HERE, draw it here, and tell the GM what it came to —
+   *  the faces are decided once, by whoever rolled. Identity first, so the GM
+   *  can attribute it, exactly as pings do. */
+  private async _rollDice(entry: import('../types.ts').DiceButton, whisper: boolean): Promise<void> {
+    const outcome = rollFormula(entry.formula);
+    if (!outcome) return;
+    await this._emitRoll(entry.label, outcome, whisper, false);
+  }
+
+  /**
+   * v2.19.5 — pair the player's own Pixels dice. From here on the tray's chips
+   * step aside: they throw their dice and the roll appears, with every rule
+   * and every bit of the look unchanged.
+   */
+  private async _connectPhysicalDice(): Promise<void> {
+    if (!this.features.dice || !isPhysicalDiceSupported()) return;
+    if (!this.identity) {
+      await this.openIdentityModal();
+      if (!this.identity) return;
+    }
+    try {
+      await (await this._pixelsLink())?.addDie();
+    } catch {
+      // A cancelled chooser, a die that would not connect, a browser that said
+      // no: nothing to report but the tray saying so in place.
+    }
+  }
+
+  /**
+   * v2.19.8 — dice this browser has been given access to before come back on
+   * their own, with no chooser and no tap. Gated on having paired here already,
+   * so nobody without dice ever downloads the library.
+   */
+  private async _reconnectKnownDice(): Promise<void> {
+    if (!isPhysicalDiceSupported() || getKnownPixels().length === 0) return;
+    try { await (await this._pixelsLink())?.reconnectKnown(); } catch { /* not around */ }
+  }
+
+  private async _pixelsLink(): Promise<import('../dice/pixelsLink.ts').PixelsLink | null> {
+    if (this._pixels) return this._pixels;
+    const { PixelsLink } = await import('../dice/pixelsLink.ts');
+    this._pixels = new PixelsLink({
+      onRoll: (outcome) => {
+        // The dice decided; whisper still applies to what you throw next.
+        void this._emitRoll(outcome.formula, outcome, this._diceTray?.isWhispering ?? false, true);
+      },
+      onCollecting: (c) => this._diceTray?.setCollecting(c.count, c.rerolled),
+      onDiceChanged: (dice) => this._diceTray?.setPhysicalDice(
+        dice.map((d) => ({ id: d.id, name: d.name, status: d.status }))),
+    });
+    return this._pixels;
+  }
+  private _pixels: import('../dice/pixelsLink.ts').PixelsLink | null = null;
+
+  /** The one path a roll takes, whether it was tapped or thrown. */
+  private async _emitRoll(label: string, outcome: RollOutcome, whisper: boolean, physical: boolean): Promise<void> {
+    if (!this.features.dice) return;
+    if (!this.identity) {
+      await this.openIdentityModal();
+      if (!this.identity) return;
+    }
+    const rollId = generateId();
+    this.guest.send({
+      type: 'dice_roll',
+      playerId: this.playerId,
+      clientId: this.clientId,
+      rollId,
+      label,
+      roll: outcome,
+      whisper,
+      ...(physical ? { physical: true } : {}),
+    });
+    // A whisper is never relayed, so this local draw is the only one there is —
+    // and a whisper always shows in full, because the table cannot show it.
+    this._showDice(whisper ? 'full' : this._diceRollerDetail, {
+      rollId,
+      label,
+      outcome,
+      rollerKey: this.playerId,
+      rollerName: this.identity.characterName || this.identity.playerName || 'You',
+      rollerColor: this.identity.color,
+      whisper,
+    });
+  }
+
+  /** Policy says how much; this device may always say less. */
+  private _showDice(detail: DiceDetail, show: import('../rendering/DiceLayer.ts').DiceShow): void {
+    show.celebrate = this._diceCelebrate;
+    const effective = reduceDetail(detail, getDiceDetailPreference());
+    if (effective === 'full') this._diceLayer?.showFull(show);
+    else if (effective === 'line') this._diceLayer?.showLine(show);
   }
 
   private _emitPing(x: number, y: number): void {
@@ -1853,6 +2027,23 @@ export class PlayerApp {
         break;
       }
 
+      case 'dice_show': {
+        // v2.19 — our OWN roll comes back as an echo; we drew it when we rolled
+        // it, so that the tap feels instant. Everyone else's is drawn here.
+        if (msg.rollerClientId && msg.rollerClientId === this.clientId) break;
+        this._showDice(msg.detailOthers, {
+          rollId: msg.rollId,
+          label: msg.label,
+          outcome: msg.roll,
+          rollerKey: msg.fromPlayerId ?? 'gm',
+          rollerName: msg.fromName,
+          rollerColor: msg.fromColor,
+          whisper: msg.whisper,
+          ...(msg.dieBase ? { skin: { base: msg.dieBase, ...(msg.dieInk ? { ink: msg.dieInk } : {}) } } : {}),
+        });
+        break;
+      }
+
       case 'ping_show': {
         // v2.17 Player Voice — a ping relayed by the GM; pulse it on our map.
         this.pingLayer?.add({ id: msg.pingId, x: msg.x, y: msg.y, color: msg.color, name: msg.name });
@@ -1864,6 +2055,12 @@ export class PlayerApp {
         if (typeof msg.pings === 'boolean')          this.features.pings          = msg.pings;
         if (typeof msg.messaging === 'boolean')      this.features.messaging      = msg.messaging;
         if (typeof msg.movableMarkers === 'boolean') this.features.movableMarkers = msg.movableMarkers;
+        if (typeof msg.dice === 'boolean')          this.features.dice           = msg.dice;
+        if (msg.diceRollerDetail) this._diceRollerDetail = msg.diceRollerDetail;
+        if (msg.diceCelebrate) this._diceCelebrate = msg.diceCelebrate;
+        if (msg.diceSet || typeof msg.dice === 'boolean') {
+          this._diceTray?.update(msg.diceSet, this.features.dice);
+        }
         // v2.17.10 — adopt the GM's measurement scale.
         if (typeof msg.measureUnitValue === 'number' && msg.measureUnitValue > 0) this._measureUnitValue = msg.measureUnitValue;
         if (typeof msg.measureUnitSuffix === 'string') this._measureUnitSuffix = msg.measureUnitSuffix;

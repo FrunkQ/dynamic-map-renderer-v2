@@ -38,7 +38,9 @@ And it's built to **share**. Whole packs — maps, audio, splash, theme — trav
 
 **Credit the creators.** Every map and sound in Mappadux carries its licence, source, and creator. The asset library has a *Copy attributions* action that produces a ready-to-paste credits block — please use it. The community that supplies free, high-quality assets only keeps going if we keep crediting it.
 
-Players connect over peer-to-peer (PeerJS); no server infrastructure beyond static file hosting. Everything stays on your device.
+Players connect over peer-to-peer (PeerJS); no server infrastructure beyond static file hosting. Your maps, packs, audio and game data stay on your device — there is no Mappadux account and no Mappadux server holding any of it.
+
+**Privacy.** mappadux.com counts page views (Vercel Web Analytics) so I know how many people use it. No cookies, no accounts, nothing that identifies you or follows you to other sites, and nothing at all about your maps, packs or table. Self-hosted builds include no analytics whatsoever — the code is behind a build flag that only Vercel's own CI sets, so it is not even in the bundle.
 
 ![Mappadux — GM interface showing filter panel](./screenshot.png)
 

@@ -19,6 +19,10 @@ import {
   UI_SCALE_MAX,
   UI_SCALE_DEFAULT,
   arePingsEnabled,
+  areDiceEnabled,
+  setDiceEnabled,
+  getDiceRenderPreference,
+  setDiceRenderPreference,
   setPingsEnabled,
   getInitiativeSortDirection,
   setInitiativeSortDirection,
@@ -51,8 +55,9 @@ import {
   isSpotifyEnabled,
   setSpotifyEnabled,
 } from '../stagecraft/stagecraftStorage.ts';
-import { loadStoredIce, saveStoredIce, parseIceText, iceToText } from '../p2p/iceConfig.ts';
+import { loadStoredIce, saveStoredIce, parseIceText, iceToText, testIceServers } from '../p2p/iceConfig.ts';
 import { getSseOrigin, setSseOrigin, SSE_ORIGIN_DEFAULT } from '../storage/localSettings.ts';
+import { buildDiceSettings, type DiceSettingsOptions } from './DiceSettings.ts';
 import { fetchInfo as fetchWledInfo, normaliseEndpoint } from '../stagecraft/wledClient.ts';
 import { fetchInfo as fetchQlcInfo, normaliseQlcEndpoint } from '../stagecraft/qlcClient.ts';
 import { wledConfigUrl, haConfigUrl, qlcConfigUrl } from '../stagecraft/configUrls.ts';
@@ -86,6 +91,12 @@ import { LLMClient } from '../ai/LLMClient.ts';
 export interface SettingsDialogCallbacks {
   onDeleteDb:        () => Promise<void> | void;
   onDeleteAllData:   () => Promise<void> | void;
+  /** v2.19.7 — the dice set, permission or policy changed in here. Viewers
+   *  need telling straight away: a GM editing the set mid-session expects it
+   *  on the players' trays before they close the dialog. */
+  onDiceChanged?:    () => void;
+  /** v2.19.8 — pairing physical dice is setup, so it belongs in here too. */
+  pixels?:           DiceSettingsOptions['pixels'];
 }
 
 export class SettingsDialog {
@@ -96,6 +107,8 @@ export class SettingsDialog {
   };
 
   open(cb: SettingsDialogCallbacks): Promise<void> {
+    this._onDiceChanged = cb.onDiceChanged;
+    this._pixels = cb.pixels;
     this.overlay = this._build(cb);
     document.body.appendChild(this.overlay);
     document.addEventListener('keydown', this.onKey);
@@ -165,6 +178,7 @@ export class SettingsDialog {
     // ── Player Permissions / Game System / Reply Assistant ───────────────
     // v2.16.109 — split the old "Player Voice" section into three focused
     // ones so each reads on its own.
+    body.appendChild(this._buildDiceSection());
     body.appendChild(this._buildPlayerPermissionsSection());
     body.appendChild(this._buildGameSystemSection());
     body.appendChild(this._buildReplyAssistantSection());
@@ -438,7 +452,16 @@ export class SettingsDialog {
     status.className = 'settings-section-intro';
     const summarise = () => {
       const l = loadStoredIce();
-      if (!l || l.length === 0) { status.textContent = 'Using the built-in relay only.'; return; }
+      if (!l || l.length === 0) {
+        // v2.19.14 — this used to say "using the built-in relay only", which is
+        // no longer true: the relays PeerJS ships stopped resolving, so the
+        // default really is direct-only. Measured, not assumed - see iceConfig.
+        status.textContent =
+          'No relay configured — remote players can only connect when their network allows a '
+          + 'direct path. There is no working fallback behind that, so add a relay here if anyone '
+          + 'reports trouble joining.';
+        return;
+      }
       const tls = l.some((e) => (Array.isArray(e.urls) ? e.urls : [e.urls]).some((u) => /^turns:/i.test(u)));
       status.textContent = `${l.length} custom server${l.length === 1 ? '' : 's'} saved${tls ? ' (includes a TLS relay - good for locked-down networks)' : ' (no turns: entry - a UDP-blocking network may still fail)'}. New player links and QR codes carry it; re-share existing ones.`;
     };
@@ -449,7 +472,34 @@ export class SettingsDialog {
       summarise();
     });
     summarise();
-    sec.append(relayLabel, ta, status);
+
+    // v2.19.14 — find out NOW, not from a player who cannot join mid-session.
+    // Gathers candidates locally: a relay candidate is proof the TURN server is
+    // reachable AND its credentials work, which is the only thing that actually
+    // rescues a player on a locked-down network.
+    const testBtn = document.createElement('button');
+    testBtn.type = 'button';
+    testBtn.className = 'btn btn--sm btn--ghost';
+    testBtn.textContent = 'Test these servers';
+    testBtn.title = 'Check the relay is reachable and its credentials work';
+    const testResult = document.createElement('p');
+    testResult.className = 'settings-section-intro';
+    testBtn.addEventListener('click', () => {
+      testBtn.disabled = true;
+      testBtn.textContent = 'Testing…';
+      testResult.textContent = '';
+      void testIceServers(parseIceText(ta.value)).then((r) => {
+        testResult.textContent = r.error
+          ? `Could not test: ${r.error}`
+          : r.relay
+            ? 'Relay working — a player on a locked-down network can get through. Re-share your link or QR so it carries this.'
+            : r.srflx
+              ? 'No relay. The servers answered, but none handed back a relay candidate — check the TURN username and password, and that the address is a turn: or turns: URL. Players on restrictive networks will still fail.'
+              : 'Nothing came back at all. Check the addresses, and that this machine can reach them.';
+      }).finally(() => { testBtn.disabled = false; testBtn.textContent = 'Test these servers'; });
+    });
+
+    sec.append(relayLabel, ta, status, testBtn, testResult);
 
     // SSE origin
     const originLabel = document.createElement('span');
@@ -546,6 +596,8 @@ export class SettingsDialog {
       set: setLocalPlayerStaticOnly,
     }));
 
+    sec.appendChild(this._buildDiceAppearanceRow());
+
     sec.appendChild(this._buildPerfToggle({
       title: 'Cap animated map texture at 1080p',
       help:
@@ -560,6 +612,41 @@ export class SettingsDialog {
   /** Build one row in the Performance section — title + multi-line
    *  help text + a right-aligned toggle that mirrors a localStorage
    *  flag via the supplied get/set pair. */
+  /** v2.19.3 — shaped dice or plain numbers, for THIS screen. Fidelity, not
+   *  attention: how MUCH you see of a roll is the Dice panel's business, and
+   *  travels with the pack; this never does. */
+  private _buildDiceAppearanceRow(): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'settings-danger-row';
+
+    const label = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = 'Dice appearance';
+    const help = document.createElement('span');
+    help.className = 'settings-stat-sub';
+    help.innerHTML =
+      'Rolled dice can be drawn as shaped, shaded dice or as plain numbered tiles. '
+      + '<em>Automatic</em> picks plain on a modest device or when you have asked the system '
+      + 'for less motion. This is for this screen only — it never travels with a pack, and every '
+      + 'player chooses their own.';
+    label.append(title, document.createElement('br'), help);
+
+    const select = document.createElement('select');
+    select.className = 'select-full';
+    select.style.flex = '0 0 auto';
+    select.style.width = '150px';
+    for (const [value, text] of [['auto', 'Automatic'], ['shaped', 'Shaped dice'], ['plain', 'Plain numbers']] as const) {
+      const o = document.createElement('option');
+      o.value = value; o.textContent = text;
+      select.append(o);
+    }
+    select.value = getDiceRenderPreference();
+    select.addEventListener('change', () => setDiceRenderPreference(select.value as 'auto' | 'shaped' | 'plain'));
+
+    row.append(label, select);
+    return row;
+  }
+
   private _buildPerfToggle(opts: {
     title: string;
     help:  string;
@@ -587,6 +674,22 @@ export class SettingsDialog {
 
   // ─── Player Voice ─────────────────────────────────────────────────────────
 
+  /** v2.19.7 — dice SETUP: sets, systems, who sees what, colours. Rolling is an
+   *  overlay on the canvas, because that is the only part you need mid-game. */
+  private _buildDiceSection(): HTMLElement {
+    const sec = mkSection(
+      'Dice',
+      'The rolls your game asks for, and the house rules about who sees them. Both travel with the pack.',
+    );
+    buildDiceSettings(sec, {
+      onChanged: () => this._onDiceChanged?.(),
+      ...(this._pixels ? { pixels: this._pixels } : {}),
+    });
+    return sec;
+  }
+  private _onDiceChanged: (() => void) | undefined;
+  private _pixels: DiceSettingsOptions['pixels'];
+
   private _buildPlayerPermissionsSection(): HTMLElement {
     const sec = mkSection(
       'Player Permissions',
@@ -607,6 +710,14 @@ export class SettingsDialog {
         'Players message you privately, or each other (copied to you). Messages arrive in the Player Voice panel with an unread count.',
       get: isMessagingEnabled,
       set: setMessagingEnabled,
+    }));
+
+    sec.appendChild(this._buildPerfToggle({
+      title: 'Allow player dice',
+      help:
+        'Players get a tray of the rolls you set up in the Dice panel — one tap is one roll. Results reach you as chat, so open All players to watch them. Off hides the tray everywhere; your own dice keep working.',
+      get: areDiceEnabled,
+      set: (v: boolean) => { setDiceEnabled(v); const t = document.getElementById('dice-enabled-toggle') as HTMLInputElement | null; if (t) t.checked = v; },
     }));
 
     sec.appendChild(this._buildPerfToggle({
@@ -1159,7 +1270,7 @@ export class SettingsDialog {
       '</ol>' +
       '<strong>Permissions you\'ll grant:</strong> <code>streaming</code> (audio playback), <code>user-modify-playback-state</code> (play / pause commands), <code>user-read-email</code> + <code>user-read-private</code> (required by Spotify alongside <code>streaming</code>).<br>' +
       '<br>' +
-      '<strong>Privacy:</strong> the Client ID + access token stay in your browser (localStorage). They never travel in <code>.mappadux</code> pack bundles or to any Mappadux server — there isn\'t one.';
+      '<strong>Privacy:</strong> the Client ID + access token stay in your browser (localStorage). They never travel in <code>.mappadux</code> pack bundles, and there is no Mappadux server holding your data. (mappadux.com does count page views — no cookies, nothing identifying, nothing about your table; see About.)';
     wrap.appendChild(sub);
 
     const form = document.createElement('div');

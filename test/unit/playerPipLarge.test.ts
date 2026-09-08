@@ -42,8 +42,8 @@ describe('PlayerPip large mode', () => {
     expect(frame.classList.contains('player-pip-frame--large')).toBe(true);
   });
 
-  it('restores the GM size and position WITHOUT reloading the player frame', () => {
-    localStorage.setItem('dmr_pip_width', '420');
+  it('restores position and frame WITHOUT reloading the player frame', () => {
+    localStorage.setItem('dmr_pip_width', '300');
     localStorage.setItem('dmr_pip_position', JSON.stringify({ x: 30, y: 40 }));
     const wrap = makeWrapper();
     const pip = new PlayerPip({ canvasWrapper: wrap, getPlayerUrl: () => 'https://gm.example/player.html?room=abc' });
@@ -51,12 +51,34 @@ describe('PlayerPip large mode', () => {
     pip.setLargeMode(true);
     pip.setLargeMode(false);
     const frame = frameOf(wrap)!;
-    expect(frame.style.width).toBe('420px');
+    expect(frame.style.width).toBe('300px');
     expect(frame.style.left).toBe('30%');
     expect(frame.style.top).toBe('40%');
     expect(frame.classList.contains('player-pip-frame--large')).toBe(false);
     // Same element: a rebuild would reload player.html and, inside it, the whole SSE session.
     expect(wrap.querySelector('iframe')).toBe(iframeBefore);
+  });
+
+  it('comes back as a CORNER preview, never covering the map it returns to', () => {
+    // The GM had dragged it to most of the canvas before the StarMap.
+    localStorage.setItem('dmr_pip_width', String(WRAP_W * 0.8));
+    const wrap = makeWrapper();
+    const pip = new PlayerPip({ canvasWrapper: wrap, getPlayerUrl: () => 'https://gm.example/player.html?room=abc' });
+    pip.setLargeMode(true);
+    pip.setLargeMode(false);
+    const width = parseFloat(frameOf(wrap)!.style.width);
+    expect(width).toBeLessThanOrEqual(WRAP_W * 0.3);
+    // ...and their own saved width is untouched, for when they want it back.
+    expect(localStorage.getItem('dmr_pip_width')).toBe(String(WRAP_W * 0.8));
+  });
+
+  it('leaves a modest size exactly as it was', () => {
+    localStorage.setItem('dmr_pip_width', '340');            // still under the cap
+    const wrap = makeWrapper();
+    const pip = new PlayerPip({ canvasWrapper: wrap, getPlayerUrl: () => 'https://gm.example/player.html?room=abc' });
+    pip.setLargeMode(true);
+    pip.setLargeMode(false);
+    expect(frameOf(wrap)!.style.width).toBe('340px');
   });
 
   it('opens a minimised preview for the StarMap and minimises it again after, without changing the saved preference', () => {
