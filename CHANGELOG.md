@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.19.16 - 2026-09-08
+
+Documentation only. `docs/connectivity-that-just-works.md` answers what it would take to make remote play connect without anyone configuring anything: what a relay can and cannot see (it cannot read what it carries, and it hides both ends' addresses from each other), what it would cost on the Cloudflare account already in use (the free allowance covers thousands of sessions), and the part that is actually work - an endpoint holding a secret, and keeping it from becoming a free relay for strangers.
+
+The same fixes are now in Star System Explorer as v3.1.9, which had the fault in a worse form: its player-side handler discarded the error entirely, so a Firefox player saw no message at all.
+
 ## v2.19.15 - 2026-09-08
 
 The dice roller is still being built, so it is now switched off on mappadux.com and stays on beta where it belongs. Nothing is lost: a GM who has already set up a dice pack keeps those settings, they are simply out of reach until the feature is finished.
