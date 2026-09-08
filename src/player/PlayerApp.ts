@@ -1034,7 +1034,16 @@ export class PlayerApp {
       onError: (err)  => this.setStatus(`Error: ${err.message}`),
       // v2.18 — honest verdict when neither a direct nor relayed path exists (UDP blocked,
       // no TLS relay): say so instead of "Connecting…" forever. Reconnect keeps trying.
-      onIceState: (st) => { if (st === 'ice-failed') this.setStatus('Connection blocked by this network — it will not carry a direct or relayed link to the GM (UDP blocked, no relay). Ask the GM for a link with a relay, or try another network.'); },
+      onIceState: (st) => {
+        if (st !== 'ice-failed') return;
+        // Two sentences, in the order a player can act on them: the thing THEY
+        // can try, then the thing to ask for. Your GM has been told as well —
+        // worth saying, because otherwise the natural move is to keep retrying.
+        this.setStatus(
+          'This network will not carry the connection to your GM. '
+          + 'Try switching between wi-fi and mobile data — that often fixes it on the spot. '
+          + 'If not, ask your GM for a new link: they have been told, and adding a relay on their side fixes it.');
+      },
       onMessage: (msg, blob) => this.handleMessage(msg, blob),
     });
     // v2.18 — BYO relay from the join URL (?ice=), set before dialling.

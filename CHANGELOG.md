@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.19.14 - 2026-09-08
+
+**When a player cannot join, you are now told.** Until now they simply never appeared: the player saw an error they could do nothing about, and the GM had no idea anyone had tried. Player Views > Player connections now says so, and says which fix applies - add a relay, or re-share your link so it carries the one you already have.
+
+**Settings > Connections gained "Test these servers"** - checks in about five seconds that a relay is reachable and its credentials work, before a game rather than during one.
+
+**And it found something.** The fallback relay that ships with the underlying networking library no longer exists - its addresses stopped resolving. So "no relay configured" quietly meant no relay at all, for anybody, and remote players could only connect when their network happened to allow a direct route. The Settings text used to say otherwise; it now tells the truth. If players have ever had trouble joining, adding a relay is very likely the answer: docs/connection-troubleshooting.md walks through it.
+
+Player-facing messages now lead with the thing a player can actually do - switch between wi-fi and mobile data, which often fixes it on the spot.
+
 ## v2.19.13 - 2026-09-08
 
 Fixed: a player whose connection failed on Firefox saw a raw "P2P negotiation error" instead of Mappadux's own explanation. The two apps watched only one of a connection's two state machines, and Firefox is the browser where they disagree - so the failure never reached our own handler. Both are watched now, and PeerJS's error is treated as what it actually is: an ICE verdict, not a protocol fault.

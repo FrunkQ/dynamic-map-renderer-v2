@@ -87,6 +87,7 @@ import { Host } from '../p2p/Host.ts';
 import { generateRoomCode, generateInstanceId } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, getMap, saveMap, deleteMap, clearAssetLibraries, clearEverything, getActiveInstanceId } from '../storage/db.ts';
 import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet, isGmDiceTrayShown, getKnownPixels } from '../storage/localSettings.ts';
+import { blockedJoinerAdvice } from '../p2p/iceConfig.ts';
 import { seedDefaultMaps, reseedWelcomePack, WELCOME_PACK_VERSION } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
@@ -639,6 +640,7 @@ export class GMApp {
     this.host = new Host({
       onReady: (code) => this.onHostReady(code),
       onPeerConnected:    (id) => this.onPeerConnected(id),
+      onPeerBlocked:      (id) => this._onJoinerBlocked(id),
       onPeerDisconnected: (id) => this.onPeerDisconnected(id),
       onError: (err) => this.onP2PError(err),
       onPeerMessage: (peerId, msg) => this.onPeerMessage(peerId, msg),
@@ -2295,6 +2297,34 @@ export class GMApp {
     const scaled       = this.projectorConnections.size;
 
     list.replaceChildren();
+
+    // v2.19.14 — anyone who tried and could not get through goes FIRST: this is
+    // the panel a GM opens when a player says "I can't join", and the answer
+    // should be waiting for them rather than hidden in a log.
+    if (this._blockedJoiners.size > 0) {
+      const li = document.createElement('li');
+      li.className = 'conn-blocked';
+      const n = this._blockedJoiners.size;
+      const advice = blockedJoinerAdvice((loadStoredIce() ?? []).length > 0);
+      const head = document.createElement('strong');
+      head.textContent = n === 1
+        ? '1 player could not connect'
+        : `${n} players could not connect`;
+      const why = document.createElement('span');
+      why.className = 'conn-blocked-why';
+      why.textContent = advice === 'add-relay'
+        ? ' — their network would not carry it. A relay fixes this: add one below, then re-share the link.'
+        : ' — you have a relay set up, so their link probably pre-dates it. Re-share the QR or link below.';
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'btn btn--ghost btn--xs';
+      clear.textContent = 'Clear';
+      clear.title = 'Forget these attempts';
+      clear.addEventListener('click', () => { this._blockedJoiners.clear(); this._renderConnectionsSummary(); });
+      li.append(head, why, clear);
+      list.appendChild(li);
+    }
+
     if (localWindows + scaled + remote === 0) {
       const li = document.createElement('li');
       li.className = 'conn-empty';
@@ -6465,6 +6495,23 @@ export class GMApp {
     // otherwise the green chrome stays missing after a map swap.
     this._refreshRectOverlays();
   }
+
+  /**
+   * v2.19.14 — a player got as far as our broker and then their network refused
+   * to carry the connection. THEY cannot fix it: the relay travels in the link
+   * they opened, so only the GM can. Say so where the GM will be looking when
+   * someone tells them "I can't get in" — beside the join QR — and say which of
+   * the two fixes applies.
+   */
+  private _onJoinerBlocked(peerId: string): void {
+    this._blockedJoiners.add(peerId);
+    const advice = blockedJoinerAdvice((loadStoredIce() ?? []).length > 0);
+    this.setStatus(advice === 'add-relay'
+      ? 'A player could not connect — their network blocked it. Add a relay in Settings > Connections and re-share the link.'
+      : 'A player could not connect. Your relay may not be in the link they used — re-share the QR or link.', 'warn');
+    this._renderConnectionsSummary();
+  }
+  private _blockedJoiners = new Set<string>();
 
   private setStatus(msg: string, level: 'ok' | 'warn' | 'error'): void {
     // v2.17.20 — feed the quiet activity log instead of the always-on bar, so

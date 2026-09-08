@@ -455,7 +455,12 @@ export class ProjectorApp {
         this._showStatus(`Reconnecting… (${secs}s, attempt ${attempt})`);
       },
       onError:   (err) => this._showStatus(`Error: ${err.message}`),
-      onIceState: (st) => { if (st === 'ice-failed') this._showStatus('Connection blocked by this network (UDP blocked, no relay). Ask the GM for a link with a relay.'); },
+      onIceState: (st) => {
+        if (st !== 'ice-failed') return;
+        this._showStatus(
+          'This network will not carry the connection to the GM. '
+          + 'Try another network, or ask the GM for a link with a relay — they have been told.');
+      },
       onMessage: (msg, blob) => this._onMessage(msg, blob),
     });
     this.guest.setIceServers(parseIceParam(new URLSearchParams(location.search).get('ice')));

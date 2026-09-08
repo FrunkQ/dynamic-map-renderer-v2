@@ -142,33 +142,64 @@ conn.on('error', (err: any) => {
 There is a second `conn.on('error')` at line 348 (host side of the same file) —
 check whether it wants the same treatment when you are in there.
 
-## 5. What this does NOT fix
+## 4d. SSE needs the rest of this too
+
+Everything in sections 5-7 applies to SSE unchanged: the dead default relay, the
+host-side blocked-joiner notice, the relay self-test. `testIceServers` and
+`blockedJoinerAdvice` are in the twin `iceConfig.ts`, so they arrive with the
+file copy; the wiring is one call site each.
+
+## 5. The default relay is DEAD — measured 2026-09-08
 
 The reporting is now honest on every browser. **The connection still failed**,
 and that is a separate question with a separate answer.
 
-Unless the GM has configured a custom relay, both apps fall back to
-`DEFAULT_ICE`: one STUN, and one **UDP-only** shared community TURN
-(`turn:eu-0/us-0.turn.peerjs.com:3478`). Chrome found a path; Firefox did not.
-Unverified hypotheses, most likely first:
+Chasing the Firefox report turned up something bigger, and it is not a
+hypothesis — it is measured:
 
-1. **IPv6-only mobile network.** Android carriers commonly run IPv6-only with
-   NAT64/DNS64. Chrome synthesises IPv6 addresses so it can still reach an
-   IPv4-only STUN/TURN server; Firefox's handling is weaker. This fits "same
-   device, same network, only the browser changed" better than anything else.
-2. **Firefox privacy settings** — `resistFingerprinting`, strict ETP or private
-   browsing restrict candidate gathering, which can leave no viable pair.
-3. **The shared free relay was unavailable to that client** at that moment.
+```
+nslookup -type=A eu-0.turn.peerjs.com.   8.8.8.8   -> NOERROR, no address
+nslookup -type=A eu-0.turn.peerjs.com.   1.1.1.1   -> NOERROR, no address
+nslookup -type=A us-0.turn.peerjs.com.   8.8.8.8   -> NOERROR, no address
+nslookup -type=A stun.l.google.com.      8.8.8.8   -> 74.125.250.129   (fine)
+```
 
-To settle it: `about:webrtc` on Firefox Android lists every candidate pair and
-whether a relay candidate was gathered at all.
+**The community TURN relays that peerjs ships as defaults no longer resolve.**
+Google STUN resolves normally from the same machine and the same resolvers, so
+this is not a local DNS fault. `testIceServers` on the default list confirms it
+from the browser side: candidate types gathered are `host` and `srflx` only, with
+`701 TURN host lookup received error` for both relay addresses.
 
-The real cure for all three is the same, and it is already built in both apps: a
-`turns:host:443` relay supplied by the GM. That is what the `?ice=` parameter and
-the Connections settings exist for. Firefox simply falls off a free UDP-only
-relay sooner than Chrome does.
+Note the trailing dot in those queries. Without it a machine with a DNS search
+suffix (and a wildcard record on that domain) will silently answer for
+`eu-0.turn.peerjs.com.<suffix>` instead, which looks like a working answer and is
+not. That cost a few minutes here; use FQDNs when checking this.
 
-## 6. Verifying
+### What it means
+
+Out of the box, BOTH APPS HAVE NO RELAY — only STUN. A direct path when the NATs
+cooperate, and nothing at all when they do not. Every "it works for some players
+and not others" report is explained by this, and the Firefox case was never
+really about Firefox: Chrome found a direct route, Firefox did not, and there was
+no relay underneath either of them to catch the fall.
+
+The entries are left in `DEFAULT_ICE` because peerjs still ships them and
+removing them changes nothing — they are inert either way. What changed is the
+copy that claimed they worked, and it should change in SSE too if SSE says
+anything similar.
+
+## 6. The cure, for both apps
+
+A `turns:host:443` relay supplied by the GM. Both apps already carry one in the
+share link (`?ice=`) and both have the settings UI for it — that machinery was
+built for locked-down workplaces, and it turns out to be the answer for remote
+play generally now that the free fallback is gone.
+
+`testIceServers()` makes that checkable in five seconds instead of mid-session,
+and the GM-side blocked-joiner notice makes the need visible to the one person
+who can act on it. Neither existed before this.
+
+## 7. Verifying
 
 `iceVerdict` is pure, so the browser divergence is pinned by unit tests rather
 than by hoping — see `test/unit/iceConfig.test.ts` ("reads the verdict from

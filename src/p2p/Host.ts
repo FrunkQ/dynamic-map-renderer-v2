@@ -1,7 +1,7 @@
 import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage, SessionState, MarkerIconData, SoundboardAudioData, TextMapVideoElement, TextMapAltItem, MsgStarMapShow, MsgFullState } from '../types.ts';
 import { LocalChannel } from './LocalChannel.ts';
-import { peerConfigFor, loadStoredIce } from './iceConfig.ts';
+import { peerConfigFor, loadStoredIce, iceVerdict } from './iceConfig.ts';
 import { generateRoomCode } from './roomCode.ts';
 import { isLocalPlayerStaticOnly } from '../storage/localSettings.ts';
 
@@ -9,6 +9,10 @@ const CHUNK_SIZE = 16 * 1024; // 16 KB — safe DataChannel message size
 
 export interface HostEvents {
   onPeerConnected: (peerId: string) => void;
+  /** v2.19.14 — someone tried to join and their network would not carry it.
+   *  Only the GM can fix this (the relay rides in the link), so the app has to
+   *  carry the message across: the player who sees the error cannot act on it. */
+  onPeerBlocked?: (peerId: string) => void;
   onPeerDisconnected: (peerId: string) => void;
   onError: (err: Error) => void;
   onReady: (roomCode: string) => void;
@@ -478,7 +482,45 @@ export class Host {
 
   // ─── Private ───────────────────────────────────────────────────────────────
 
+  /** Watch an incoming connection's ICE until it opens or gives up. */
+  private _watchJoinerIce(conn: DataConnection): void {
+    let settled = false;
+    conn.on('open', () => { settled = true; });
+    // PeerJS raises this from iceConnectionState === 'failed' and nothing else.
+    conn.on('error', (err) => {
+      if (settled) return;
+      if ((err as unknown as { type?: string }).type === 'negotiation-failed') {
+        settled = true;
+        this.events.onPeerBlocked?.(conn.peer);
+      }
+    });
+    const watch = () => {
+      if (settled) return;
+      const pc: RTCPeerConnection | undefined =
+        (conn as unknown as { peerConnection?: RTCPeerConnection }).peerConnection;
+      if (!pc) { setTimeout(watch, 250); return; }
+      const report = () => {
+        if (settled) return;
+        if (iceVerdict(pc) === 'ice-failed') {
+          settled = true;
+          this.events.onPeerBlocked?.(conn.peer);
+        }
+      };
+      pc.addEventListener('connectionstatechange', report);
+      pc.addEventListener('iceconnectionstatechange', report);
+      report();
+    };
+    watch();
+  }
+
   private handleConnection(conn: DataConnection): void {
+    // v2.19.14 — a joiner whose ICE fails NEVER opens, so without this the GM
+    // simply never learns that someone tried and could not get in. Signalling
+    // already worked (that is how we got this far), so the failure is the media
+    // path: exactly the case a turns:443 relay exists to fix, and only the GM
+    // can supply one.
+    this._watchJoinerIce(conn);
+
     conn.on('open', () => {
       this.connections.set(conn.peer, conn);
       this.events.onPeerConnected(conn.peer);

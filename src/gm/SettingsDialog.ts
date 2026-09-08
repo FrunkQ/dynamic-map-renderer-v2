@@ -55,7 +55,7 @@ import {
   isSpotifyEnabled,
   setSpotifyEnabled,
 } from '../stagecraft/stagecraftStorage.ts';
-import { loadStoredIce, saveStoredIce, parseIceText, iceToText } from '../p2p/iceConfig.ts';
+import { loadStoredIce, saveStoredIce, parseIceText, iceToText, testIceServers } from '../p2p/iceConfig.ts';
 import { getSseOrigin, setSseOrigin, SSE_ORIGIN_DEFAULT } from '../storage/localSettings.ts';
 import { buildDiceSettings, type DiceSettingsOptions } from './DiceSettings.ts';
 import { fetchInfo as fetchWledInfo, normaliseEndpoint } from '../stagecraft/wledClient.ts';
@@ -452,7 +452,16 @@ export class SettingsDialog {
     status.className = 'settings-section-intro';
     const summarise = () => {
       const l = loadStoredIce();
-      if (!l || l.length === 0) { status.textContent = 'Using the built-in relay only.'; return; }
+      if (!l || l.length === 0) {
+        // v2.19.14 — this used to say "using the built-in relay only", which is
+        // no longer true: the relays PeerJS ships stopped resolving, so the
+        // default really is direct-only. Measured, not assumed - see iceConfig.
+        status.textContent =
+          'No relay configured — remote players can only connect when their network allows a '
+          + 'direct path. There is no working fallback behind that, so add a relay here if anyone '
+          + 'reports trouble joining.';
+        return;
+      }
       const tls = l.some((e) => (Array.isArray(e.urls) ? e.urls : [e.urls]).some((u) => /^turns:/i.test(u)));
       status.textContent = `${l.length} custom server${l.length === 1 ? '' : 's'} saved${tls ? ' (includes a TLS relay - good for locked-down networks)' : ' (no turns: entry - a UDP-blocking network may still fail)'}. New player links and QR codes carry it; re-share existing ones.`;
     };
@@ -463,7 +472,34 @@ export class SettingsDialog {
       summarise();
     });
     summarise();
-    sec.append(relayLabel, ta, status);
+
+    // v2.19.14 — find out NOW, not from a player who cannot join mid-session.
+    // Gathers candidates locally: a relay candidate is proof the TURN server is
+    // reachable AND its credentials work, which is the only thing that actually
+    // rescues a player on a locked-down network.
+    const testBtn = document.createElement('button');
+    testBtn.type = 'button';
+    testBtn.className = 'btn btn--sm btn--ghost';
+    testBtn.textContent = 'Test these servers';
+    testBtn.title = 'Check the relay is reachable and its credentials work';
+    const testResult = document.createElement('p');
+    testResult.className = 'settings-section-intro';
+    testBtn.addEventListener('click', () => {
+      testBtn.disabled = true;
+      testBtn.textContent = 'Testing…';
+      testResult.textContent = '';
+      void testIceServers(parseIceText(ta.value)).then((r) => {
+        testResult.textContent = r.error
+          ? `Could not test: ${r.error}`
+          : r.relay
+            ? 'Relay working — a player on a locked-down network can get through. Re-share your link or QR so it carries this.'
+            : r.srflx
+              ? 'No relay. The servers answered, but none handed back a relay candidate — check the TURN username and password, and that the address is a turn: or turns: URL. Players on restrictive networks will still fail.'
+              : 'Nothing came back at all. Check the addresses, and that this machine can reach them.';
+      }).finally(() => { testBtn.disabled = false; testBtn.textContent = 'Test these servers'; });
+    });
+
+    sec.append(relayLabel, ta, status, testBtn, testResult);
 
     // SSE origin
     const originLabel = document.createElement('span');
