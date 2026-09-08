@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.18 - 2026-09-08
+
+The relay's own side, in `worker/relay` - a small Cloudflare Worker that hands a browser credentials which expire in two hours. It exists because the long-term key must never reach a browser, and something has to do the minting. Its README carries the setup, which is four steps and two of them are secrets that only a person should handle.
+
+It counts two things: which app asked, and what happened. It records no addresses and nothing per visitor - the caller's address is used once, for the rate limiter, and passed straight to it. What fraction of players actually need a relay comes from Cloudflare's own relayed-GB figures set against those counts, so the useful number needs no extra collection.
+
+Not yet deployed, and both apps still ship with it switched off.
+
 ## v2.19.17 - 2026-09-08
 
 **Groundwork for a relay nobody has to configure.** Mappadux can now fetch short-lived relay credentials from an endpoint of ours at startup and add them to the list it already uses. It is switched OFF in this build - the endpoint does not exist yet - so nothing changes until it does.
