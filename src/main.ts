@@ -5,6 +5,12 @@
 // rules land in the document before any TextMapEditor opens.
 import './images/bundledFontsLoad.ts';
 
+// v2.19.17 — ask for the managed relay's credentials NOW, so the answer is
+// already here by the time anything dials. Inert until an endpoint is
+// configured, and silent if it fails: no relay just means today's behaviour.
+import { primeManagedIce } from './p2p/iceConfig.ts';
+void primeManagedIce();
+
 import { GMApp } from './gm/GMApp.ts';
 import { handleAuthCallback as handleSpotifyCallback } from './stagecraft/spotifyAuth.ts';
 

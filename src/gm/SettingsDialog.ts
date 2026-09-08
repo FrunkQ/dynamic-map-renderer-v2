@@ -55,7 +55,8 @@ import {
   isSpotifyEnabled,
   setSpotifyEnabled,
 } from '../stagecraft/stagecraftStorage.ts';
-import { loadStoredIce, saveStoredIce, parseIceText, iceToText, testIceServers } from '../p2p/iceConfig.ts';
+import { loadStoredIce, saveStoredIce, parseIceText, iceToText, testIceServers,
+  managedIceUrl, managedRelayEnabled, setManagedRelayEnabled } from '../p2p/iceConfig.ts';
 import { getSseOrigin, setSseOrigin, SSE_ORIGIN_DEFAULT } from '../storage/localSettings.ts';
 import { buildDiceSettings, type DiceSettingsOptions } from './DiceSettings.ts';
 import { isDiceAvailable } from '../storage/featureFlags.ts';
@@ -437,8 +438,23 @@ export class SettingsDialog {
   private _buildConnectionsSection(): HTMLElement {
     const sec = mkSection(
       'Connections',
-      'Remote players connect peer-to-peer. That works on home and mobile networks by itself (a public relay is built in). A workplace network that blocks UDP can stop it - then a relay that speaks TLS on port 443 is needed.',
+      'Remote players connect peer-to-peer - straight from their device to yours whenever the two networks allow it. When they will not, the connection needs a relay to carry it.',
     );
+
+    // v2.19.17 - the managed relay. Only shown once an endpoint exists, because
+    // a switch for something that is not there is worse than no switch.
+    if (managedIceUrl()) {
+      sec.appendChild(this._buildPerfToggle({
+        title: 'Use the Mappadux relay when a direct connection fails',
+        help:
+          'On by default. Your players connect directly whenever they can - the relay is the LAST route tried, '
+          + 'so it only carries the players who could not connect without it. It cannot read anything it carries '
+          + '(the connection is encrypted between the two browsers), and it hides your address and theirs from '
+          + 'each other. Switch it off to use only a direct path, or your own relay below.',
+        get: managedRelayEnabled,
+        set: setManagedRelayEnabled,
+      }));
+    }
     // Relay
     const relayLabel = document.createElement('span');
     relayLabel.className = 'about-edit-label';

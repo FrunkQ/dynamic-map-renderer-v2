@@ -1008,8 +1008,13 @@ export class PlayerApp {
 
   // ─── P2P ──────────────────────────────────────────────────────────────────
 
+  /** v2.19.17 — ICE has returned a definitive failure; the reconnect messages
+   *  must not talk over the one explanation that is true. */
+  private _iceBlocked = false;
+
   private connect(roomCode: string): void {
     this.roomCode = roomCode;
+    this._iceBlocked = false;
     this.setStatus('Connecting…');
 
     // Destroy any existing guest (e.g. WebGL context-recovery reconnect) before
@@ -1018,6 +1023,7 @@ export class PlayerApp {
 
     this.guest = new Guest({
       onConnected:    () => {
+        this._iceBlocked = false;
         this.setStatus('');
         // v2.16.43 — tell the GM this peer is a PiP / pop-out preview so
         // it shows "GM Player View disconnected" instead of the generic
@@ -1028,16 +1034,23 @@ export class PlayerApp {
         }
         void this._onConnectedIdentity();
       },
-      onDisconnected: () => this.setStatus('Disconnected — waiting for GM…'),
+      // v2.19.17 — "waiting for GM" is a LIE once ICE has failed: the GM is
+      // there and working, this network will not carry the connection to them.
+      // A GM's own report of it: "showed I was offline. I had no problem
+      // working the app." So once the verdict is in, the reconnect chatter no
+      // longer overwrites it — the retries continue underneath regardless.
+      onDisconnected: () => { if (!this._iceBlocked) this.setStatus('Disconnected — waiting for GM…'); },
       onReconnecting: (attempt, delayMs) => {
+        if (this._iceBlocked) return;
         const secs = Math.round(delayMs / 1000);
         this.setStatus(`Reconnecting… (${secs}s, attempt ${attempt})`);
       },
-      onError: (err)  => this.setStatus(`Error: ${err.message}`),
+      onError: (err)  => { if (!this._iceBlocked) this.setStatus(`Error: ${err.message}`); },
       // v2.18 — honest verdict when neither a direct nor relayed path exists (UDP blocked,
       // no TLS relay): say so instead of "Connecting…" forever. Reconnect keeps trying.
       onIceState: (st) => {
-        if (st !== 'ice-failed') return;
+        if (st !== 'ice-failed') { this._iceBlocked = false; return; }
+        this._iceBlocked = true;
         // Two sentences, in the order a player can act on them: the thing THEY
         // can try, then the thing to ask for. Your GM has been told as well —
         // worth saying, because otherwise the natural move is to keep retrying.

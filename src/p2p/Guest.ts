@@ -1,6 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import type { GMMessage } from '../types.ts';
-import { peerConfigFor, iceVerdict, type IceServerEntry } from './iceConfig.ts';
+import { peerConfigFor, iceVerdict, managedIceReady, type IceServerEntry } from './iceConfig.ts';
 import { LocalChannel } from './LocalChannel.ts';
 
 export interface GuestEvents {
@@ -159,7 +159,13 @@ export class Guest {
   private _doConnect(roomCode: string): void {
     this._teardownPeer();
     this._resetBlobState();
+    // v2.19.17 — ICE config is fixed when the peer is built, so the managed
+    // relay has to be in hand first. Primed at page load; this is the last
+    // moment to collect it, and it gives up fast rather than holding a join.
+    void managedIceReady().then(() => { if (!this._destroyed) this._openPeer(roomCode); });
+  }
 
+  private _openPeer(roomCode: string): void {
     // v2.18 — BYO STUN/TURN (custom prepended to PeerJS defaults) so a locked-down network
     // can still relay over TLS on 443. Read from the URL (?ice=) so it is known BEFORE dialling.
     const cfg = peerConfigFor(this.iceServers);

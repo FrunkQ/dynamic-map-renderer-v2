@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.19.17 - 2026-09-08
+
+**Groundwork for a relay nobody has to configure.** Mappadux can now fetch short-lived relay credentials from an endpoint of ours at startup and add them to the list it already uses. It is switched OFF in this build - the endpoint does not exist yet - so nothing changes until it does.
+
+Two things worth knowing about how it will work, because they are built in rather than promised. A relay is the **last** route a browser tries: everyone who can connect directly still does, machine to machine, and never touches it. And when it is used it cannot read anything it carries - the connection is encrypted between the two browsers - while hiding your address and your players' from each other, which a direct connection does not.
+
+Settings will carry a switch to turn it off entirely, appearing only once there is something to switch.
+
+Fixed: once a player's connection was definitively blocked, the "Reconnecting..." countdown wrote over the message explaining why, leaving them with a status that blamed the GM for a fault at their own end. The explanation now stays put; the retries carry on underneath it.
+
 ## v2.19.16 - 2026-09-08
 
 Documentation only. `docs/connectivity-that-just-works.md` answers what it would take to make remote play connect without anyone configuring anything: what a relay can and cannot see (it cannot read what it carries, and it hides both ends' addresses from each other), what it would cost on the Cloudflare account already in use (the free allowance covers thousands of sessions), and the part that is actually work - an endpoint holding a secret, and keeping it from becoming a free relay for strangers.
