@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.19.22 - 2026-09-08
+
+The relay now lives at `turn.starsystemx.com` rather than a `workers.dev` address. That is not cosmetic: `workers.dev` is a hostname routinely blocked by corporate and school firewalls, and those are exactly the restrictive networks a relay exists to rescue - a blocked endpoint would have meant no relay for precisely the people who need one.
+
+The old address still answers, so any build already out there keeps working.
+
+## v2.19.21 - 2026-09-08
+
+Documentation: the connectivity note now records that the relay shipped the same day it was proposed, with the browser measurements behind the "a relay is the last route tried" claim rather than an appeal to the spec. It also names the one thing still outstanding - the endpoint is on a `workers.dev` address, which restrictive networks often block, and those are exactly the networks a relay exists for.
+
 ## v2.19.20 - 2026-09-08
 
 Internal: connecting to a game no longer starts a request for relay credentials on its own - it waits only for the one the app already made when it started up. An app should not reach the network as a side effect of something else, and the same change in Star System Explorer turned out to be breaking four unrelated tests by doing exactly that.

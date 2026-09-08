@@ -2,6 +2,26 @@ name = "relay-ice"
 main = "src/index.js"
 compatibility_date = "2026-09-08"
 
+# KEEP the workers.dev address alive alongside the custom domain. Adding
+# [[routes]] silently disables it by default, and shipped apps point at it -
+# turning it off strands every already-deployed build until it is redeployed.
+# It costs nothing to serve both, and it is a second way in if the custom
+# domain is ever the blocked one.
+workers_dev = true
+
+# A CUSTOM DOMAIN rather than the workers.dev address, and the reason is the
+# whole point of this Worker: *.workers.dev is routinely blocked by corporate
+# and school firewalls - exactly the restrictive networks a relay exists to
+# rescue. A blocked credential endpoint means no relay for precisely the people
+# who need one.
+#
+# Cloudflare creates and manages the DNS record for this (proxied, like
+# explorers.starsystemx.com). The zone's CAA already permits pki.goog, which is
+# the CA a Worker custom domain uses - do not narrow that list.
+[[routes]]
+pattern = "turn.starsystemx.com"
+custom_domain = true
+
 # Counts only: which app asked, and what happened. No IPs, no per-visitor rows.
 # Query it with the Workers Analytics Engine SQL API, or from the dashboard.
 # ENABLE Analytics Engine on the account first (one click, Workers ->
