@@ -117,14 +117,17 @@ export function peerConfigFor(custom: IceServerEntry[] | null | undefined): { ic
 // silently. Nothing here may ever be able to stop a game connecting.
 
 /**
- * Where short-lived credentials come from. EMPTY = no managed relay, which is
- * the shipped state until the Worker exists; the machinery below is inert and
- * costs one `if`. Flip this to the endpoint and everything switches on.
+ * Where short-lived credentials come from. Empty would mean no managed relay
+ * at all, and the machinery below would be inert.
  *
  * Overridable per-device for testing without a deploy: set
  * `localStorage['mappadux:managed_relay_url']`.
+ *
+ * The Worker is in this repo at `worker/relay`. It mints two-hour Cloudflare
+ * TURN credentials, holds the long-term key that must never reach a browser,
+ * and returns 503 rather than anything alarming when it cannot.
  */
-export const MANAGED_ICE_URL = '';
+export const MANAGED_ICE_URL = 'https://relay-ice.orange-tree-847c.workers.dev/ice';
 
 const MANAGED_URL_KEY   = 'mappadux:managed_relay_url';
 const MANAGED_OFF_KEY   = 'mappadux:managed_relay_off';
@@ -224,7 +227,10 @@ export function primeManagedIce(): Promise<IceServerEntry[] | null> {
   if (_managedPromise) return _managedPromise;
   _managedPromise = (async () => {
     const url = managedIceUrl();
-    if (!url || !managedRelayEnabled() || typeof fetch === 'undefined') return null;
+    // `typeof window` rather than `typeof fetch`: server-side rendering has a
+    // perfectly good fetch, and a build step quietly asking for TURN
+    // credentials would be a genuinely surprising thing to ship.
+    if (!url || typeof window === 'undefined' || !managedRelayEnabled()) return null;
     const cached = readCache();
     if (cached) { _managed = cached; return cached; }
     const got = await fetchManagedIce(url);

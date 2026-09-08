@@ -109,15 +109,15 @@ describe('the managed relay', () => {
     expect(parseManagedIce({ iceServers: [{ urls: 'turns:r:443' }] })!.ttlMs).toBe(3600_000);
   });
 
-  it('is inert with no endpoint configured — this is the shipped state', async () => {
-    expect(managedIceUrl()).toBe('');
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
-    await primeManagedIce();
-    // Nothing asked, nothing added, nothing to go wrong.
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(managedIce()).toBeNull();
-    expect(peerConfigFor(null)).toBeUndefined();
+  it('ships pointing at an https endpoint, or at none at all', () => {
+    // Two legal states. Empty means the whole feature is inert - one `if`, no
+    // request, today's behaviour. Otherwise it MUST be https: a credential is
+    // a secret in transit, and a plain-http endpoint would hand it to the same
+    // network that is already refusing to carry the game.
+    const url = managedIceUrl();
+    if (url) expect(url.startsWith('https://')).toBe(true);
+    // (The inert path itself is exercised by the switched-off test below: both
+    // reach the same branch.)
   });
 
   it('adds itself AFTER the GM’s own servers and BEFORE the defaults', async () => {

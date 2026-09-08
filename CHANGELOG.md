@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.19.19 - 2026-09-08
+
+**Remote players now have a relay, and nobody has to set it up.** When a player's network will not carry a direct connection to you, the connection falls back to a relay automatically. Until today there was nothing to fall back to - the free one both apps inherited had quietly stopped existing - which is why some players could join and others never could.
+
+It is the LAST route tried, and that is measured rather than claimed: a relay route ranks about thirty times below a direct one, so every player who can reach you directly still does, straight from their device to yours, and never touches it. When it is used it cannot read anything it carries - the connection is encrypted between the two browsers - and it hides your address and theirs from each other, which a direct connection does not.
+
+Settings > Connections carries a switch to turn it off, and your own relay still takes precedence over ours if you have one.
+
 ## v2.19.18 - 2026-09-08
 
 The relay's own side, in `worker/relay` - a small Cloudflare Worker that hands a browser credentials which expire in two hours. It exists because the long-term key must never reach a browser, and something has to do the minting. Its README carries the setup, which is four steps and two of them are secrets that only a person should handle.
