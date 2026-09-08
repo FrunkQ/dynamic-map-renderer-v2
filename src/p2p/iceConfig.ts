@@ -271,15 +271,21 @@ export async function fetchManagedIce(
 }
 
 /**
- * Wait for the relay before dialling — but not for long, and never forever.
- * Resolves the moment the answer is in, or after MANAGED_WAIT_MS regardless.
- * A player who joins a fraction of a second sooner without a relay they did
- * not need beats a player staring at a spinner.
+ * Wait for a request that is ALREADY IN FLIGHT — but not for long, and never
+ * forever. Resolves the moment the answer is in, or after MANAGED_WAIT_MS
+ * regardless: a player who joins a fraction of a second sooner without a relay
+ * they did not need beats a player staring at a spinner.
+ *
+ * It deliberately does NOT start the request. Only `primeManagedIce`, called
+ * from the app's own startup, does that — so nothing on the dialling path can
+ * reach the network on its own. Two things fall out of that, and both matter:
+ * an app that never primed simply dials as it always did, and a test that
+ * constructs a transport makes no network call by accident.
  */
 export async function managedIceReady(maxWaitMs = MANAGED_WAIT_MS): Promise<void> {
-  if (_managed || !managedIceUrl() || !managedRelayEnabled()) return;
+  if (_managed || !_managedPromise) return;
   await Promise.race([
-    primeManagedIce(),
+    _managedPromise,
     new Promise((resolve) => setTimeout(resolve, maxWaitMs)),
   ]);
 }

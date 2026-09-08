@@ -172,9 +172,23 @@ describe('the managed relay', () => {
     // An endpoint that never answers. The whole point: a player joins WITHOUT
     // a relay rather than staring at a spinner because ours is having a day.
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => { /* never settles */ })));
+    void primeManagedIce();
     const started = Date.now();
     await managedIceReady(60);
     expect(Date.now() - started).toBeLessThan(1000);
+    expect(managedIce()).toBeNull();
+  });
+
+  it('WAITS for a request, and never starts one', async () => {
+    // The dialling path calls this. If it could start a request, then merely
+    // constructing a transport would reach the network - which is how four
+    // unrelated tests broke the first time this was wired up, and would be a
+    // surprising thing for an app to do on someone's behalf.
+    localStorage.setItem('mappadux:managed_relay_url', 'https://relay.test/ice');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    await managedIceReady();
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(managedIce()).toBeNull();
   });
 

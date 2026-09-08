@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.19.20 - 2026-09-08
+
+Internal: connecting to a game no longer starts a request for relay credentials on its own - it waits only for the one the app already made when it started up. An app should not reach the network as a side effect of something else, and the same change in Star System Explorer turned out to be breaking four unrelated tests by doing exactly that.
+
 ## v2.19.19 - 2026-09-08
 
 **Remote players now have a relay, and nobody has to set it up.** When a player's network will not carry a direct connection to you, the connection falls back to a relay automatically. Until today there was nothing to fall back to - the free one both apps inherited had quietly stopped existing - which is why some players could join and others never could.
