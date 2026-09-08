@@ -26,8 +26,12 @@ automated should be handling either.
 
 ### 1. Create a TURN key
 
-Cloudflare dashboard → **Realtime** → **TURN Keys** → create one. Note the
-**TURN Key ID** and the **API token** it gives you. The token is shown once.
+Cloudflare dashboard → **Realtime** → **TURN Server** → **Create** (top right).
+The list is empty until you do; there is no key by default. Name it anything.
+
+It then shows a **TURN Key ID** and a **TURN Key API Token**. Copy the token
+before leaving the page — it is displayed once and cannot be retrieved later,
+only replaced.
 
 ### 2. Deploy, and give it the secret
 
