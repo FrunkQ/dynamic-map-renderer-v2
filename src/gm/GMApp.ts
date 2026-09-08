@@ -88,6 +88,7 @@ import { generateRoomCode, generateInstanceId } from '../p2p/roomCode.ts';
 import { saveSession, loadSession, getAllMaps, getMap, saveMap, deleteMap, clearAssetLibraries, clearEverything, getActiveInstanceId } from '../storage/db.ts';
 import { clearAllLocalSettings, SUPPRESS_DEFAULT_SEED_KEY, DEFAULT_SEED_DONE_KEY, arePingsEnabled, isMessagingEnabled, arePlayerMarkersMovable, getInitiativeSortDirection, isInitiativeAnonymised, getMeasureUnitValue, getMeasureUnitSuffix, getWelcomePackSeededVersion, getWelcomePackOfferDismissedVersion, setWelcomePackOfferDismissedVersion, setWelcomePackRefreshedFlag, consumeWelcomePackRefreshedFlag, areDiceEnabled, getDicePolicy, getDiceSet, isGmDiceTrayShown, getKnownPixels } from '../storage/localSettings.ts';
 import { blockedJoinerAdvice } from '../p2p/iceConfig.ts';
+import { isDiceAvailable } from '../storage/featureFlags.ts';
 import { seedDefaultMaps, reseedWelcomePack, WELCOME_PACK_VERSION } from '../storage/seedMaps.ts';
 import { seedAudioAssets } from '../storage/seedAudioAssets.ts';
 import { migrateLegacyMaps } from '../storage/seedMapAssets.ts';
@@ -4129,7 +4130,7 @@ export class GMApp {
     if (msg.type === 'dice_roll') {
       // v2.19 — the player already rolled; we relay, we never re-roll. Dropping
       // it here is what "players may not roll" means for a stale client.
-      if (!areDiceEnabled()) return;
+      if (!areDiceEnabled() || !isDiceAvailable()) return;
       if (this._seenUpstream(msg.rollId)) return;
       const outcome = _sanitiseOutcome(msg.roll);
       if (!outcome) return;
@@ -7236,8 +7237,8 @@ export class GMApp {
       pings: arePingsEnabled(),
       messaging: isMessagingEnabled(),
       movableMarkers: arePlayerMarkersMovable(),
-      dice: areDiceEnabled(),
-      diceSet: getDiceSet(),
+      dice: areDiceEnabled() && isDiceAvailable(),
+      diceSet: isDiceAvailable() ? getDiceSet() : [],
       // Standing policy: a roller draws their own roll without waiting for the
       // relay, so it needs this in advance. 'auto' is resolved here.
       diceRollerDetail: detailFor('roller', {
@@ -7543,6 +7544,8 @@ export class GMApp {
   private _gmPixels: import('../dice/pixelsLink.ts').PixelsLink | null = null;
 
   private _mountDiceOverlay(): void {
+    // v2.19.15 — in progress: nothing dice-shaped exists on production yet.
+    if (!isDiceAvailable()) return;
     const layerEl = document.getElementById('dice-layer');
     if (layerEl && !this._diceLayer) this._diceLayer = new DiceLayer(layerEl, 'viewer');
     const trayEl = document.getElementById('dice-tray');

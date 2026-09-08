@@ -58,6 +58,7 @@ import {
 import { loadStoredIce, saveStoredIce, parseIceText, iceToText, testIceServers } from '../p2p/iceConfig.ts';
 import { getSseOrigin, setSseOrigin, SSE_ORIGIN_DEFAULT } from '../storage/localSettings.ts';
 import { buildDiceSettings, type DiceSettingsOptions } from './DiceSettings.ts';
+import { isDiceAvailable } from '../storage/featureFlags.ts';
 import { fetchInfo as fetchWledInfo, normaliseEndpoint } from '../stagecraft/wledClient.ts';
 import { fetchInfo as fetchQlcInfo, normaliseQlcEndpoint } from '../stagecraft/qlcClient.ts';
 import { wledConfigUrl, haConfigUrl, qlcConfigUrl } from '../stagecraft/configUrls.ts';
@@ -178,7 +179,7 @@ export class SettingsDialog {
     // ── Player Permissions / Game System / Reply Assistant ───────────────
     // v2.16.109 — split the old "Player Voice" section into three focused
     // ones so each reads on its own.
-    body.appendChild(this._buildDiceSection());
+    if (isDiceAvailable()) body.appendChild(this._buildDiceSection());
     body.appendChild(this._buildPlayerPermissionsSection());
     body.appendChild(this._buildGameSystemSection());
     body.appendChild(this._buildReplyAssistantSection());
@@ -712,7 +713,7 @@ export class SettingsDialog {
       set: setMessagingEnabled,
     }));
 
-    sec.appendChild(this._buildPerfToggle({
+    if (isDiceAvailable()) sec.appendChild(this._buildPerfToggle({
       title: 'Allow player dice',
       help:
         'Players get a tray of the rolls you set up in the Dice panel — one tap is one roll. Results reach you as chat, so open All players to watch them. Off hides the tray everywhere; your own dice keep working.',

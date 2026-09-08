@@ -26,6 +26,7 @@ import { DiceLayer } from '../rendering/DiceLayer.ts';
 import { PlayerDiceTray } from './PlayerDiceTray.ts';
 import { rollFormula, type RollOutcome } from '../dice/roll.ts';
 import { isPhysicalDiceSupported } from '../dice/physicalRoll.ts';
+import { isDiceAvailable } from '../storage/featureFlags.ts';
 import { getKnownPixels } from '../storage/localSettings.ts';
 import { reduceDetail, type DiceDetail } from '../dice/dicePolicy.ts';
 import { Viewer } from '../viewers/Viewer.ts';
@@ -430,7 +431,8 @@ export class PlayerApp {
     const diceLayerEl = document.getElementById('dice-layer');
     if (diceLayerEl) this._diceLayer = new DiceLayer(diceLayerEl, 'viewer');
     const diceTrayEl = document.getElementById('dice-tray');
-    if (diceTrayEl && !this._isPreviewMode()) {
+    // v2.19.15 — in progress: gated off production alongside the GM's side.
+    if (diceTrayEl && !this._isPreviewMode() && isDiceAvailable()) {
       this._diceTray = new PlayerDiceTray(diceTrayEl, {
         onRoll: (entry, whisper) => void this._rollDice(entry, whisper),
         onWhisperChange: (armed, reason) => {
@@ -1365,7 +1367,7 @@ export class PlayerApp {
     }
     // v2.19 — a pack sets the ceiling for dice; this is how a player lowers it
     // on their own screen. Cycles rather than nesting a submenu.
-    if (this.features.dice) {
+    if (this.features.dice && isDiceAvailable()) {
       const current = getDiceDetailPreference();
       const nextOf: Record<DiceDetail, DiceDetail> = { full: 'line', line: 'none', none: 'full' };
       const wording: Record<DiceDetail, string> = { full: 'the dice', line: 'a line of text', none: 'nothing' };

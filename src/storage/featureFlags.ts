@@ -34,6 +34,22 @@ function _defaultEnabled(): boolean {
   return !(host === 'www.mappadux.com' || host === 'mappadux.com');
 }
 
+/**
+ * v2.19.15 — dice are IN PROGRESS and gated off production until they are
+ * finished. Beta, localhost and deploy previews get them; mappadux.com does
+ * not, and a beta tester can still switch them off in Danger Zone to see what
+ * production sees.
+ *
+ * Every dice surface asks this: the GM's rail and Settings section, the player
+ * permission, the broadcast that tells players they may roll, and the handler
+ * that accepts a roll. Gating the surfaces rather than the stored permission
+ * keeps a GM's own setting intact for when this lifts — nothing is forgotten,
+ * it is only unreachable.
+ */
+export function isDiceAvailable(): boolean {
+  return isInProgressEnabled();
+}
+
 export function isInProgressEnabled(): boolean {
   try {
     const raw = localStorage.getItem(IN_PROGRESS_KEY);
