@@ -78,6 +78,44 @@ export function peerConfigFor(custom: IceServerEntry[] | null | undefined): { ic
   return { iceServers: [...s, ...DEFAULT_ICE] };
 }
 
+/**
+ * v2.19.13 — the ICE verdict, read from BOTH of a peer connection's state
+ * machines, because browsers do not agree on which one reaches 'failed'.
+ *
+ * `connectionState` is the aggregate (ICE + DTLS); `iceConnectionState` is ICE
+ * alone. Chrome drives them together, so watching either works there. Firefox
+ * does not: it can sit on `iceConnectionState: 'failed'` while `connectionState`
+ * reports 'disconnected' or lags behind it. A guest watching only
+ * `connectionState` therefore misses the failure on Firefox and shows the
+ * player nothing useful — while PeerJS, which watches `iceConnectionState`,
+ * raises its own raw `negotiation-failed` error at them instead.
+ *
+ * That is a REAL user report: Chrome on Android connected, Firefox on Android
+ * showed "P2P negotiation error" (2026-09-08). PeerJS 1.5.5 emits that error
+ * from exactly one place — `iceConnectionState === 'failed'` — so despite the
+ * name it never means an SDP/offer-answer fault. It means no network path was
+ * found, which is the same thing this verdict is for.
+ *
+ * Returns 'ice-failed' when the connection is definitively dead, 'connected'
+ * when a path is up, and null while it is still trying.
+ */
+export function iceVerdict(pc: {
+  connectionState?: string;
+  iceConnectionState?: string;
+} | null | undefined): 'ice-failed' | 'connected' | null {
+  if (!pc) return null;
+  // Either state machine reaching 'failed' is final: every candidate pair was
+  // tried and none worked.
+  if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') return 'ice-failed';
+  // 'completed' is ICE's own success terminal; 'connected' appears on both.
+  if (pc.connectionState === 'connected'
+    || pc.iceConnectionState === 'connected'
+    || pc.iceConnectionState === 'completed') return 'connected';
+  // 'disconnected' is NOT a verdict: it is a wobble that routinely recovers,
+  // and calling it a failure would tell a player their game had died mid-scene.
+  return null;
+}
+
 /** Mirror of peerjs@1.5 DEFAULT_CONFIG.iceServers — kept here so a custom
  *  list ADDS to the defaults rather than replacing them. */
 export const DEFAULT_ICE: IceServerEntry[] = [

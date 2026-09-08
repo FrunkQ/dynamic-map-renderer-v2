@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.19.13 - 2026-09-08
+
+Fixed: a player whose connection failed on Firefox saw a raw "P2P negotiation error" instead of Mappadux's own explanation. The two apps watched only one of a connection's two state machines, and Firefox is the browser where they disagree - so the failure never reached our own handler. Both are watched now, and PeerJS's error is treated as what it actually is: an ICE verdict, not a protocol fault.
+
+This does not change whether a connection succeeds. If yours are failing on a mobile network, the cure is a `turns:` relay on port 443 in Settings > Connections - see docs/p2p-ice-verdict-crossrepo.md.
+
 ## v2.19.12 - 2026-08-26
 
 A plain word about privacy, in About, in Settings and in the README: mappadux.com counts page views so I know how many people use it - no cookies, no accounts, nothing that identifies you or follows you elsewhere, and nothing at all about your maps, packs or table. Self-hosted builds contain none of it.
