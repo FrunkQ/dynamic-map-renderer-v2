@@ -142,11 +142,22 @@ applies, a five-second relay test in Settings, and the documentation to walk a
 GM through it. Zero infrastructure. A GM who pastes a relay is fully covered
 today.
 
-**Phase 2 — the invisible one, recommended.** A Worker on the existing
-Cloudflare account minting short-lived Cloudflare TURN credentials; both apps
-fetch at startup and fall back silently to today's behaviour on any failure.
-The GM never learns the word "relay". Estimated: a day, most of it on the abuse
-control rather than the feature.
+**Phase 2 — DONE, 2026-09-08, same day.** `worker/relay` mints two-hour
+Cloudflare TURN credentials; both apps fetch at startup and fall back silently
+to the old behaviour on any failure. The GM never learns the word "relay".
+Live in Mappadux from v2.19.19 and SSE from v3.1.21.
+
+Measured rather than assumed, in a real browser: credentials fetched in 92ms,
+a relay candidate genuinely gathered (so the credentials are accepted and the
+server is reachable), and the candidate priorities that back the claim in
+section 1 — host 2113937151, srflx 1677729535, relay 50341375. Every relay
+route ranks about thirty times below the lowest direct one.
+
+**Phase 2b — still open, and it is the one that would bite.**
+`*.workers.dev` is a hostname commonly blocked by restrictive corporate and
+school networks. Those are precisely the networks that need a relay, so the
+endpoint should move to a custom domain on the zone we already control. It is
+a Workers custom domain plus one constant in each app.
 
 **Guardrails to build in from the start, not after:**
 
