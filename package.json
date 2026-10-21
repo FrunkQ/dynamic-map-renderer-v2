@@ -1,7 +1,7 @@
 {
   "name": "dynamic-map-renderer-v2",
   "private": true,
-  "version": "2.20.0",
+  "version": "2.20.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -50,6 +50,6 @@
     "polygon-clipping": "^0.15.7",
     "qrcode": "^1.5.4",
     "three": "^0.183.2",
-    "vamper": "github:FrunkQ/vamper#f4bfc39a682dfa150a876ef2202811c8c18aa84a"
+    "vamper": "github:FrunkQ/vamper#43114a849e74dd4271c4fadcaa66ebe55e2b39f0"
   }
 }

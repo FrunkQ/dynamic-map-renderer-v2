@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.20.1 - 2026-10-21
+
+Vamper, the engine behind local-song soundtracks, is now MIT licensed (it was public domain), so its copyright notice travels with Mappadux like the other libraries in THIRD-PARTY-NOTICES.md. Mappadux now pins the Vamper commit that carries the new licence; the engine code is unchanged.
+
 ## v2.20.0 - 2026-10-21
 
 **Local songs in Soundtracks, with music that changes on the beat.** Pick **Local song...** in an empty slot and choose a song from your audio library (or upload one). Give several slots the same song, each with its own Start / End - "Calm" on the quiet intro, "Combat" on the loud chorus - and switching between them no longer crossfades: the music changes on the next bar with a seamless join, like a film score, and the now-playing line counts down to it. The first play of a song finds its beats and bars, with a progress line; after that it is remembered on this device. Start / End snap to whole bars, so rough values are fine, and clicking the progress bar jumps to that bar.

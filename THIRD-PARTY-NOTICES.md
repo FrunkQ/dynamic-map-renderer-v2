@@ -47,7 +47,7 @@ The join QR code. <https://github.com/soldair/node-qrcode>
 
 > Copyright (c) Ryan Day
 
-### Vamper (The Unlicense)
+### Vamper (MIT)
 
 Local-song soundtracks: beat / bar analysis and bar-quantised
 changes with seamless joins (`src/audio/VamperSongPlayer.ts`).
@@ -55,7 +55,7 @@ changes with seamless joins (`src/audio/VamperSongPlayer.ts`).
 GitHub. Its analyser comes from Gondryator
 (<https://github.com/FrunkQ/gondryator>, The Unlicense).
 
-> Public domain (The Unlicense)
+> Copyright (c) 2026 Alex (FrunkQ)
 
 ### idb (ISC)
 
