@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.20.0 - 2026-10-21
+
+**Local songs in Soundtracks, with music that changes on the beat.** Pick **Local song...** in an empty slot and choose a song from your audio library (or upload one). Give several slots the same song, each with its own Start / End - "Calm" on the quiet intro, "Combat" on the loud chorus - and switching between them no longer crossfades: the music changes on the next bar with a seamless join, like a film score, and the now-playing line counts down to it. The first play of a song finds its beats and bars, with a progress line; after that it is remembered on this device. Start / End snap to whole bars, so rough values are fine, and clicking the progress bar jumps to that bar.
+
+It needs no account, so it is on by default and the Soundtracks panel now appears for everyone; Settings > Soundtracks turns it off. Songs are ordinary library audio, so they travel in `.mappadux` packs with the slots that use them. Switching to or from YouTube and Spotify slots still crossfades.
+
+The engine is [Vamper](https://github.com/FrunkQ/vamper), installed from its GitHub repository pinned to a commit rather than copied, so improvements made and tested there arrive exactly. `npm run vamper:update` moves the pin to Vamper's latest main.
+
 ## v2.19.22 - 2026-09-08
 
 The relay now lives at `turn.starsystemx.com` rather than a `workers.dev` address. That is not cosmetic: `workers.dev` is a hostname routinely blocked by corporate and school firewalls, and those are exactly the restrictive networks a relay exists to rescue - a blocked endpoint would have meant no relay for precisely the people who need one.

@@ -115,6 +115,7 @@ function _isTrack(v: unknown): v is SoundtrackTrack {
   if (r['kind'] === 'youtube'          && typeof r['videoId']  === 'string') return true;
   if (r['kind'] === 'youtube-playlist' && typeof r['listId']   === 'string') return true;
   if (r['kind'] === 'spotify'          && typeof r['trackUri'] === 'string') return true;
+  if (r['kind'] === 'vamper'           && typeof r['assetId']  === 'string') return true;
   return false;
 }
 

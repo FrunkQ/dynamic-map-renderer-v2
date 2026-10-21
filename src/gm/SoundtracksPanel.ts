@@ -20,6 +20,13 @@
  * trick.
  *
  * v2.15.12 — N-slot model + Spotify SDK + crossfade.
+ *
+ * v2.20.0 — Local songs via the Vamper engine (VamperSongPlayer). A
+ * slot can hold a song from the audio library; every slot on the
+ * same song is a passage of it (Start / End trim, snapped to bars),
+ * and switching between two of them changes on the next bar with a
+ * seamless join instead of crossfading. Switching to or from any
+ * other slot still crossfades.
  */
 
 import type { SoundtracksConfig, SoundtrackSlot, SoundtrackTrack } from '../types.ts';
@@ -27,7 +34,12 @@ import {
   isSoundtracksEnabled,
   isYoutubeEnabled,
   isSpotifyEnabled,
+  isLocalSongsEnabled,
 } from '../stagecraft/stagecraftStorage.ts';
+import { VamperSongPlayer } from '../audio/VamperSongPlayer.ts';
+import { AudioAssetStore } from '../audio/AudioAssetStore.ts';
+import { generateId } from '../utils/id.ts';
+import type { AudioAsset } from '../types.ts';
 import {
   createYouTubePlayer,
   YT_STATE,
@@ -64,14 +76,19 @@ const ICON_RESTART = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none
 const ICON_PROVIDER_YT = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#FF0033"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>';
 const ICON_PROVIDER_SP = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/></svg>';
 
+// v2.20.0 — Local song (Vamper): an audio waveform, in the accent colour.
+const ICON_PROVIDER_VAMPER = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2M6 8v8M10 4v16M14 7v10M18 10v4M22 12h0"/></svg>';
+
 function _providerIconFor(track: SoundtrackTrack | undefined): string | null {
   if (!track) return null;
+  if (track.kind === 'vamper')  return ICON_PROVIDER_VAMPER;
   if (track.kind === 'spotify') return ICON_PROVIDER_SP;
   return ICON_PROVIDER_YT;  // 'youtube' or 'youtube-playlist'
 }
 
 function _providerNameFor(track: SoundtrackTrack | undefined): string {
   if (!track) return '';
+  if (track.kind === 'vamper')  return 'Vamper';
   if (track.kind === 'spotify') return 'Spotify';
   return 'YouTube';
 }
@@ -157,8 +174,10 @@ export class SoundtracksPanel {
   /** Lazily created engines. */
   private ytPlayer:      YouTubeSoundtrackPlayer | null = null;
   private spotifyPlayer: SpotifySoundtrackPlayer | null = null;
+  /** v2.20.0 — Local songs. Created on first use. */
+  private vamper: VamperSongPlayer | null = null;
   /** Which provider's engine is currently producing audio. */
-  private activeKind:   'youtube' | 'spotify' | null = null;
+  private activeKind:   'youtube' | 'spotify' | 'vamper' | null = null;
   /** Which slot is currently playing — id from this.cfg.slots. */
   private activeSlotId: string | null = null;
   /** RAF / setTimeout handle for the running crossfade so we can
@@ -253,6 +272,10 @@ export class SoundtracksPanel {
    *  to 0 when muted; restores to the active slot's volume when
    *  unmuted. Called on toggle + after every track load + crossfade. */
   private _applyMute(): void {
+    if (this.activeKind === 'vamper') {
+      this.vamper?.setVolume(this.isMuted ? 0 : this._currentVolume(), 100);
+      return;
+    }
     const p = this._activePlayer();
     if (!p) return;
     const target = this.isMuted ? 0 : this._currentVolume();
@@ -421,7 +444,9 @@ export class SoundtracksPanel {
         const provider = document.createElement('span');
         provider.className = 'soundtrack-provider-badge';
         provider.innerHTML = _providerIconFor(slot.track) ?? '';
-        provider.title = `Powered by ${_providerNameFor(slot.track)}. Sign in to ${_providerNameFor(slot.track)} (Premium) in another tab for ad-free playback.`;
+        provider.title = slot.track.kind === 'vamper'
+          ? 'Local song, played by Vamper. Other slots on the same song are passages of it: switching between them changes on the next bar.'
+          : `Powered by ${_providerNameFor(slot.track)}. Sign in to ${_providerNameFor(slot.track)} (Premium) in another tab for ad-free playback.`;
         header.appendChild(provider);
       }
 
@@ -452,7 +477,8 @@ export class SoundtracksPanel {
     // glance. Empty slots show the URL input so they're still
     // fillable.
     if (!slot.track) {
-      row.appendChild(this._renderUrlInput(slot));
+      if (isYoutubeEnabled() || isSpotifyEnabled()) row.appendChild(this._renderUrlInput(slot));
+      if (isLocalSongsEnabled()) row.appendChild(this._renderSongPicker(slot));
     } else if (isActive) {
       row.appendChild(this._renderControlsRow(slot, true));
       row.appendChild(this._renderNowPlaying(slot));
@@ -528,6 +554,9 @@ export class SoundtracksPanel {
     // v2.15.34 — Restart-vs-Resume toggle. Active state (accent
     // highlight) = Restart (always start at the slot's start
     // point); inactive = Resume (continue where it left off).
+    // Local songs: a passage always starts at its Start bar (a loop
+    // simply carries on), so Restart / Resume doesn't apply.
+    if (slot.track?.kind === 'vamper') return row;
     const restartOn = _effectiveRestart(slot);
     row.appendChild(this._renderIconToggle({
       icon:    ICON_RESTART,
@@ -598,6 +627,7 @@ export class SoundtracksPanel {
     const { durationSec } = this._currentProgress();
     if (durationSec <= 0) return;
     const target = pct * durationSec;
+    if (this.activeKind === 'vamper') { this.vamper?.seek(target); return; }
     if (this.activeKind === 'youtube' && this.ytPlayer) {
       this.ytPlayer.seekSec(target);
     } else if (this.activeKind === 'spotify' && this.spotifyPlayer) {
@@ -629,6 +659,12 @@ export class SoundtracksPanel {
   }
 
   private _transportTogglePause(): void {
+    if (this.activeKind === 'vamper' && this.vamper) {
+      if (this.isPaused) this.vamper.resume(); else this.vamper.pause();
+      this.isPaused = !this.isPaused;
+      this._renderSlots();
+      return;
+    }
     const p = this._activePlayer();
     if (!p) return;
     if (this.isPaused) {
@@ -693,6 +729,55 @@ export class SoundtracksPanel {
     return row;
   }
 
+  /** v2.20.0 — Fill an empty slot with a song from the audio library
+   *  (or a file uploaded into it here), played by Vamper. Songs added
+   *  here are ordinary library assets, so they travel in .mappadux
+   *  packs with the slots that use them. */
+  private _renderSongPicker(slot: SoundtrackSlot): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'soundtrack-add-row';
+    const select = document.createElement('select');
+    select.title = 'A song from your audio library, played by Vamper. Give several slots the same song and set each one\'s Start / End: switching between them changes the music on the next bar.';
+    const placeholder = new Option('Local song…', '');
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    select.append(placeholder, new Option('Upload a song file…', '__upload'));
+    void AudioAssetStore.getAll().then((assets) => {
+      for (const a of assets) select.appendChild(new Option(a.name, a.id));
+    });
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.accept = 'audio/*';
+    file.hidden = true;
+    const choose = (id: string, name: string): void => {
+      void this._updateSlot(slot.id, {
+        track: { kind: 'vamper', assetId: id, label: name },
+        loop:  true,
+      });
+    };
+    select.addEventListener('change', () => {
+      if (select.value === '__upload') { select.value = ''; file.click(); return; }
+      const opt = select.selectedOptions[0];
+      if (select.value && opt) choose(select.value, opt.text);
+    });
+    file.addEventListener('change', () => {
+      const f = file.files?.[0];
+      if (!f) return;
+      const asset: AudioAsset = {
+        id:            generateId(),
+        name:          f.name.replace(/\.[^.]+$/, ''),
+        source:        'upload',
+        locallyStored: true,
+        license:       'Unknown / Manual import',
+        addedAt:       Date.now(),
+      };
+      void AudioAssetStore.save(asset, f)
+        .then(() => choose(asset.id, asset.name))
+        .catch((e) => this._showError(`${f.name}: ${(e as Error).message}`));
+    });
+    row.append(select, file);
+    return row;
+  }
 
   private _renderTimeControls(slot: SoundtrackSlot): HTMLElement {
     const wrap = document.createElement('div');
@@ -763,7 +848,9 @@ export class SoundtracksPanel {
       label.textContent = `Vol ${v}%`;
       // Live-drive the active player's volume if THIS slot is
       // playing AND the panel isn't muted. Muted state pins at 0.
-      if (this.activeSlotId === slot.id && !this.isMuted) {
+      if (this.activeSlotId === slot.id && !this.isMuted && this.activeKind === 'vamper') {
+        this.vamper?.setVolume(v, 50);
+      } else if (this.activeSlotId === slot.id && !this.isMuted) {
         const player = this._activePlayer();
         if (player) {
           if (this.activeKind === 'spotify') void (player as SpotifySoundtrackPlayer).setVolume(v);
@@ -801,6 +888,12 @@ export class SoundtracksPanel {
       slots: this.cfg.slots.map((s) => s.id === id ? { ...s, ...patch } : s),
     };
     await this.host.saveConfig(this.cfg);
+    // Local song: a new trim or Loop setting changes the cue, and the
+    // playing passage picks it up on its next bar.
+    if (this.activeKind === 'vamper' && this.vamper) {
+      this.vamper.setCues(this.cfg.slots);
+      if (id === this.activeSlotId) this.vamper.goTo(id);
+    }
     this._renderSlots();
   }
 
@@ -816,6 +909,23 @@ export class SoundtracksPanel {
     // Cancel any in-flight crossfade.
     if (this.crossfadeTimer) { clearTimeout(this.crossfadeTimer); this.crossfadeTimer = null; }
 
+    // v2.20.0 — Another passage of the song already playing: no
+    // crossfade, Vamper changes on the next bar.
+    if (this.activeKind === 'vamper' && this.vamper && target?.track?.kind === 'vamper'
+        && target.track.assetId === this.vamper.loadedAssetId) {
+      this.activeSlotId = target.id;
+      this.isPaused     = false;
+      this.vamper.goTo(target.id);
+      this.vamper.setVolume(this.isMuted ? 0 : (target.volume ?? DEFAULT_VOLUME), 300);
+      this._renderSlots();
+      return;
+    }
+    if (this.activeKind === 'vamper' && this.vamper) {
+      this.vamper.setVolume(0, crossfadeMs);
+      await new Promise((r) => setTimeout(r, crossfadeMs));
+      this.vamper.stop();
+    }
+
     // v2.15.28 — Capture the current slot's playhead so switching
     // back resumes from where we left off. Only captures if there
     // IS an active slot with an engine running.
@@ -825,7 +935,7 @@ export class SoundtracksPanel {
     }
 
     // Fade current down (if anything is playing).
-    if (this.activeKind && this._activePlayer()) {
+    if (this.activeKind && this.activeKind !== 'vamper' && this._activePlayer()) {
       await this._fade(this.activeKind, this._currentVolume(), 0, crossfadeMs);
       try {
         const p = this._activePlayer();
@@ -872,11 +982,13 @@ export class SoundtracksPanel {
         ? this.ytPlayer?.getNowPlaying()
         : this.activeKind === 'spotify'
           ? this.spotifyPlayer?.getNowPlaying()
-          : null;
+          : this.activeKind === 'vamper' && this.vamper
+            ? { title: this.vamper.nowPlaying() }
+            : null;
       const el = this.slotsEl.querySelector<HTMLElement>('[data-now-playing="1"]');
       if (el) {
         el.textContent = np?.title
-          ? (np.author ? `${np.title} — ${np.author}` : np.title)
+          ? ('author' in np && np.author ? `${np.title} — ${np.author}` : np.title)
           : '…';
       }
       // Update progress fill width + start/end tick positions.
@@ -917,7 +1029,12 @@ export class SoundtracksPanel {
         // brief reload window after _onTrackEnded triggers a loop
         // or restart; it clears once position has dropped back
         // below endSec (the seek-to-startSec brings it down).
-        if (showTicks && slot.endSec !== undefined && slot.endSec > 0) {
+        // Local songs: Vamper loops / plays on itself; a "once" passage
+        // that reaches the end of the song stops, and we fall to Silence.
+        if (this.activeKind === 'vamper') {
+          const st = this.vamper?.state();
+          if (st && !st.playing && !this.isPaused) this._onTrackEnded();
+        } else if (showTicks && slot.endSec !== undefined && slot.endSec > 0) {
           if (this._endTrimFired) {
             if (positionSec < slot.endSec - 1) this._endTrimFired = false;
           } else if (positionSec >= slot.endSec - 0.25) {
@@ -932,6 +1049,9 @@ export class SoundtracksPanel {
   }
 
   private _currentProgress(): { positionSec: number; durationSec: number } {
+    if (this.activeKind === 'vamper' && this.vamper) {
+      return { positionSec: this.vamper.state()?.position ?? 0, durationSec: this.vamper.durationSec };
+    }
     if (this.activeKind === 'youtube' && this.ytPlayer) {
       return {
         positionSec: this.ytPlayer.getCurrentTime(),
@@ -974,6 +1094,23 @@ export class SoundtracksPanel {
     // (which may be > 0) — that's the configured trim point, not a
     // literal zero — because the load path falls through to
     // slot.startSec when no resume position is supplied.
+    if (track.kind === 'vamper') {
+      this.vamper ??= new VamperSongPlayer();
+      const v = this.vamper;
+      try {
+        await v.load(track.assetId, (text) => { this.statusEl.textContent = text; });
+      } finally {
+        this.statusEl.textContent = '';
+      }
+      // The GM may have picked another slot while the song was analysed.
+      if (this.activeSlotId !== slot.id) return;
+      v.setCues(this.cfg.slots);
+      v.setVolume(0);
+      v.goTo(slot.id);
+      this.activeKind = 'vamper';
+      v.setVolume(targetVolume, crossfadeMs);
+      return;
+    }
     const useResume = !_effectiveRestart(slot);
     const resume = useResume ? this.resumeStates.get(slot.id) : undefined;
     if (track.kind === 'youtube') {
@@ -1247,6 +1384,10 @@ export class SoundtracksPanel {
       this._endTrimFired = false;
       return;
     }
+    if (slot.track.kind === 'vamper') {
+      void this._selectSlot(this.cfg.slots[0]?.id ?? null);
+      return;
+    }
     if (!playlistContent && slot.loop) {
       // Single track + loop → replay (respects startSec on Spotify).
       void this._playSlotTrack(slot, 0);
@@ -1261,6 +1402,7 @@ export class SoundtracksPanel {
     this._stopNowPlayingPoll();
     if (this.ytPlayer)      { try { this.ytPlayer.destroy(); }      catch { /* nothing */ } this.ytPlayer = null; }
     if (this.spotifyPlayer) { try { this.spotifyPlayer.destroy(); } catch { /* nothing */ } this.spotifyPlayer = null; }
+    if (this.vamper)        { this.vamper.dispose(); this.vamper = null; }
     this.activeKind   = null;
     this.activeSlotId = null;
     this.isPaused     = false;

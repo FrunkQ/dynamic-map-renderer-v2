@@ -16,6 +16,7 @@ const HA_CONFIG_KEY      = 'mappadux:stagecraft_ha';
 const QLC_CONFIG_KEY     = 'mappadux:stagecraft_qlc';
 const SOUNDTRACK_YT_KEY  = 'mappadux:stagecraft_soundtracks_youtube';
 const SOUNDTRACK_SP_KEY  = 'mappadux:stagecraft_soundtracks_spotify';
+const SOUNDTRACK_LOCAL_KEY = 'mappadux:stagecraft_soundtracks_local';
 
 export interface WledEndpoint {
   /** Stable id (generated when the endpoint is first added). Used to
@@ -153,9 +154,23 @@ export function setSpotifyEnabled(enabled: boolean): void {
   } catch { /* private mode etc. — no-op */ }
 }
 
-/** Either provider enabled → the Soundtracks panel appears. */
+/** Local songs (your own files, played by the Vamper engine). Needs
+ *  no account, so unlike the streaming providers it is ON unless the
+ *  GM turns it off: the key stores '0' for off. */
+export function isLocalSongsEnabled(): boolean {
+  try { return localStorage.getItem(SOUNDTRACK_LOCAL_KEY) !== '0'; }
+  catch { return true; }
+}
+export function setLocalSongsEnabled(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.removeItem(SOUNDTRACK_LOCAL_KEY);
+    else         localStorage.setItem(SOUNDTRACK_LOCAL_KEY, '0');
+  } catch { /* private mode etc. — no-op */ }
+}
+
+/** Any source enabled → the Soundtracks panel appears. */
 export function isSoundtracksEnabled(): boolean {
-  return isYoutubeEnabled() || isSpotifyEnabled();
+  return isYoutubeEnabled() || isSpotifyEnabled() || isLocalSongsEnabled();
 }
 
 // ─── Convenience: are any Stagecraft connections configured? ──────────

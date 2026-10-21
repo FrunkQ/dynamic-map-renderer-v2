@@ -2227,11 +2227,19 @@ export interface SoundtrackSlot {
  *                      loop hooks); the slot treats the playlist as
  *                      a single playable entity.
  *  - spotify:          one track / album / playlist / episode via
- *                      the Web Playback SDK. */
+ *                      the Web Playback SDK.
+ *  - vamper:           a song file from the audio library, played by
+ *                      the Vamper engine (github.com/FrunkQ/vamper).
+ *                      Slots that share one song are cues in it: the
+ *                      slot's Start / End trim is the passage (snapped
+ *                      to whole bars), Loop holds it, and switching
+ *                      between them lands on the next bar instead of
+ *                      crossfading. */
 export type SoundtrackTrack =
   | { kind: 'youtube';          videoId:  string; label?: string }
   | { kind: 'youtube-playlist'; listId:   string; label?: string }
-  | { kind: 'spotify';          trackUri: string; label?: string };
+  | { kind: 'spotify';          trackUri: string; label?: string }
+  | { kind: 'vamper';           assetId:  string; label?: string };
 
 /** Per-pack UI theme. Both fields optional — unset = Mappadux defaults
  *  (dark mode, cyan accent). */

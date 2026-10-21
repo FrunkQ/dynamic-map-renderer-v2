@@ -52,6 +52,8 @@ import {
   setQlcConfig,
   isYoutubeEnabled,
   setYoutubeEnabled,
+  isLocalSongsEnabled,
+  setLocalSongsEnabled,
   isSpotifyEnabled,
   setSpotifyEnabled,
 } from '../stagecraft/stagecraftStorage.ts';
@@ -1241,6 +1243,12 @@ export class SettingsDialog {
     const wrap = document.createElement('div');
     wrap.className = 'settings-stagecraft-soundtracks';
 
+    wrap.appendChild(this._buildProviderToggleRow(
+      'Enable local songs (Vamper)',
+      'Your own music files from the audio library, nothing to sign in to. Each song is analysed once on this device (beats, bars, sections); slots that use the same song become passages of it, and switching between them changes the music on the next bar instead of crossfading. Uses the Vamper engine (github.com/FrunkQ/vamper).',
+      isLocalSongsEnabled,
+      setLocalSongsEnabled,
+    ));
     wrap.appendChild(this._buildProviderToggleRow(
       'Enable YouTube',
       'No sign-in needed. Plays via YouTube\'s public IFrame Player API.',

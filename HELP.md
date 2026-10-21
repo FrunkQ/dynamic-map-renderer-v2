@@ -23,7 +23,7 @@ Pack-level actions live behind the hamburger.
 - **Display** — **UI scale** slider (75–150%) shrinks or grows the whole left-hand sidebar in proportion — fonts, padding, icons, popovers all scale together. The map canvas itself is untouched. Double-click the slider to reset to 100%.
 - **Scaled View** — toggle map transitions & animations.
 - **Performance** — **Send only the first frame to local player windows** (for same-machine player windows where a 4K animated map is starving Chrome's decoder budget) and **Cap animated map texture at 1080p** (for remote players whose GPUs struggle with full-resolution video uploads). Both default off.
-- **Soundtracks** — enable / configure the YouTube + Spotify soundtrack providers.
+- **Soundtracks** — enable / configure the soundtrack sources: local songs (Vamper), YouTube and Spotify.
 - **Player Permissions** *(v2.17)* — what connected players can do: allow pings, allow messages, let players move their own token, and *Full player UI in the GM preview window* (off by default — the inline preview stays a clean, non-registering preview unless you flip this on).
 - **Game System** *(v2.17)* — initiative order direction: High → Low (d20) or Low → High (roll-under systems).
 - **Reply Assistant (LLM)** *(v2.17)* — optional LLM that drafts replies to player messages. Walks you through it: **Base URL** (pre-filled with the LM Studio local address) → **API key** (blank for LM Studio; required for OpenRouter etc.) → **Test connection & fetch models** → pick the **Model** from the dropdown. Plus an editable system prompt. Everything stays between your browser and the endpoint you choose.
@@ -158,8 +158,12 @@ Pack-level background music that persists across map switches.
 Distinct from the per-map **Soundboard** (sound effects + per-map
 ambience): Soundtracks are the running score for your whole
 session — the tavern lute that keeps playing as you walk to the
-inn's bedroom and back again. Two providers ship:
+inn's bedroom and back again. Three sources ship:
 
+- **Local songs (Vamper)** *(new in v2.20)* — your own music
+  files, nothing to sign in to, on by default. See
+  [Local songs](#local-songs-vamper) below: one song can hold
+  several slots and switch between them on the beat.
 - **YouTube / YouTube Music** — no sign-in needed for the user;
   YouTube's IFrame Player handles playback. Single tracks and
   playlists both supported.
@@ -186,6 +190,30 @@ each slot holds either a single track or a full playlist / album.
 Paste a YouTube or Spotify URL into the slot's input — Mappadux
 recognises whether it's a single track or a playlist and adjusts
 the controls accordingly. URLs travel in `.mappadux` exports.
+
+### Local songs (Vamper)
+
+Pick **Local song…** in an empty slot and choose a song from
+your audio library, or **Upload a song file…**. The first time a
+song plays, Mappadux finds its beats, bars and sections (a
+progress line shows how long it has left; after that it is
+remembered on this device).
+
+The trick is to give **several slots the same song**, each with
+its own **Start / End** — say "Calm" on the quiet intro and
+"Combat" on the loud chorus. Switching between them doesn't
+crossfade: the music changes on the **next bar** with a seamless
+join, like a film score, and the now-playing line counts down
+to it ("→ Combat in 1.4 s"). Start / End snap to whole bars, so
+rough values are fine. With **Loop** on (the default) the passage
+repeats until you move on; with it off the song plays on from
+Start. Switching to or from a YouTube / Spotify slot still
+crossfades. Clicking the progress bar jumps to that bar, which
+is the quick way to find a passage. The songs are ordinary
+library audio, so they travel in `.mappadux` packs with the
+slots that use them. The engine is
+[Vamper](https://vamper.starsystemx.com), which also works on
+its own in a browser.
 
 ### Slot controls
 

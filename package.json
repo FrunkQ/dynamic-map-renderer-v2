@@ -1,7 +1,7 @@
 {
   "name": "dynamic-map-renderer-v2",
   "private": true,
-  "version": "2.19.22",
+  "version": "2.20.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/generate-pwa-icons.mjs",
-    "build-icons": "node scripts/build-icon-manifests.mjs"
+    "build-icons": "node scripts/build-icon-manifests.mjs",
+    "vamper:update": "node scripts/update-vamper.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
@@ -48,6 +49,7 @@
     "peerjs": "^1.5.5",
     "polygon-clipping": "^0.15.7",
     "qrcode": "^1.5.4",
-    "three": "^0.183.2"
+    "three": "^0.183.2",
+    "vamper": "github:FrunkQ/vamper#f4bfc39a682dfa150a876ef2202811c8c18aa84a"
   }
 }

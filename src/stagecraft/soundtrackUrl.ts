@@ -82,6 +82,7 @@ export function parseSpotifyUri(uri: string): { kind: string; id: string } | nul
 export function defaultTrackLabel(track: SoundtrackTrack): string {
   if (track.kind === 'youtube')          return track.videoId;
   if (track.kind === 'youtube-playlist') return `Playlist · ${track.listId}`;
+  if (track.kind === 'vamper')           return track.label ?? 'Local song';
   const parts = parseSpotifyUri(track.trackUri);
   if (!parts) return track.trackUri;
   return parts.id;

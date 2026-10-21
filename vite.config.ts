@@ -93,6 +93,11 @@ export default defineConfig(({ command }) => ({
     __VERCEL_DEPLOY__: JSON.stringify(process.env['VERCEL'] === '1'),
   },
 
+  // The Vamper engine ships as TypeScript source with a module worker
+  // (new URL('../analysis/worker.ts', import.meta.url)); pre-bundling
+  // would break that URL, so Vite serves it as-is.
+  optimizeDeps: { exclude: ['vamper'] },
+
   server: {
     host: true,   // bind to 0.0.0.0 so LAN devices can reach the dev server
     port: 5173,
@@ -113,6 +118,9 @@ export default defineConfig(({ command }) => ({
   test: {
     environment: 'happy-dom',
     include: ['test/unit/**/*.test.ts'],
+    // vamper is TypeScript source in node_modules: transform it rather
+    // than handing it to Node as-is.
+    server: { deps: { inline: ['vamper'] } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
