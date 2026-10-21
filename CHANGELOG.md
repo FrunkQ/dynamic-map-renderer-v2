@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.20.2 - 2026-10-21
+
+Internal: Mappadux now uses Vamper's latest engine. Local-song soundtracks behave as before; Vamper's two new features stay off here for now: **riff** cues (a passage that varies its bars instead of repeating them exactly) and the **voice pass** (changes wait for a gap in a sung line, using an 11 MB model downloaded on first use). Songs are analysed once more on first play, because the engine's analysis grew.
+
 ## v2.20.1 - 2026-10-21
 
 Vamper, the engine behind local-song soundtracks, is now MIT licensed (it was public domain), so its copyright notice travels with Mappadux like the other libraries in THIRD-PARTY-NOTICES.md. Mappadux now pins the Vamper commit that carries the new licence; the engine code is unchanged.

@@ -57,6 +57,17 @@ GitHub. Its analyser comes from Gondryator
 
 > Copyright (c) 2026 Alex (FrunkQ)
 
+### MediaPipe Tasks Audio — Google (Apache 2.0)
+
+Comes with Vamper (`@mediapipe/tasks-audio`) for its optional voice
+pass, which keeps music changes from cutting a sung line. Built into a
+separate worker chunk that only loads if the voice pass is switched on;
+Mappadux does not switch it on or ship the YAMNet model files.
+<https://github.com/google-ai-edge/mediapipe> — full licence:
+<https://www.apache.org/licenses/LICENSE-2.0>
+
+> Copyright Google LLC
+
 ### idb (ISC)
 
 The workspace database. <https://github.com/jakearchibald/idb>
